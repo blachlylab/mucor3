@@ -1,0 +1,11 @@
+{
+    "HighConf":{
+        "query":"((NOT _exists_:1kG_af) OR (1kG_af:<=0.01 AND 1kG_af_afr:<=0.01 AND 1kG_af_amr:<=0.01 AND 1kG_af_eur:<=0.01 AND 1kG_af_eas:<=0.01 AND 1kG_af_sas:<=0.01)) AND ((NOT _exists_:ExAC_af) OR ExAC_af:<=0.01) AND AF:>=0.01",
+        "filter":" AND FILTER:(PASS AND NOT FALSE_NEG AND NOT POSSIBLE_ARTIFACT)",
+        "filterfn":" AND FILTER:(FALSE_NEG AND NOT POSSIBLE_ARTIFACT)",
+        "effect":" AND NOT ANN_effect:(synonymous_variant OR intergenic_region OR upstream_gene_variant OR intron_variant OR structural_interaction_variant OR protein_protein_contact OR downstream_gene_variant OR sequence_feature)",
+        "queryfn":" AND ((NOT _exists_:cosmic_ids) OR cosmic_count:>1)",
+        "gene":""
+    },
+    "depth":50
+}
