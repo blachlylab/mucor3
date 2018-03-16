@@ -73,10 +73,12 @@ def alter_table(master: pd.DataFrame, conf: dict) -> pd.DataFrame:
     :type conf: dict
     :return:pd.Dataframe
     """
-    if "AD" in master.columns:
-        master = master[master["AD"].apply(sum) > conf["depth"]]
-    elif "DP" in master.columns:
-        master = master[master["DP"] > conf["depth"]]
+    if "Alt_depths" in master.columns and "Ref_Depth" in master.columns and "QSS" in master.columns:
+        master["Total_depth"]=master["Alt_depths"].apply(sum)+master["Ref_Depth"]
+        master = master[ master["Total_depth"]> conf["depth"]]
+        #master["Avg_QSS_Per_Read_by_Allele"]= pd.Series([[a/b for a,b in zip(x,y)] for x,y in zip(master["QSS"],[[b]+a for a,b in zip(master["Ref_Depth"],master["Alt_depths"])])])
+        master=master.assign(Avg_QSS_Per_Read_by_Allele=pd.Series([[a/b for a,b in zip(x,y)] for x,y in zip(master["QSS"],[[a]+b for a,b in zip(master["Ref_Depth"],master["Alt_depths"])])]).values)
+
     return master
 
 
@@ -191,10 +193,10 @@ if __name__ == "__main__":
     if args.merge:
         merge = merge_rows(data, args.merge)
         merge = merge.fillna(".")
-        merge.to_csv(args.out_prefix + "_" + "master.tsv", sep="\t", na_rep=".")
+        merge.to_csv(args.out_prefix + "_" + "master.tsv", sep="\t", na_rep=".",float_format='%.4f')
     else:
         merge = data.fillna(".")
-        merge.to_csv(args.out_prefix + "_" + "master.tsv", sep="\t", na_rep=".")
+        merge.to_csv(args.out_prefix + "_" + "master.tsv", sep="\t", na_rep=".",float_format='%.4f')
 
     # pivot if all args are present
     if args.pivot_index and args.pivot_on and args.pivot_value:
@@ -202,7 +204,8 @@ if __name__ == "__main__":
         # if merge uniquely merge rows on index
         if args.merge:
             data = merge_rows_unique(data, args.merge)
-            data['ANN_hgvs_p'] = np.where(data['ANN_hgvs_p'] == "", data['ANN_effect'], data['ANN_hgvs_p'])
+            if "ANN_hgvs_p" in data:
+                data['ANN_hgvs_p'] = np.where(data['ANN_hgvs_p'] == "", data['ANN_effect'], data['ANN_hgvs_p'])
 
         # do pivot
         piv = pivot(data, args)

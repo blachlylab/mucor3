@@ -9,8 +9,12 @@ import json
 #query elasticsearch
 def query(es, index, doctype,str_q):
     res = []
-    s = Search(using=es, index=index, doc_type=doctype) \
-        .query("query_string", query=str_q)
+    s=""
+    if str_q=="":
+        s = Search(using=es, index=index, doc_type=doctype)
+    else:
+        s = Search(using=es, index=index, doc_type=doctype) \
+            .query("query_string", query=str_q)
     for hit in s.scan():
         res.append(hit.to_dict())
     return pd.DataFrame(res)
@@ -20,16 +24,14 @@ def query(es, index, doctype,str_q):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-id", "--index", default="test")
-    parser.add_argument("-q", "--query", nargs="+")
+    parser.add_argument("-q", "--query", nargs="+",default=[])
     parser.add_argument("-m","--meta_doctype",default="meta")
     parser.add_argument("-mid", "--meta_id", default=None)
-    parser.add_argument("-c","--config")
     parser.add_argument("--write_meta",action="store_true")
 
     # parse args and open elasticsearch client
     args = parser.parse_args()
     client = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
-    config = json.load(open(args.config, "r"))
 
     if args.meta_id is None:
         args.meta_id=args.meta_doctype+"_id"
