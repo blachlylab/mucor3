@@ -28,10 +28,15 @@ if __name__ == "__main__":
     parser.add_argument("-m","--meta_doctype",default="meta")
     parser.add_argument("-mid", "--meta_id", default=None)
     parser.add_argument("--write_meta",action="store_true")
+    parser.add_argument("-host","--host",default=None)
 
     # parse args and open elasticsearch client
     args = parser.parse_args()
-    client = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
+    client=None
+    if args.host:
+        client = Elasticsearch(args.host,timeout=30, max_retries=10, retry_on_timeout=True)
+    else:
+        client = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
 
     if args.meta_id is None:
         args.meta_id=args.meta_doctype+"_id"

@@ -145,8 +145,9 @@ def hc_query(es:Elasticsearch, index:str, doc:str, conf:dict)->pd.DataFrame:
     :type conf:dict
     :return: pd.Dataframe
     """
-    conf["HighConf"]["query"] = conf["HighConf"]["query"] + " AND " + conf["ids_field"] + ":" + str(
-        tuple(config["ids"])).replace("'", "").replace(",", " OR")
+    if ("ids_field" in conf) and ("ids" in conf):
+        conf["HighConf"]["query"] = conf["HighConf"]["query"] + " AND " + conf["ids_field"] + ":" + str(
+            tuple(config["ids"])).replace("'", "").replace(",", " OR")
     hc_q = conf["HighConf"]["query"] + conf["HighConf"]["filter"] + conf["HighConf"]["effect"] + conf["HighConf"][
         "gene"]
     hc_rq = conf["HighConf"]["query"] + conf["HighConf"]["filterfn"] + conf["HighConf"]["queryfn"] + conf["HighConf"][
@@ -168,10 +169,16 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--config", nargs="+", required=True)
     parser.add_argument("-d", "--doctype", default="variant_vcf")
     parser.add_argument("-l", "--column_list")
+    parser.add_argument("-host","--host",default=None)
 
     # parse args and open elasticsearch client
     args = parser.parse_args()
-    client = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
+    parser.add_argument("-host","--host",default=None)
+    client=None
+    if args.host:
+        client = Elasticsearch(args.host,timeout=30, max_retries=10, retry_on_timeout=True)
+    else:
+        client = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
     config = {}
     for file in args.config:
         config.update(json.load(open(file, "r")))
