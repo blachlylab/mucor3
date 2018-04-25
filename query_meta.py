@@ -29,6 +29,7 @@ if __name__ == "__main__":
     parser.add_argument("-mid", "--meta_id", default=None)
     parser.add_argument("--write_meta",action="store_true")
     parser.add_argument("-host","--host",default=None)
+    parser.add_argument("-c", "--config",default=None)
 
     # parse args and open elasticsearch client
     args = parser.parse_args()
@@ -37,11 +38,17 @@ if __name__ == "__main__":
         client = Elasticsearch(args.host,timeout=30, max_retries=10, retry_on_timeout=True)
     else:
         client = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
-
+    conf=dict()
+    if args.config:
+        conf.update(json.load(open(args.config, "r")))
     if args.meta_id is None:
         args.meta_id=args.meta_doctype+"_id"
-    data=query(client,args.index,args.meta_doctype," ".join(args.query))
+    if ("ids" in conf) and ("ids_field" in conf):
+        q=" ".join(args.query)+" AND "+conf["ids_field"]+":(\""+"\" OR \"".join(conf["ids"])+"\")"
+    else:
+        q=" ".join(args.query)
+    data=query(client,args.index,args.meta_doctype,q)
     if(args.write_meta):
         data.to_csv("meta.tsv",sep="\t")
     ids=data[args.meta_id].tolist()
-    print(json.dumps({"ids":ids,"ids_field":args.meta_id}))
+    print(json.dumps({"ids":ids,"ids_field":args.meta_id,"len":len(ids),"q":q}))
