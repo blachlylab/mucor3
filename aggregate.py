@@ -146,8 +146,7 @@ def hc_query(es:Elasticsearch, index:str, doc:str, conf:dict)->pd.DataFrame:
     :return: pd.Dataframe
     """
     if ("ids_field" in conf) and ("ids" in conf):
-        conf["HighConf"]["query"] = conf["HighConf"]["query"] + " AND " + conf["ids_field"] + ":" + str(
-            tuple(config["ids"])).replace("'", "").replace(",", " OR")
+        conf["HighConf"]["query"] = conf["HighConf"]["query"] + " AND " + conf["ids_field"] + ":(\"" + "\" OR \"".join(config["ids"])+"\")"
     hc_q = conf["HighConf"]["query"] + conf["HighConf"]["filter"] + conf["HighConf"]["effect"] + conf["HighConf"][
         "gene"]
     hc_rq = conf["HighConf"]["query"] + conf["HighConf"]["filterfn"] + conf["HighConf"]["queryfn"] + conf["HighConf"][
@@ -173,7 +172,6 @@ if __name__ == "__main__":
 
     # parse args and open elasticsearch client
     args = parser.parse_args()
-    parser.add_argument("-host","--host",default=None)
     client=None
     if args.host:
         client = Elasticsearch(args.host,timeout=30, max_retries=10, retry_on_timeout=True)
