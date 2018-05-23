@@ -25,7 +25,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-id", "--index", default="test")
     parser.add_argument("-q", "--query", nargs="+",default=[])
-    parser.add_argument("-m","--meta_doctype",default="meta")
+    parser.add_argument("-m","--meta_doctype",default=None)
     parser.add_argument("-mid", "--meta_id", default=None)
     parser.add_argument("--write_meta",action="store_true")
     parser.add_argument("-host","--host",default=None)
