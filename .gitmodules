@@ -1,0 +1,3 @@
+[submodule "vcf_atomizer"]
+	path = vcf_atomizer
+	url = git@github.com:blachlylab/vcf_atomizer.git
