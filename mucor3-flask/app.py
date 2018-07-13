@@ -1,4 +1,4 @@
-from flask import Flask, flash, request, redirect, url_for
+from flask import Flask, flash, request, redirect, url_for,render_template
 import os
 from werkzeug.utils import secure_filename
 import subprocess
@@ -30,20 +30,14 @@ def upload_file():
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
                 tmp_file=os.path.join(app.config['UPLOAD_FOLDER'], str(uuid.uuid4())+"."+".".join(filename.split(".")[1:]))
-                UPLOADED_FILES.append(tmp_file)
+
                 file.save(tmp_file)
-                out =open(tmp_file+".jsonl","w")
+                tmp_file=tmp_file+".jsonl"
+                out =open(tmp_file,"w")
+                UPLOADED_FILES.append(tmp_file)
                 print(subprocess.call(['../vcf_atomizer/bin/atomizer',tmp_file],stdout=out))
                 return redirect('/')
-    return '''
-    <!doctype html>
-    <title>Upload new File</title>
-    <h1>Upload new File</h1>
-    <form method=post enctype=multipart/form-data>
-      <input type=file name=files multiple>
-      <input type=submit value=Upload>
-    </form>
-    '''
+    return render_template("upload.html")
 
 if __name__ == '__main__':
     app.run(debug=True,host='0.0.0.0')

@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>Upload your VCFs</h1>
+    <p class="lead">In order to mucorelate your data we need to see it first!</p>
+    <form method=post enctype=multipart/form-data>
+        <input class="form-control-file" type=file name=files multiple>
+        <input type=submit value=Upload class="btn btn-lg btn-primary" role="button">
+    </form>
+{% endblock %}
