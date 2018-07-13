@@ -5,7 +5,7 @@ import subprocess
 import uuid
 UPLOAD_FOLDER = '/tmp/'
 ALLOWED_EXTENSIONS = set(['vcf'])
-UPLOADED_FILES=[]
+UPLOADED_FILES=set()
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -29,15 +29,10 @@ def upload_file():
                 return redirect(request.url)
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
-                tmp_file=os.path.join(app.config['UPLOAD_FOLDER'], str(uuid.uuid4())+"."+".".join(filename.split(".")[1:]))
-
-                file.save(tmp_file)
-                tmp_file=tmp_file+".jsonl"
-                out =open(tmp_file,"w")
-                UPLOADED_FILES.append(tmp_file)
-                print(subprocess.call(['../vcf_atomizer/bin/atomizer',tmp_file],stdout=out))
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'],filename))
+                UPLOADED_FILES.add(file.filename)
                 return redirect('/')
-    return render_template("upload.html")
+    return render_template("upload.html",files=UPLOADED_FILES)
 
 if __name__ == '__main__':
     app.run(debug=True,host='0.0.0.0')
