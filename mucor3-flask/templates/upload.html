@@ -4,32 +4,46 @@
     <h1>Upload your VCFs</h1>
     <p class="lead">In order to mucorelate your data we need to see it first!</p>
     <form method=post enctype=multipart/form-data>
-        <input class="form-control-file" type=file name=files multiple>
+        <p><input class="form-control-file" type=file name=files multiple></p>
         {% if files%}
-                <h4>Uploaded Files</h4>
-                <!-- <ul class="list-group"> -->
+
+            <h4>Uploaded Files</h4>
+
             {% for file in files %}
-                    <!-- <div class="container"> -->
-                    <!-- <li class="list-group-item">{{ file }} </li> -->
-                    <div class="input-group mb-3">
-                    <input type="text" class="form-control" placeholder="{{ file }}" aria-label="Recipient's username" aria-describedby="basic-addon2" readonly>
-                    <div class="input-group-append">
-                    <button class="btn btn-danger" type="button">Remove</button>
-                    </div>
-                    </div>
-                    <!-- <span class="pull-right"> -->
-                    <!-- <button type="button" class="btn btn-danger pull-right">Remove</button> -->
-                    <!-- </span> -->
-                    <!-- </div> -->
+                  <div class="input-group mb-3">
+                      <input type="text" class="form-control" placeholder="{{ file }}" aria-label="Recipient's username" aria-describedby="basic-addon2" readonly>
+                      <div class="input-group-append">
+                          <button class="btn btn-danger" type="button">Remove</button>
+                      </div>
+                  </div>
             {% endfor %}
-                <!-- </ul> -->
+
         {% endif %}
-        <input type=submit value=Upload class="btn btn-lg btn-primary" role="button">
+        <p>
+            <input type=submit value=Upload class="btn btn-lg btn-primary" role="button">
+        </p>
         {% if files%}
             <!-- Button trigger modal -->
             <button type="button" class="btn btn-lg btn-success"  data-toggle="modal" data-target="#optionsModal">
                 Mucorelate!
             </button>
+        {% else %}
+            <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#collapseURL" aria-expanded="false" aria-controls="collapseURL">
+              Use JSONL data source
+            </button>
+            <div class="collapse" id="collapseURL">
+                <div class="card card-body">
+                    <div class="input-group mb-3">
+                          <div class="input-group-prepend">
+                                <span class="input-group-text" id="basic-addon2">Query URL</span>
+                          </div>
+                          <input type="text" class="form-control" aria-describedby="basic-addon2">
+                          <button type="button" class="btn btn-lg btn-success"  data-toggle="modal" data-target="#optionsModal">
+                              Mucorelate!
+                          </button>
+                    </div>
+                </div>
+            </div>
         {% endif %}
         <!-- Modal -->
         <div class="modal fade" id="optionsModal" tabindex="-1" role="dialog" aria-labelledby="optionsModalLabel" aria-hidden="true">
