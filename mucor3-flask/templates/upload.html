@@ -6,14 +6,23 @@
     <form method=post enctype=multipart/form-data>
         <input class="form-control-file" type=file name=files multiple>
         {% if files%}
-            <div class="container">
                 <h4>Uploaded Files</h4>
-                <div class="jumbotron bg-info">
+                <!-- <ul class="list-group"> -->
             {% for file in files %}
-                <p>{{ file }}</p>
+                    <!-- <div class="container"> -->
+                    <!-- <li class="list-group-item">{{ file }} </li> -->
+                    <div class="input-group mb-3">
+                    <input type="text" class="form-control" placeholder="{{ file }}" aria-label="Recipient's username" aria-describedby="basic-addon2" readonly>
+                    <div class="input-group-append">
+                    <button class="btn btn-danger" type="button">Remove</button>
+                    </div>
+                    </div>
+                    <!-- <span class="pull-right"> -->
+                    <!-- <button type="button" class="btn btn-danger pull-right">Remove</button> -->
+                    <!-- </span> -->
+                    <!-- </div> -->
             {% endfor %}
-            </div>
-            </div>
+                <!-- </ul> -->
         {% endif %}
         <input type=submit value=Upload class="btn btn-lg btn-primary" role="button">
         {% if files%}

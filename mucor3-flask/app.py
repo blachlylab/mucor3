@@ -34,5 +34,12 @@ def upload_file():
                 return redirect('/')
     return render_template("upload.html",files=UPLOADED_FILES)
 
+@app.route('/Result', methods=['GET', 'POST'])
+def get_results():
+    if request.method == 'POST':
+        pass
+    return render_template("result.html",files=UPLOADED_FILES)
+
+
 if __name__ == '__main__':
     app.run(debug=True,host='0.0.0.0')

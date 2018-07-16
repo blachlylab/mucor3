@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>Results</h1>
+    <div class="card-deck">
+        <div class="card border-dark" style="width: 18rem;">
+            <div class="jumbotron">
+                <i class="fas fa-file-excel fa-7x"></i>
+                <i class="fas fa-table fa-3x pull-down"></i>
+            </div>
+          <div class="card-body">
+            <h5 class="card-title">Tab-separated pivot file</h5>
+            <p class="card-text">Tab-separated file of vcfs pivoted on specified values.</p>
+            <p><b>Your pivot index:</b>CHROM, POS, REF, ALT</p>
+            <p><b>Your pivot on:</b>sample</p>
+            <p><b>Your pivot value:</b>AF</p>
+            <a href="#" class="btn btn-primary">Download</a>
+          </div>
+        </div>
+        <div class="card border-dark" style="width: 18rem;">
+            <div class="jumbotron">
+                <i class="fas fa-file-excel fa-7x"></i>
+                <i class="fas fa-receipt fa-3x pull-down"></i>
+            </div>
+          <div class="card-body">
+            <h5 class="card-title">Tab-separated master file</h5>
+            <p class="card-text">Tab-separated file of all vcf information (used to develop pivot tables).</p>
+            <a href="#" class="btn btn-primary">Download</a>
+          </div>
+        </div>
+        <div class="card border-dark" style="width: 18rem;">
+            <div class="jumbotron">
+                <i class="fas fa-file-archive fa-7x"></i>
+                <i class="fas fa-table fa-3x pull-down"></i>
+                <i class="fas fa-receipt fa-3x pull-down"></i>
+            </div>
+          <div class="card-body">
+            <h5 class="card-title">Zipped folder of all files</h5>
+            <p class="card-text">Zipped folder of master file, pivot table, and uploaded vcfs.</p>
+            <a href="#" class="btn btn-primary">Download</a>
+          </div>
+        </div>
+    </div>
+{% endblock %}
