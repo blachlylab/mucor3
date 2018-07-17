@@ -1,0 +1,35 @@
+version: '3.4'
+services:
+    rabbit:
+        hostname: rabbit
+        image: rabbitmq:latest
+        environment:
+            - RABBITMQ_DEFAULT_USER=admin
+            - RABBITMQ_DEFAULT_PASS=mypass
+        ports:
+            - "5673:5673"
+
+    worker:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: celery_worker
+        # volumes:
+            # - .:/app
+        links:
+            - rabbit
+        depends_on:
+            - rabbit
+        volumes:
+            - data-volume:/data
+    webapp:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: flask
+        ports:
+            - "5000:5000"
+        volumes:
+            - data-volume:/data
+volumes:
+     data-volume:

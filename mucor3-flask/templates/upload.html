@@ -5,24 +5,25 @@
     <p class="lead">In order to mucorelate your data we need to see it first!</p>
     <form method=post enctype=multipart/form-data action="/">
         <p><input class="form-control-file" type=file name=files multiple></p>
-        {% if files%}
-
-            <h4>Uploaded Files</h4>
-
-            {% for file in files %}
-                  <div class="input-group mb-3">
-                      <input type="text" class="form-control" placeholder="{{ file }}" aria-label="Recipient's username" aria-describedby="basic-addon2" readonly>
-                      <div class="input-group-append">
-                          <button class="btn btn-danger" type="button">Remove</button>
-                      </div>
-                  </div>
-            {% endfor %}
-
-        {% endif %}
         <p>
             <input type=submit value=Upload class="btn btn-lg btn-primary" role="button">
         </p>
     </form>
+    {% if files%}
+
+    <h4>Uploaded Files</h4>
+
+    {% for file in files %}
+    <form method=post action="/remove">
+        <div class="input-group mb-3">
+            <input type="text" class="form-control" value="{{ file }}" name="upload-remove" aria-label="Recipient's username" aria-describedby="basic-addon2" readonly>
+            <div class="input-group-append">
+                <button type=submit class="btn btn-danger" type="button">Remove</button>
+            </div>
+        </div>
+    </form>
+    {% endfor %}
+    {% endif %}
     <form action="/mucorelate" method="post">
         {% if files%}
 
@@ -80,7 +81,7 @@
                               Pivot Index
                           </span>
                       </div>
-                      <input type="text" class="form-control" placeholder="CHROM, POS, REF, ALT" value="CHROM, POS, REF, ALT" name="piv-index">
+                      <input type="text" class="form-control" placeholder="CHROM, POS, REF, ALT" name="piv-index">
                   </div>
                   <div class="input-group mb-3">
                       <div class="input-group-prepend">
