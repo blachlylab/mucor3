@@ -31,8 +31,11 @@ def upload_file():
                 filename = secure_filename(file.filename)
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'],filename))
                 UPLOADED_FILES.add(file.filename)
-                return redirect('/')
-    return render_template("upload.html",files=UPLOADED_FILES)
+    return render_template("upload.html",files=sorted(UPLOADED_FILES))
+
+@app.route('/mucorelate', methods=['POST'])
+def mucorelate():
+    return request.form.get("piv-index")
 
 @app.route('/Result', methods=['GET', 'POST'])
 def get_results():
