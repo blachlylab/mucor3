@@ -1,4 +1,4 @@
-from flask import Flask, flash, request, redirect,session, url_for,render_template
+from flask import Flask, flash, request, redirect,session, url_for,render_template, send_from_directory
 import os
 import shutil
 from werkzeug.utils import secure_filename
@@ -99,22 +99,29 @@ def combine():
 @app.route('/mucorelate', methods=['GET'])
 def mucorelate():
     session["pipeline"]="mucor"
-    app.logger.info(session["piv-index"])
-    app.logger.info(session["piv-on"])
-    app.logger.info(session["piv-value"])
-    app.logger.info(os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+".jsonl"))
-    app.logger.info(os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+"_piv.tsv"))
-    app.logger.info(" ".join([x.strip() for x in session["piv-index"].split(",")]))
-    app.logger.info(" ".join([x.strip() for x in session["piv-on"].split(",")]))
     JOBS[session["uuid"]].append(
-        {"mucor3":tasks.mucor3.delay(
+        {"mucor3":tasks.mucor3_pivot.delay(
             os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+".jsonl"),
             session["piv-index"],
             session["piv-on"],
             session["piv-value"],
             os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+"_piv.tsv"),
             )})
-    app.logger.info(JOBS[session["uuid"]][-1]["mucor3"].get())
+    JOBS[session["uuid"]].append(
+        {"mucor3":tasks.mucor3_master.delay(
+            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+".jsonl"),
+            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+"_master.tsv"),
+            )})
+    return redirect("/wait")
+
+@app.route('/zip', methods=['GET'])
+def zip_folder():
+    session["pipeline"]="zip"
+    JOBS[session["uuid"]].append(
+        {"zip":tasks.zip.delay(
+            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"]),
+            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"]+".zip"),
+            )})
     return redirect("/wait")
 
 @app.route('/wait', methods=['GET'])
@@ -128,15 +135,23 @@ def wait():
         return redirect("/combine")
     elif session["pipeline"]=="combine":
         return redirect("/mucorelate")
+    elif session["pipeline"]=="mucor":
+        return redirect("/zip")
     else:
         return redirect("/Result")
 
-@app.route('/Result', methods=['GET', 'POST'])
+@app.route('/Result', methods=['GET'])
 def get_results():
-    if request.method == 'POST':
-        pass
-    return render_template("result.html")
+    return render_template("result.html",session=session)
 
+@app.route('/downloads/<path:filename>', methods=['GET', 'POST'])
+def download(filename):
+    uploads=""
+    if filename.split(".")[1]!="zip":
+        uploads= os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"])
+    else:
+        uploads= os.path.join(app.config['UPLOAD_FOLDER'])
+    return send_from_directory(directory=uploads, filename=filename)
 
 if __name__ == '__main__':
     app.secret_key="myflaskapp".encode("utf-8")

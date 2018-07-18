@@ -5,6 +5,7 @@ RUN apt-get update
 RUN apt-get install -y jq
 RUN apt-get install -y golang
 RUN apt-get install -y make
+RUN apt-get install -y zip
 
 # install python packages
 RUN conda install -y pandas

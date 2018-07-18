@@ -2,7 +2,7 @@ from celery_server.celery import app
 import subprocess
 
 @app.task
-def mucor3(filein, piv_index,piv_on,piv_value,outfile):
+def mucor3_pivot(filein, piv_index,piv_on,piv_value,outfile):
     mucor=subprocess.Popen(
         ["python","../aggregate.py","-pi"]+
         [x.strip() for x in piv_index.split(",")]+
@@ -10,10 +10,23 @@ def mucor3(filein, piv_index,piv_on,piv_value,outfile):
         ["-pv", piv_value.strip()],
         stdin=open(filein,'r'),stdout=subprocess.PIPE)
     to_tsv=subprocess.Popen(
-        ["python","../utils/jsonl2csv.py"],
+        ["python","../utils/jsonl2csv.py","-t","-i"]+[x.strip() for x in piv_index.split(",")],
         stdin=mucor.stdout,stdout=open(outfile,"w"))
         #stdin=mucor.stdout)
     return to_tsv.returncode
+
+@app.task
+def mucor3_master(filein,outfile):
+    to_tsv=subprocess.Popen(
+        ["python","../utils/jsonl2csv.py","-t"],
+        stdin=open(filein,"r"),stdout=open(outfile,"w"))
+    return to_tsv.returncode
+
+@app.task
+def zip(folder,outfile):
+    zip=subprocess.Popen(
+        ["zip","-r",outfile,folder])
+    return zip.returncode
 
 @app.task
 def combine(files, outfile):
