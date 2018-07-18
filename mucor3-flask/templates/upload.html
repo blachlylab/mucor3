@@ -24,7 +24,7 @@
     </form>
     {% endfor %}
     {% endif %}
-    <form action="/mucorelate" method="post">
+    <form action="/atomize" method="post">
         {% if files%}
 
         <!-- Button trigger modal -->
@@ -86,7 +86,7 @@
                   <div class="input-group mb-3">
                       <div class="input-group-prepend">
                           <span class="input-group-text" data-toggle="tooltip" data-placement="top" title="VCF field(s) values that will be present as the columns in the resulting pivot table.">
-                              Pivot Index
+                              Pivot On
                           </span>
                       </div>
                       <input type="text" class="form-control" placeholder="sample" name="piv-on">
@@ -94,10 +94,10 @@
                   <div class="input-group mb-3">
                       <div class="input-group-prepend">
                           <span class="input-group-text" data-toggle="tooltip" data-placement="top" title="VCF field that will displayed for every column-index combination in the resulting pivot table.">
-                              Pivot Index
+                              Pivot Value
                           </span>
                       </div>
-                      <input type="text" class="form-control" placeholder="AF" name="piv-val">
+                      <input type="text" class="form-control" placeholder="AF" name="piv-value">
                   </div>
               </div>
               <div class="modal-footer">

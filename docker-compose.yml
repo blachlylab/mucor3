@@ -14,8 +14,18 @@ services:
             context: .
             dockerfile: Dockerfile
             target: celery_worker
+
         # volumes:
             # - .:/app
+        image: mucor3_worker
+        # deploy:
+          # resources:
+              # limits:
+                  # cpus: '4'
+                  # memory: 4G
+              # reservations:
+                  # cpus: '2'
+                  # memory: 500M
         links:
             - rabbit
         depends_on:
@@ -27,6 +37,7 @@ services:
             context: .
             dockerfile: Dockerfile
             target: flask
+        image: mucor3_webapp
         ports:
             - "5000:5000"
         volumes:

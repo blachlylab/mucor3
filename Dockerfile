@@ -10,6 +10,7 @@ RUN apt-get install -y make
 RUN conda install -y pandas
 RUN conda install -y flask
 RUN conda install -y -c conda-forge celery
+RUN conda update -y pandas
 
 #add mucor3 files
 COPY . /home/user/mucor3/
