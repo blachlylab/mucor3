@@ -47,6 +47,7 @@ def form_parser() -> argparse.ArgumentParser:
     parser.add_argument("-po", "--pivot_on", nargs="+",required=True)
     parser.add_argument("-pv", "--pivot_value", nargs="+",required=True)
     parser.add_argument("-f", "--fill_value",default=".")
+    parser.add_argument("-t", "--from_tsv",action="store_true")
 
     return parser
 
@@ -54,7 +55,11 @@ if __name__ == "__main__":
 
     # parse args and open elasticsearch client
     args = form_parser().parse_args()
-    data=pd.read_json(sys.stdin,orient="records",lines=True)
+    data=[]
+    if args.from_tsv:
+        data=pd.read_csv(sys.stdin,delimiter="\t")
+    else:
+        data=pd.read_json(sys.stdin,orient="records",lines=True)
     # do pivot
     piv = pivot(data, args)
     piv.columns = piv.columns.droplevel(0)
