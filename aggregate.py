@@ -24,6 +24,8 @@ def alter_table(master: pd.DataFrame, conf: dict) -> pd.DataFrame:
 
     return master
 
+def string_agg(x):
+    return ' '.join(str(v) for v in x)
 
 # pivot dataframe based on parameters provided at runtime
 def pivot(master: pd.DataFrame, args: argparse.ArgumentParser)->pd.DataFrame:
@@ -38,8 +40,12 @@ def pivot(master: pd.DataFrame, args: argparse.ArgumentParser)->pd.DataFrame:
     """
     master[args.pivot_index] = master[args.pivot_index].fillna(".")
     sub = master[args.pivot_index + args.pivot_on + args.pivot_value]
+    func=args.agg_func
+    if args.agg_func=="string_agg":
+        func=eval(func)
     return pd.pivot_table(sub, index=args.pivot_index, columns=args.pivot_on,
-                          fill_value=args.fill_value, values=args.pivot_value)
+                          fill_value=args.fill_value, values=args.pivot_value,
+                          aggfunc=func)
 
 def form_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -48,7 +54,7 @@ def form_parser() -> argparse.ArgumentParser:
     parser.add_argument("-pv", "--pivot_value", nargs="+",required=True)
     parser.add_argument("-f", "--fill_value",default=".")
     parser.add_argument("-t", "--from_tsv",action="store_true")
-
+    parser.add_argument("-a", "--agg-func",default="string_agg")
     return parser
 
 if __name__ == "__main__":
