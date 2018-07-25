@@ -66,6 +66,15 @@ if __name__ == "__main__":
         data=pd.read_csv(sys.stdin,delimiter="\t")
     else:
         data=pd.read_json(sys.stdin,orient="records",lines=True)
+    for i,x in enumerate(args.pivot_value):
+        if x in args.pivot_index:
+            col=x+"2"
+            data[col]=data[x]
+            args.pivot_value[i]=col
+        elif x in args.pivot_on:
+            col=x+"2"
+            data[col]=data[x]
+            args.pivot_value[i]=col
     # do pivot
     piv = pivot(data, args)
     piv.columns = piv.columns.droplevel(0)
