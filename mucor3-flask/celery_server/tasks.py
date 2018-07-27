@@ -29,6 +29,12 @@ def zip(folder,outfile):
     return zip.returncode
 
 @app.task
+def download(url, outfile):
+    cat=subprocess.Popen(
+        ["curl",url],stdout=open(outfile,"w"))
+    return cat.returncode
+
+@app.task
 def combine(files, outfile):
     cat=subprocess.Popen(
         ["cat"]+[x for x in files],stdout=open(outfile,"w"))

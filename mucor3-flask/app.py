@@ -82,11 +82,19 @@ def atomize():
     session["piv-value"]=request.form.get("piv-value")
     session["merge-check"]=request.form.get("merge-check")
     session["filter-check"]=request.form.get("filter-check")
-    session["pipeline"]="atomize"
+    if "uuid" not in session:
+        session["uuid"]=str(uuid.uuid4())
+        os.mkdir(os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"]))
     if session["uuid"] not in JOBS:
         JOBS[session["uuid"]]=[]
-    for x in session["files"]:
-        JOBS[session["uuid"]].append({"atomizer":tasks.atomizer.delay(os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],x))})
+    if request.form.get("filter-check")!="":
+        session["pipeline"]="download"
+        url=request.form.get("json-url")
+        JOBS[session["uuid"]].append({"download":tasks.download.delay(url,os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+".jsonl"))})
+    else:
+        session["pipeline"]="atomize"
+        for x in session["files"]:
+            JOBS[session["uuid"]].append({"atomizer":tasks.atomizer.delay(os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],x))})
     return redirect("/wait")
 
 @app.route('/combine', methods=['GET'])
@@ -134,6 +142,8 @@ def wait():
     if session["pipeline"]=="atomize":
         return redirect("/combine")
     elif session["pipeline"]=="combine":
+        return redirect("/mucorelate")
+    elif session["pipeline"]=="download":
         return redirect("/mucorelate")
     elif session["pipeline"]=="mucor":
         return redirect("/zip")
