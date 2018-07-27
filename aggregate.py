@@ -24,6 +24,8 @@ def alter_table(master: pd.DataFrame, conf: dict) -> pd.DataFrame:
 
     return master
 
+def string_agg(x):
+    return ' '.join(str(v) for v in x)
 
 # pivot dataframe based on parameters provided at runtime
 def pivot(master: pd.DataFrame, args: argparse.ArgumentParser)->pd.DataFrame:
@@ -38,8 +40,12 @@ def pivot(master: pd.DataFrame, args: argparse.ArgumentParser)->pd.DataFrame:
     """
     master[args.pivot_index] = master[args.pivot_index].fillna(".")
     sub = master[args.pivot_index + args.pivot_on + args.pivot_value]
+    func=args.agg_func
+    if args.agg_func=="string_agg":
+        func=eval(func)
     return pd.pivot_table(sub, index=args.pivot_index, columns=args.pivot_on,
-                          fill_value=args.fill_value, values=args.pivot_value)
+                          fill_value=args.fill_value, values=args.pivot_value,
+                          aggfunc=func)
 
 def form_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -47,14 +53,28 @@ def form_parser() -> argparse.ArgumentParser:
     parser.add_argument("-po", "--pivot_on", nargs="+",required=True)
     parser.add_argument("-pv", "--pivot_value", nargs="+",required=True)
     parser.add_argument("-f", "--fill_value",default=".")
-
+    parser.add_argument("-t", "--from_tsv",action="store_true")
+    parser.add_argument("-a", "--agg-func",default="string_agg")
     return parser
 
 if __name__ == "__main__":
 
     # parse args and open elasticsearch client
     args = form_parser().parse_args()
-    data=pd.read_json(sys.stdin,orient="records",lines=True)
+    data=[]
+    if args.from_tsv:
+        data=pd.read_csv(sys.stdin,delimiter="\t")
+    else:
+        data=pd.read_json(sys.stdin,orient="records",lines=True)
+    for i,x in enumerate(args.pivot_value):
+        if x in args.pivot_index:
+            col=x+"2"
+            data[col]=data[x]
+            args.pivot_value[i]=col
+        elif x in args.pivot_on:
+            col=x+"2"
+            data[col]=data[x]
+            args.pivot_value[i]=col
     # do pivot
     piv = pivot(data, args)
     piv.columns = piv.columns.droplevel(0)
