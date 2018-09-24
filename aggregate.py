@@ -29,7 +29,8 @@ def string_agg(x):
     return np.unique(x)
 
 # pivot dataframe based on parameters provided at runtime
-def pivot(master: pd.DataFrame, args: argparse.ArgumentParser)->pd.DataFrame:
+def pivot(master: pd.DataFrame, pivot_index: list,
+          pivot_on: list,pivot_value: list ,agg_func: str,fill_value: str)->pd.DataFrame:
     """
     Creates a pivot table using master dataframe and the arguments provided at runtime.
 
@@ -39,14 +40,26 @@ def pivot(master: pd.DataFrame, args: argparse.ArgumentParser)->pd.DataFrame:
     :type args: argparse.ArgumentParser
     :return: pd.Dataframe
     """
-    master[args.pivot_index] = master[args.pivot_index].fillna(".")
-    sub = master[args.pivot_index + args.pivot_on + args.pivot_value]
-    func=args.agg_func
-    if args.agg_func=="string_agg":
+    master[pivot_index] = master[pivot_index].fillna(".")
+    sub = master[pivot_index + pivot_on + pivot_value]
+    func=agg_func
+    if agg_func=="string_agg":
         func=eval(func)
-    return pd.pivot_table(sub, index=args.pivot_index, columns=args.pivot_on,
-                          fill_value=args.fill_value, values=args.pivot_value,
+    piv = pd.pivot_table(sub, index=pivot_index, columns=pivot_on,
+                          fill_value=fill_value, values=pivot_value,
                           aggfunc=func)
+    piv.columns = piv.columns.droplevel(0)
+    piv.reset_index(inplace=True)
+    piv.insert(len(pivot_index),
+        "Positive results",
+        (piv.shape[1]-len(pivot_index)-(piv.iloc[:,len(pivot_index):] == ".")
+               .sum(axis=1)))
+    piv.insert(len(pivot_index)+1,
+        "Positive rate",
+        (piv.shape[1]-(len(pivot_index)+1)-(piv.iloc[:,len(pivot_index)+1:] == ".")
+               .sum(axis=1))/(piv.shape[1]-(len(pivot_index)+1)))
+    return piv
+
 
 def form_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -57,6 +70,7 @@ def form_parser() -> argparse.ArgumentParser:
     parser.add_argument("-t", "--from_tsv",action="store_true")
     parser.add_argument("-a", "--agg-func",default="string_agg")
     return parser
+
 
 if __name__ == "__main__":
 
@@ -77,15 +91,5 @@ if __name__ == "__main__":
             data[col]=data[x]
             args.pivot_value[i]=col
     # do pivot
-    piv = pivot(data, args)
-    piv.columns = piv.columns.droplevel(0)
-    piv.reset_index(inplace=True)
-    piv.insert(len(args.pivot_index),
-        "Positive results",
-        (piv.shape[1]-len(args.pivot_index)-(piv.iloc[:,len(args.pivot_index):] == ".")
-               .sum(axis=1)))
-    piv.insert(len(args.pivot_index)+1,
-        "Positive rate",
-        (piv.shape[1]-(len(args.pivot_index)+1)-(piv.iloc[:,len(args.pivot_index)+1:] == ".")
-               .sum(axis=1))/(piv.shape[1]-(len(args.pivot_index)+1)))
+    piv = pivot(data, args.pivot_index,args.pivot_on,args.pivot_value,args.agg_func,args.fill_value)
     piv.to_json(sys.stdout,orient="records",lines=True)
