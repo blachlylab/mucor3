@@ -1,5 +1,6 @@
 import argparse
 import pandas as pd
+import numpy as np
 import sys
 
 
@@ -25,7 +26,7 @@ def alter_table(master: pd.DataFrame, conf: dict) -> pd.DataFrame:
     return master
 
 def string_agg(x):
-    return ' '.join(str(v) for v in x)
+    return np.unique(x)
 
 # pivot dataframe based on parameters provided at runtime
 def pivot(master: pd.DataFrame, args: argparse.ArgumentParser)->pd.DataFrame:
@@ -79,4 +80,12 @@ if __name__ == "__main__":
     piv = pivot(data, args)
     piv.columns = piv.columns.droplevel(0)
     piv.reset_index(inplace=True)
+    piv.insert(len(args.pivot_index),
+        "Positive results",
+        (piv.shape[1]-len(args.pivot_index)-(piv.iloc[:,len(args.pivot_index):] == ".")
+               .sum(axis=1)))
+    piv.insert(len(args.pivot_index)+1,
+        "Positive rate",
+        (piv.shape[1]-(len(args.pivot_index)+1)-(piv.iloc[:,len(args.pivot_index)+1:] == ".")
+               .sum(axis=1))/(piv.shape[1]-(len(args.pivot_index)+1)))
     piv.to_json(sys.stdout,orient="records",lines=True)
