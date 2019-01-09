@@ -50,16 +50,41 @@ def pivot(master: pd.DataFrame, pivot_index: list,
                           aggfunc=func)
     piv.columns = piv.columns.droplevel(0)
     piv.reset_index(inplace=True)
-    piv.insert(len(pivot_index),
-        "Positive results",
-        (piv.shape[1]-len(pivot_index)-(piv.iloc[:,len(pivot_index):] == ".")
-               .sum(axis=1)))
-    piv.insert(len(pivot_index)+1,
-        "Positive rate",
-        (piv.shape[1]-(len(pivot_index)+1)-(piv.iloc[:,len(pivot_index)+1:] == ".")
-               .sum(axis=1))/(piv.shape[1]-(len(pivot_index)+1)))
     return piv
 
+def add_result_metrics(piv: pd.DataFrame, index: list):
+    piv.insert(len(index),
+        "Positive results",
+        (piv.shape[1]-len(index)-(piv.iloc[:,len(index):] == ".")
+         .sum(axis=1)))
+    piv.insert(len(index)+1,
+        "Positive rate",
+        (piv.shape[1]-(len(index)+1)-(piv.iloc[:,len(index)+1:] == ".")
+            .sum(axis=1))/(piv.shape[1]-(len(index)+1)))
+    return piv
+
+def join_columns(master: pd.DataFrame, piv: pd.DataFrame, index: list, join: list):
+    """
+    Creates a pivot table using master dataframe and the arguments provided at runtime.
+
+    :param master: Dataframe to merge columns from.
+    :type master: pd.Dataframe
+    :param master: pivoted Dataframe.
+    :type master: pd.Dataframe
+    :param index: list of columns for indexing dataframes
+    :type index: list
+    :param join: list of columns to join from master
+    :type join: list
+    :return: pd.Dataframe
+    """
+    master.set_index(index,inplace=True)
+    piv.set_index(index,inplace=True)
+    master.sort_index(inplace=True)
+    piv.sort_index(inplace=True)
+    piv=piv.join(master[join])
+    master.reset_index(inplace=True)
+    piv.reset_index(inplace=True)
+    return piv
 
 def form_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
