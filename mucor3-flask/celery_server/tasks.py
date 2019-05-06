@@ -2,18 +2,11 @@ from celery_server.celery import app
 import subprocess
 
 @app.task
-def mucor3_pivot(filein, piv_index,piv_on,piv_value,outfile):
+def mucor3_pivot(filein, folder):
     mucor=subprocess.Popen(
-        ["python","../aggregate.py","-pi"]+
-        [x.strip() for x in piv_index.split(",")]+
-        ["-po"]+[x.strip() for x in piv_on.split(",")]+
-        ["-pv", piv_value.strip()],
-        stdin=open(filein,'r'),stdout=subprocess.PIPE)
-    to_tsv=subprocess.Popen(
-        ["python","../utils/jsonl2csv.py","-t","-i"]+[x.strip() for x in piv_index.split(",")],
-        stdin=mucor.stdout,stdout=open(outfile,"w"))
-        #stdin=mucor.stdout)
-    return to_tsv.returncode
+        ["python","../mucor.py",filein,folder])
+    mucor.communicate()
+    return mucor.returncode
 
 @app.task
 def mucor3_master(filein,outfile):

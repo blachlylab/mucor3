@@ -1,4 +1,4 @@
 from celery import Celery
 
 app = Celery('celery_server',backend='rpc://',
-    broker='pyamqp://admin:mypass@rabbit//',include=['celery_server.tasks'])
+    broker='pyamqp://127.0.0.1//',include=['celery_server.tasks'])

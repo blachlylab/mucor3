@@ -1,13 +1,16 @@
 from flask import Flask, flash, request, redirect,session, url_for,render_template, send_from_directory
 import os
+import signal
 import shutil
 from werkzeug.utils import secure_filename
 import subprocess
 import uuid
 import sys
 from celery_server import tasks
+import webbrowser
+import subprocess
 
-UPLOAD_FOLDER = '/data/'
+UPLOAD_FOLDER = '/tmp/'
 ALLOWED_EXTENSIONS = set(['vcf'])
 UPLOADED_FILES=set()
 JOBS=dict()
@@ -87,14 +90,9 @@ def atomize():
         os.mkdir(os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"]))
     if session["uuid"] not in JOBS:
         JOBS[session["uuid"]]=[]
-    if request.form.get("filter-check")!="":
-        session["pipeline"]="download"
-        url=request.form.get("json-url")
-        JOBS[session["uuid"]].append({"download":tasks.download.delay(url,os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+".jsonl"))})
-    else:
-        session["pipeline"]="atomize"
-        for x in session["files"]:
-            JOBS[session["uuid"]].append({"atomizer":tasks.atomizer.delay(os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],x))})
+    session["pipeline"]="atomize"
+    for x in session["files"]:
+        JOBS[session["uuid"]].append({"atomizer":tasks.atomizer.delay(os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],x))})
     return redirect("/wait")
 
 @app.route('/combine', methods=['GET'])
@@ -110,16 +108,7 @@ def mucorelate():
     JOBS[session["uuid"]].append(
         {"mucor3":tasks.mucor3_pivot.delay(
             os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+".jsonl"),
-            session["piv-index"],
-            session["piv-on"],
-            session["piv-value"],
-            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+"_piv.tsv"),
-            )})
-    JOBS[session["uuid"]].append(
-        {"mucor3":tasks.mucor3_master.delay(
-            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+".jsonl"),
-            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+"_master.tsv"),
-            )})
+            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"]))})
     return redirect("/wait")
 
 @app.route('/zip', methods=['GET'])
@@ -163,6 +152,20 @@ def download(filename):
         uploads= os.path.join(app.config['UPLOAD_FOLDER'])
     return send_from_directory(directory=uploads, filename=filename)
 
+rabbit=subprocess.Popen(["rabbitmq-server"])
+celery=subprocess.Popen(["celery", "-A", "celery_server", "worker"])
+
+def kill_sub():
+    os.killpg(os.getpgid(rabbit.pid),signal.SIGTERM)
+    os.killpg(os.getpgid(celery.pid),signal.SIGTERM)
+
+@app.route('/kill', methods=['GET'])
+def kill():
+    kill_sub()
+    os._exit(0)
+
+
 if __name__ == '__main__':
     app.secret_key="myflaskapp".encode("utf-8")
-    app.run(debug=True,host='0.0.0.0')
+    webbrowser.open("http://127.0.0.1:5000/")
+    app.run(debug=True)
