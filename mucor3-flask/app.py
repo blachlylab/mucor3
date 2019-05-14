@@ -87,14 +87,9 @@ def atomize():
         os.mkdir(os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"]))
     if session["uuid"] not in JOBS:
         JOBS[session["uuid"]]=[]
-    if request.form.get("filter-check")!="":
-        session["pipeline"]="download"
-        url=request.form.get("json-url")
-        JOBS[session["uuid"]].append({"download":tasks.download.delay(url,os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+".jsonl"))})
-    else:
-        session["pipeline"]="atomize"
-        for x in session["files"]:
-            JOBS[session["uuid"]].append({"atomizer":tasks.atomizer.delay(os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],x))})
+    session["pipeline"]="atomize"
+    for x in session["files"]:
+        JOBS[session["uuid"]].append({"atomizer":tasks.atomizer.delay(os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],x))})
     return redirect("/wait")
 
 @app.route('/combine', methods=['GET'])
@@ -110,16 +105,7 @@ def mucorelate():
     JOBS[session["uuid"]].append(
         {"mucor3":tasks.mucor3_pivot.delay(
             os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+".jsonl"),
-            session["piv-index"],
-            session["piv-on"],
-            session["piv-value"],
-            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+"_piv.tsv"),
-            )})
-    JOBS[session["uuid"]].append(
-        {"mucor3":tasks.mucor3_master.delay(
-            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+".jsonl"),
-            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],session["uuid"]+"_master.tsv"),
-            )})
+            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"]))})
     return redirect("/wait")
 
 @app.route('/zip', methods=['GET'])
