@@ -1,17 +1,17 @@
-from celery_server.celery import app
+from mucor3_flask.celery_server.celery import app
 import subprocess
 
 @app.task
 def mucor3_pivot(filein, folder):
     mucor=subprocess.Popen(
-        ["python","../mucor.py",filein,folder])
+        ["python","/app/mucor.py",filein,folder])
     mucor.communicate()
     return mucor.returncode
 
 @app.task
 def mucor3_master(filein,outfile):
     to_tsv=subprocess.Popen(
-        ["python","../utils/jsonl2csv.py","-t"],
+        ["python","/app/utils/jsonl2csv.py","-t"],
         stdin=open(filein,"r"),stdout=open(outfile,"w"))
     return to_tsv.returncode
 
@@ -36,6 +36,6 @@ def combine(files, outfile):
 @app.task
 def atomizer(file):
     atom=subprocess.Popen(
-        ["../vcf_atomizer/bin/atomizer",file],stdout=open(file+".jsonl","w"))
+        ["/app/vcf_atomizer/bin/atomizer",file],stdout=open(file+".jsonl","w"))
     atom.communicate()
     return atom.returncode

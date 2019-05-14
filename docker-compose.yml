@@ -34,7 +34,7 @@ services:
             - data-volume:/data
     webapp:
         environment:
-            - MODULE_NAME=mucor3-flask.app
+            - MODULE_NAME=mucor3_flask.app
         build:
             context: .
             dockerfile: Dockerfile
@@ -45,4 +45,10 @@ services:
         volumes:
             - data-volume:/data
 volumes:
-     data-volume:
+     data-volume: 
+        driver: local
+        driver_opts:
+            type: 'none'
+            o: 'bind'
+            device: '/tmp'
+

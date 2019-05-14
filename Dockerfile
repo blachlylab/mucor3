@@ -25,6 +25,6 @@ ENV GOPATH /home/user/mucor3/go
 WORKDIR /app/vcf_atomizer
 RUN make deps
 RUN make build
-WORKDIR /app/mucor3-flask/
+WORKDIR /app/
 #ENV FLASK_APP app.py
-ENTRYPOINT celery -A celery_server worker --concurrency=20 --loglevel=info
+ENTRYPOINT celery -A mucor3_flask.celery_server worker --concurrency=20 --loglevel=info

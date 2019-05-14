@@ -5,7 +5,7 @@ from werkzeug.utils import secure_filename
 import subprocess
 import uuid
 import sys
-from mucor3-flask.celery_server import tasks
+from mucor3_flask.celery_server import tasks
 
 UPLOAD_FOLDER = '/data/'
 ALLOWED_EXTENSIONS = set(['vcf'])
@@ -13,6 +13,7 @@ UPLOADED_FILES=set()
 JOBS=dict()
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.secret_key="myflaskapp".encode("utf-8")
 
 def allowed_file(filename):
     return '.' in filename and \
