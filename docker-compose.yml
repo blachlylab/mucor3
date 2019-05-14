@@ -33,13 +33,15 @@ services:
         volumes:
             - data-volume:/data
     webapp:
+        environment:
+            - MODULE_NAME=mucor3-flask.app
         build:
             context: .
             dockerfile: Dockerfile
             target: flask
         image: mucor3_webapp
         ports:
-            - "5000:5000"
+            - "80:80"
         volumes:
             - data-volume:/data
 volumes:

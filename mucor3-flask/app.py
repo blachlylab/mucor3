@@ -5,7 +5,7 @@ from werkzeug.utils import secure_filename
 import subprocess
 import uuid
 import sys
-from celery_server import tasks
+from mucor3-flask.celery_server import tasks
 
 UPLOAD_FOLDER = '/data/'
 ALLOWED_EXTENSIONS = set(['vcf'])
@@ -165,4 +165,4 @@ def download(filename):
 
 if __name__ == '__main__':
     app.secret_key="myflaskapp".encode("utf-8")
-    app.run(debug=True,host='0.0.0.0')
+    app.run(debug=True,host='0.0.0.0',port=80)
