@@ -39,3 +39,10 @@ def atomizer(file):
         ["/app/vcf_atomizer/bin/atomizer",file],stdout=open(file+".jsonl","w"))
     atom.communicate()
     return atom.returncode
+
+@app.task
+def depthgauge(file,folder,outfile):
+    atom=subprocess.Popen(
+        ["/app/depthGauge/depthgauge","-t","4",file,"11",folder,outfile])
+    atom.communicate()
+    return atom.returncode

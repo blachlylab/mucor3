@@ -109,6 +109,16 @@ def mucorelate():
             os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"]))})
     return redirect("/wait")
 
+@app.route('/depth', methods=['GET'])
+def depthgauge():
+    session["pipeline"]="depthgauge"
+    JOBS[session["uuid"]].append(
+        {"depthgauge":tasks.depthgauge.delay(
+            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],"AF.tsv"),
+            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"]),
+            os.path.join(app.config['UPLOAD_FOLDER'],session["uuid"],"depthgauge.tsv"))})
+    return redirect("/wait")
+
 @app.route('/zip', methods=['GET'])
 def zip_folder():
     session["pipeline"]="zip"
@@ -133,6 +143,8 @@ def wait():
     elif session["pipeline"]=="download":
         return redirect("/mucorelate")
     elif session["pipeline"]=="mucor":
+        return redirect("/depth")
+    elif session["pipeline"]=="depthgauge":
         return redirect("/zip")
     else:
         return redirect("/Result")
