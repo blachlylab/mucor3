@@ -1,6 +1,6 @@
 [submodule "vcf_atomizer"]
 	path = vcf_atomizer
-	url = git@github.com:blachlylab/vcf_atomizer.git
+	url = https://github.com/blachlylab/vcf_atomizer.git
 [submodule "depthGauge"]
 	path = depthGauge
-	url = git@github.com:blachlylab/depthGauge.git
+	url = https://github.com/blachlylab/depthGauge.git
