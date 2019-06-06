@@ -33,21 +33,25 @@ if __name__=="__main__":
     master=pd.read_json(os.path.join(args.prefix,"__master.jsonl"),orient="records",lines=True)
 
     #create EFFECT column
-    master["EFFECT"]=master["ANN_hgvs_p"]
-    master["EFFECT"].fillna(master["ANN_effect"],inplace=True)
+    if("ANN_hgvs_p" in master):
+        master["EFFECT"]=master["ANN_hgvs_p"]
+        master["EFFECT"].fillna(master["ANN_effect"],inplace=True)
 
     #create Total Depth column
     master["Total_depth"]=master["Ref_Depth"]+master["Alt_depths"].apply(sum)
     samples=set(master["sample"])
 
+    required_fields=["sample", "CHROM", "POS", "REF", "ALT"]
+    extra_fields=list(set(master.columns) & set(["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"]))
+
     print("sorting")
-    master.set_index(["sample", "CHROM", "POS", "REF", "ALT"]+[col for col in master if col.startswith('ANN_')],inplace=True)
+    master.set_index(required_fields+[col for col in master if col.startswith('ANN_')],inplace=True)
     master.sort_index(inplace=True)
     master.reset_index(inplace=True)
     print("merging")
     #write the merged datasets - merged on CHROM POS REF ALT sample to remove duplicate entrys related to alternate annotations
-    write_jsonl(merge.merge_rows(master,["sample","CHROM","POS","REF","ALT"]),os.path.join(args.prefix,"__merge_sample.jsonl"))
-    write_jsonl(merge.merge_rows_unique(master,["sample","CHROM","POS","REF","ALT"]),os.path.join(args.prefix,"__merge_sample_u.jsonl"))
+    write_jsonl(merge.merge_rows(master,required_fields),os.path.join(args.prefix,"__merge_sample.jsonl"))
+    write_jsonl(merge.merge_rows_unique(master,required_fields),os.path.join(args.prefix,"__merge_sample_u.jsonl"))
 
     #import merged dataset
     merged=pd.read_json(os.path.join(args.prefix,"__merge_sample.jsonl"),orient="records",lines=True)
@@ -55,16 +59,14 @@ if __name__=="__main__":
     #write master tsv
     jsonlcsv.jsonl2tsv(
         merged,
-        ["sample", "CHROM", "POS", "REF", "ALT",
-         "ANN_gene_name", "EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],
+        required_fields + extra_fields,
         os.path.join(args.prefix,"master.tsv")
     )
     condensed=merge.merge_rows_unique(merged,["CHROM","POS","REF","ALT"])
     #write Variants tsv
     jsonlcsv.jsonl2tsv(
         condensed,
-        ["sample", "CHROM", "POS", "REF", "ALT",
-         "ANN_gene_name", "EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],
+        required_fields + extra_fields,
         os.path.join(args.prefix,"Variants.tsv")
     )
 
@@ -82,15 +84,14 @@ if __name__=="__main__":
         print(x)
 
     pivot=aggregate.join_columns(condensed,pivot,["CHROM", "POS", "REF", "ALT"],
-                                 ["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"])
-    pivot.set_index(["CHROM", "POS", "REF", "ALT"]+["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],inplace=True)
+                                 extra_fields)
+    pivot.set_index(["CHROM", "POS", "REF", "ALT"]+extra_fields,inplace=True)
     pivot.reset_index(inplace=True)
-    pivot=aggregate.add_result_metrics(pivot,["CHROM", "POS", "REF", "ALT"]+["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"])
+    pivot=aggregate.add_result_metrics(pivot,["CHROM", "POS", "REF", "ALT"]+extra_fields)
 
     #write AF pivot table
     jsonlcsv.jsonl2tsv(pivot,
-                       ["CHROM", "POS", "REF", "ALT",
-                        "ANN_gene_name", "EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],
+                       ["CHROM", "POS", "REF", "ALT"]+extra_fields,
                        os.path.join(args.prefix,"AF.tsv")
     )
 
@@ -104,15 +105,14 @@ if __name__=="__main__":
         pivot[x]="."
 
     pivot=aggregate.join_columns(condensed,pivot,["CHROM", "POS", "REF", "ALT"],
-                                 ["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"])
-    pivot.set_index(["CHROM", "POS", "REF", "ALT"]+["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],inplace=True)
+                                 extra_fields)
+    pivot.set_index(["CHROM", "POS", "REF", "ALT"]+extra_fields,inplace=True)
     pivot.reset_index(inplace=True)
-    pivot=aggregate.add_result_metrics(pivot,["CHROM", "POS", "REF", "ALT"]+["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"])
+    pivot=aggregate.add_result_metrics(pivot,["CHROM", "POS", "REF", "ALT"]+extra_fields)
 
     #write DP pivot table
     jsonlcsv.jsonl2tsv(pivot,
-                       ["CHROM", "POS", "REF", "ALT",
-                        "ANN_gene_name", "EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],
+                       ["CHROM", "POS", "REF", "ALT"]+extra_fields,
                        os.path.join(args.prefix,"DP.tsv")
     )
 
