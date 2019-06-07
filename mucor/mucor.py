@@ -1,7 +1,7 @@
-import aggregate
-import merge
+import mucor.aggregate
+import mucor.merge
 import argparse
-import jsonlcsv
+import mucor.jsonlcsv
 from shutil import copyfile
 import os
 import pandas as pd
@@ -18,7 +18,7 @@ def write_jsonl(master: pd.DataFrame,fn: str):
     master.to_json(fn,orient="records",lines=True)
 
 
-if __name__=="__main__":
+def main():
     #parse args
     args=form_parser().parse_args()
     if not os.path.exists(args.prefix):
@@ -115,6 +115,10 @@ if __name__=="__main__":
                        ["CHROM", "POS", "REF", "ALT"]+extra_fields,
                        os.path.join(args.prefix,"DP.tsv")
     )
+
+
+if __name__=="__main__":
+    main()
 
 
 
