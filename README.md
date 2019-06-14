@@ -38,6 +38,7 @@ mucor3 data.jsonl output_folder
 ```
 Mucor3 will output a pivoted table that is every variant pivoted 
 by sample and should have this general format:
+
 | CHROM | POS  | REF | ALT    | ANN_gene_name | ANN_effect | sample1 | sample2 |
 |-------|------|-----|--------|---------------|------------|---------|---------|
 | chr1  | 2    | G   | T      | foo           | missense   | .       | 0.7     |
@@ -49,6 +50,7 @@ The values under sample1 and sample2 are the values from the AF field of FORMAT 
 
 The master table however would represent this same data in
 this format:
+
 | CHROM | POS  | REF | ALT    | sample1 | sample  | ANN_gene_name | ANN_hgvs_p | ANN_effect |
 |-------|------|-----|--------|---------|---------|---------------|------------|------------|
 | chr1  | 2    | G   | T      | 0.7     | sample2 | foo           | p.Met1Ala  | missense   |
@@ -68,6 +70,7 @@ For our example we would expect BAMs to contain ```sample1.bam, sample2.bam, sam
 depthgauge -t 4 output_folder/AF.tsv 7 BAMS/ depthgauge.tsv
 ```
 This will create an identical table to our first except with read depths instead of allele frequencies.
+
 | CHROM | POS  | REF | ALT    | ANN_gene_name | ANN_effect | sample1 | sample2 |
 |-------|------|-----|--------|---------------|------------|---------|---------|
 | chr1  | 2    | G   | T      | foo           | missense   | 10      | 37      |
