@@ -31,6 +31,13 @@ vcf_atomizer sample2.vcf >sample2.jsonl
 ```
 cat sample1.jsonl sample2.jsonl ... > data.jsonl
 ```
+#### OR Filter Data
+```
+// select only jsonl rows where protein change annotation (ANN_hgvs_p) from snpeff
+// is not null and the variant allele frequency is > 0.01
+cat *.jsonl | jq -c 'select(.ANN_hgvs_p!=null and .AF > 0.01)' > data.jsonl
+```
+
 #### Mucor
 Provide mucor3 with your combined data and an output folder.
 ```

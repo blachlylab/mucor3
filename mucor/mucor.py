@@ -1,7 +1,7 @@
-import mucor.aggregate
-import mucor.merge
+import mucor.aggregate as aggregate
+import mucor.merge as merge
 import argparse
-import mucor.jsonlcsv
+import mucor.jsonlcsv as jsonlcsv
 from shutil import copyfile
 import os
 import pandas as pd
