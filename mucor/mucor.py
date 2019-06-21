@@ -4,11 +4,14 @@ import argparse
 import mucor.jsonlcsv as jsonlcsv
 from shutil import copyfile
 import os
+import sys
 import pandas as pd
 
 
 def form_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument("-e","--extra",default=["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],nargs="+")
+    parser.add_argument("-i","--index",default="AF")
     parser.add_argument("datafile")
     parser.add_argument("prefix")
     return parser
@@ -32,17 +35,31 @@ def main():
     print("importing")
     master=pd.read_json(os.path.join(args.prefix,"__master.jsonl"),orient="records",lines=True)
 
+    required_fields=["sample", "CHROM", "POS", "REF", "ALT"]
+    missing_fields = set(required_fields) - set(master.columns)
+    if(len(missing_fields)!=0):
+        print("Error: missing column ",missing_fields)
+        sys.exit(0)
+
+    if(args.index not in master):
+        print("Error: missing column ",args.index)
+        sys.exit(0)
+
     #create EFFECT column
     if("ANN_hgvs_p" in master):
         master["EFFECT"]=master["ANN_hgvs_p"]
         master["EFFECT"].fillna(master["ANN_effect"],inplace=True)
 
     #create Total Depth column
-    master["Total_depth"]=master["Ref_Depth"]+master["Alt_depths"].apply(sum)
+    if(("Ref_Depth" in master) and ("Alt_depths" in master)):
+        master["Total_depth"]=master["Ref_Depth"]+master["Alt_depths"].apply(sum)
     samples=set(master["sample"])
 
-    required_fields=["sample", "CHROM", "POS", "REF", "ALT"]
-    extra_fields=list(set(master.columns) & set(["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"]))
+    missing_fields = set(args.extra) - set(master.columns)
+    if(len(missing_fields)!=0):
+        print("Warning: missing column ",missing_fields)
+
+    extra_fields=list(set(master.columns) & set(args.extra))
 
     print("sorting")
     master.set_index(required_fields+[col for col in master if col.startswith('ANN_')],inplace=True)
@@ -76,7 +93,7 @@ def main():
     #pivot AF
     pivot=aggregate.pivot(merged,
                     ["CHROM", "POS", "REF", "ALT"],#["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],
-                    ["sample"],["AF"],"string_agg",".")
+                    ["sample"],[args.index],"string_agg",".")
 
     #if any samples removed add them back
     for x in (samples-set(pivot.columns)):
@@ -95,26 +112,6 @@ def main():
                        os.path.join(args.prefix,"AF.tsv")
     )
 
-    #pivot DP
-    pivot=aggregate.pivot(merged,
-                    ["CHROM", "POS", "REF", "ALT"],#["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],
-                    ["sample"],["Total_depth"],"string_agg",".")
-
-    #if any samples removed add them back
-    for x in (samples-set(pivot.columns)):
-        pivot[x]="."
-
-    pivot=aggregate.join_columns(condensed,pivot,["CHROM", "POS", "REF", "ALT"],
-                                 extra_fields)
-    pivot.set_index(["CHROM", "POS", "REF", "ALT"]+extra_fields,inplace=True)
-    pivot.reset_index(inplace=True)
-    pivot=aggregate.add_result_metrics(pivot,["CHROM", "POS", "REF", "ALT"]+extra_fields)
-
-    #write DP pivot table
-    jsonlcsv.jsonl2tsv(pivot,
-                       ["CHROM", "POS", "REF", "ALT"]+extra_fields,
-                       os.path.join(args.prefix,"DP.tsv")
-    )
 
 
 if __name__=="__main__":
