@@ -12,7 +12,7 @@ try:
 except ImportError:
     print("Could not load setuptools. Please install the setuptools package.", file=sys.stderr)
 
-__version__=0.1
+__version__=0.3
 
 
 setup(

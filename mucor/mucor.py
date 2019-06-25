@@ -10,10 +10,11 @@ import pandas as pd
 
 def form_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e","--extra",default=["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],nargs="+")
-    parser.add_argument("-i","--index",default="AF")
-    parser.add_argument("datafile")
-    parser.add_argument("prefix")
+    #default=["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"]
+    parser.add_argument("-e","--extra",help="comma delimited list of extra columns to include in pivoted table index",type=str)
+    parser.add_argument("-a","--value",default="AF", help="Value to be displayed in pivoted table values")
+    parser.add_argument("datafile", help="input jsonl data from vcf_atomizer")
+    parser.add_argument("prefix", help="directory for output")
     return parser
 
 
@@ -41,8 +42,8 @@ def main():
         print("Error: missing column ",missing_fields)
         sys.exit(0)
 
-    if(args.index not in master):
-        print("Error: missing column ",args.index)
+    if(args.value not in master):
+        print("Error: missing column ",args.value)
         sys.exit(0)
 
     #create EFFECT column
@@ -55,11 +56,11 @@ def main():
         master["Total_depth"]=master["Ref_Depth"]+master["Alt_depths"].apply(sum)
     samples=set(master["sample"])
 
-    missing_fields = set(args.extra) - set(master.columns)
+    missing_fields = set(args.extra.split(",")) - set(master.columns)
     if(len(missing_fields)!=0):
         print("Warning: missing column ",missing_fields)
 
-    extra_fields=list(set(master.columns) & set(args.extra))
+    extra_fields=list(set(master.columns) & set(args.extra.split(",")))
 
     print("sorting")
     master.set_index(required_fields+[col for col in master if col.startswith('ANN_')],inplace=True)
@@ -93,7 +94,7 @@ def main():
     #pivot AF
     pivot=aggregate.pivot(merged,
                     ["CHROM", "POS", "REF", "ALT"],#["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],
-                    ["sample"],[args.index],"string_agg",".")
+                    ["sample"],[args.value],"string_agg",".")
 
     #if any samples removed add them back
     for x in (samples-set(pivot.columns)):

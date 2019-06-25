@@ -1,26 +1,38 @@
 # Mucor3
-Mucor3 an iteration on the original [Mucor](https://github.com/blachlylab/mucor). Mucor3 translates [VCF](https://samtools.github.io/hts-specs/VCFv4.2.pdf) files into tabular data and aggregates it into useful pivoted tables.
+
+* [Introduction](#introduction)
+* [Installation](#installation)
+* [Run Mucor3](#run-mucor3)
+	* [Atomize VCFs](#atomize-vcfs)
+	* [Combine jsonl data](#combine-jsonl-data)
+	* [Filter Data](#filter-data)
+	* [Running Mucor3](#running-mucor3)
+	* [DepthGauge](#depthgauge)
+* [Datastore](#datastore)
+
+
+### Introduction
+Mucor3 an iteration on the original [Mucor](https://github.com/blachlylab/mucor). Mucor3 translates [VCF](https://samtools.github.io/hts-specs/VCFv4.2.pdf) files into tabular data and aggregates it into useful pivoted tables. VCFs are converted to line-delimited [json](http://jsonlines.org/) objects. This allows for great flexibility in filtering the VCF data before pivoting the data. After combining all variant jsonl into one file Mucor3 can convert it to a tabular format and generate pivoted tables that show by default each variant pivoted by sample while display the allele frequency of that variant for a particular sample. [depthgauge](https://github.com/blachlylab/depthGauge) serves to create a pivoted spreadsheet that shows the read depth at all positions in the pivoted allele frequency table.
+
 
 ### Installation
 ```
-conda install -c bioconda mucor3
+conda install -c bioconda -c conda-forge mucor3
 ```
-or if you wish to build mucor3: requires go and dlang
+or if you wish to build mucor3:
 ```
-git clone ...
+git clone --recurse-submodules https://github.com/blachlylab/mucor3.git
 cd vcf_atomizer
-make
+make  #requires go
 cd ..
 cd depthGauge
-dub build --build release
+dub build --build release #requires dlang: dub and (ldc2 or dmd)
 cd ..
 python setup.py install
 ```
 
 ### Run Mucor3
-VCFs must be atomized into line-delimited [json](http://jsonlines.org/). The [vcf_atomizer](https://github.com/blachlylab/vcf_atomizer) can take a vcf or gzipped vcf file and convert it to jsonl. After combining all jsonl into one file Mucor3 can convert it to a tabular format and generate pivoted tables. [depthgauge](https://github.com/blachlylab/depthGauge) serves to create a pivoted spreadsheet that shows the read depth at all positions in the pivoted AF table.
-
-Mucor3 is intended to be run on [GATK](https://software.broadinstitute.org/gatk/) VCFs that have undergone annotation with [SnpEff](http://snpeff.sourceforge.net/), however, Mucor3 and the vcf_atomizer should work for most VCFs that are properly formatted. If you find that we couldn't atomize your particular VCF or an annotation string from a software like SnpEff, please open an issue on the [vcf_atomizer github](https://github.com/blachlylab/vcf_atomizer/issues) with a sample of your VCF including the header.
+VCFs must be atomized into line-delimited [json](http://jsonlines.org/). The [vcf_atomizer](https://github.com/blachlylab/vcf_atomizer) can take a vcf or gzipped vcf file and convert it to jsonl. Mucor3 is intended to be run on [GATK](https://software.broadinstitute.org/gatk/) VCFs that have undergone annotation with [SnpEff](http://snpeff.sourceforge.net/), however, Mucor3 and the vcf_atomizer should work for most VCFs that are properly formatted. If you find that we couldn't atomize your particular VCF or an annotation string from a software like SnpEff, please open an issue on the [vcf_atomizer github](https://github.com/blachlylab/vcf_atomizer/issues) with a sample of your VCF including the header.
 
 #### Atomize VCFs
 
@@ -35,13 +47,13 @@ vcf_atomizer sample2.vcf >sample2.jsonl
 cat sample1.jsonl sample2.jsonl ... > data.jsonl
 ```
 #### Filter Data (optional)
-The bioconda package includes jq as an option for simple filtering of JSONL variant data while combining:
+The bioconda package includes [jq](https://github.com/stedolan/jq) as an option for simple filtering of JSONL variant data while combining:
 ```
 // select only jsonl rows where protein change annotation (ANN_hgvs_p) from snpeff
 // is not null and the variant allele frequency is > 0.01
 cat *.jsonl | jq -c 'select(.ANN_hgvs_p!=null and .AF > 0.01)' > data.jsonl
 ```
-You can read more about jq [here](https://stedolan.github.io/jq/).
+You can read more about jq syntax [here](https://stedolan.github.io/jq/).
 
 
 **Note:** If more extensive filtering is needed, Mucor3 should be flexible with any noSQL datastore that accepts 
@@ -94,3 +106,6 @@ This will create an identical table to our first except with read depths instead
 | chr1  | 5    | C   | T      | foo           | synonymous | 100     | 4       |
 | chr1  | 1000 | TA  | T      | bar           | ...        | 20      | 45      |
 | chr1  | 3000 | G   | GATAGC | oncogene      | ...        | 300     | 78      |
+
+### Datastore
+The key advancement of using JSONL as a intermediate data type is it flexibility and use in noSQL datastores. When using a large number of samples or a more permanant dataset that may be analyzed several times, a noSQL database may offer more flexibility and robustness. We have provided python scripts that can be used to upload data to an Elasticsearch instance and query VCF data from an elasticsearch instance.
