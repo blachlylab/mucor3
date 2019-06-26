@@ -11,11 +11,11 @@
 * [Datastore](#datastore)
 
 
-### Introduction
+## Introduction
 Mucor3 an iteration on the original [Mucor](https://github.com/blachlylab/mucor). Mucor3 translates [VCF](https://samtools.github.io/hts-specs/VCFv4.2.pdf) files into tabular data and aggregates it into useful pivoted tables. VCFs are converted to line-delimited [json](http://jsonlines.org/) objects. This allows for great flexibility in filtering the VCF data before pivoting the data. After combining all variant jsonl into one file Mucor3 can convert it to a tabular format and generate pivoted tables that show by default each variant pivoted by sample while display the allele frequency of that variant for a particular sample. [depthgauge](https://github.com/blachlylab/depthGauge) serves to create a pivoted spreadsheet that shows the read depth at all positions in the pivoted allele frequency table.
 
 
-### Installation
+## Installation
 ```
 conda install -c bioconda -c conda-forge mucor3
 ```
@@ -31,7 +31,7 @@ cd ..
 python setup.py install
 ```
 
-### Run Mucor3
+## Run Mucor3
 VCFs must be atomized into line-delimited [json](http://jsonlines.org/). The [vcf_atomizer](https://github.com/blachlylab/vcf_atomizer) can take a vcf or gzipped vcf file and convert it to jsonl. Mucor3 is intended to be run on [GATK](https://software.broadinstitute.org/gatk/) VCFs that have undergone annotation with [SnpEff](http://snpeff.sourceforge.net/), however, Mucor3 and the vcf_atomizer should work for most VCFs that are properly formatted. If you find that we couldn't atomize your particular VCF or an annotation string from a software like SnpEff, please open an issue on the [vcf_atomizer github](https://github.com/blachlylab/vcf_atomizer/issues) with a sample of your VCF including the header.
 
 #### Atomize VCFs
@@ -107,5 +107,5 @@ This will create an identical table to our first except with read depths instead
 | chr1  | 1000 | TA  | T      | bar           | ...        | 20      | 45      |
 | chr1  | 3000 | G   | GATAGC | oncogene      | ...        | 300     | 78      |
 
-### Datastore
-The key advancement of using JSONL as a intermediate data type is it flexibility and use in noSQL datastores. When using a large number of samples or a more permanant dataset that may be analyzed several times, a noSQL database may offer more flexibility and robustness. We have provided python scripts that can be used to upload data to an Elasticsearch instance and query VCF data from an elasticsearch instance.
+## Datastore
+The key advancement of using JSONL as a intermediate data type is it flexibility and use in noSQL datastores. When using a large number of samples or a more permanant dataset that may be analyzed several times, a noSQL database may offer more flexibility and robustness. We have provided python scripts that can be used to upload data to an Elasticsearch instance and query VCF data from an Elasticsearch instance.

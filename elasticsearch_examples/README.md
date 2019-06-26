@@ -6,10 +6,10 @@
 * [AWS](#amazon-web-services-elasticsearch-instances)
 
 
-### Introduction
+## Introduction
 Elasticsearch is a noSQL datastore that accepts documents or JSON objects as input into indexes. Using mucor3 along with an Elasticsearch instance has proved most useful for our lab as we have sequenced thousands of DNA samples for mutational analysis. We will not cover setting up your own Elasticsearch instance that information can be found [here](https://www.elastic.co/guide/en/elasticsearch/reference/current/elasticsearch-intro.html). 
 
-### Indexing
+## Indexing
 JSONL data is indexed into Elasticsearch under an index (used to separate documents into groups). The python script ```indexer.py``` can index jsonl from the vcf_atomizer into an Elasticsearch instance.
 
 Install requirements (in addition to normal Mucor3 requirements):
@@ -49,7 +49,7 @@ The indexer reads jsonl from stdin and will store json objects in the specified 
 cat data.jsonl | python indexer.py myproject 
 ```
 
-### Query
+## Query
 The query script uses the Elasticsearch [Query String](https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html) syntax (also know as the Kibana Query Syntax).
 
 #### Query Options
