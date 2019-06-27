@@ -84,8 +84,6 @@ def form_parser() -> argparse.ArgumentParser:
     parser.add_argument("index",help="Elasticsearch index to query.")
     parser.add_argument("doctype",help="Elasticsearch doc type to query.")
     parser.add_argument("query", type=str,help="Elasticsearch query string to query index.")
-
-    parser.set_defaults(func=run_query)
     return parser
 
 
@@ -106,8 +104,8 @@ if __name__ == "__main__":
                           connection_class=RequestsHttpConnection,
                           http_auth=auth,
                           timeout=30, max_retries=10, retry_on_timeout=True)
-    if args.host:
+    elif args.host:
         client = Elasticsearch(args.host,timeout=30, max_retries=10, retry_on_timeout=True)
     else:
         client = Elasticsearch(timeout=30, max_retries=10, retry_on_timeout=True)
-    args.func(args,client)
+    run_query(args,client)
