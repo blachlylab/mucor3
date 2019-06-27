@@ -91,5 +91,10 @@ mucor3 query.jsonl output_dir
 ### Amazon Web Services Elasticsearch Instances
 The python scripts also allow usage with AWS Elasticsearch Instances. This functionality is provided through the boto3 package. If you are familiar with the AWS CLI, boto3 uses your existing AWS credentials (setup information found [here](https://docs.aws.amazon.com/polly/latest/dg/setup-aws-cli.html)). You must provide your AWS Elasticsearch host and AWS region.
 ```
-cat data.jsonl | python indexer.py -a -e host -r us-east-1 myproject 
+cat data.jsonl | \
+	python indexer.py -a -e search-domain1234.us-east-1.es.amazonaws.com -r us-east-1 myproject 
+    
+python query.py -a -e search-domain1234.us-east-1.es.amazonaws.com -r us-east-1 \
+	myproject variant_vcf 'AF:> 0.01 AND _exists_:ANN_hgvs_p' > query.jsonl
 ```
+**Note:** Don't include ```https://``` on your host for AWS. Your host should be present under your AWS Elasticsearch Domains.
