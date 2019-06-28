@@ -9,6 +9,7 @@
 	* [Running Mucor3](#running-mucor3)
 	* [DepthGauge](#depthgauge)
 * [Datastore](#datastore)
+* [Custom Tables](#custom-tables)
 
 
 ## Introduction
@@ -80,7 +81,7 @@ The values under sample1 and sample2 are the values from the AF field of FORMAT 
 The master table however would represent this same data in
 this format:
 
-| CHROM | POS  | REF | ALT    | sample1 | sample  | ANN_gene_name | ANN_hgvs_p | ANN_effect |
+| CHROM | POS  | REF | ALT    |   AF    | sample  | ANN_gene_name | ANN_hgvs_p | ANN_effect |
 |-------|------|-----|--------|---------|---------|---------------|------------|------------|
 | chr1  | 2    | G   | T      | 0.7     | sample2 | foo           | p.Met1Ala  | missense   |
 | chr1  | 5    | C   | T      | 1       | sample1 | foo           | ...        | synonymous |
@@ -108,4 +109,33 @@ This will create an identical table to our first except with read depths instead
 | chr1  | 3000 | G   | GATAGC | oncogene      | ...        | 300     | 78      |
 
 ## Datastore
-The key advancement of using JSONL as a intermediate data type is it flexibility and use in noSQL datastores. When using a large number of samples or a more permanant dataset that may be analyzed several times, a noSQL database may offer more flexibility and robustness. We have provided python scripts that can be used to upload data to an Elasticsearch instance and query VCF data from an Elasticsearch instance.
+The key advancement of using JSONL as a intermediate data type is it flexibility and use in noSQL datastores. When using a large number of samples or a more permanent dataset that may be analyzed several times, a noSQL database may offer more flexibility and robustness. We have provided python scripts that can be used to upload data to an Elasticsearch instance and query VCF data from an Elasticsearch instance. Other JSONL querying mechanisms can be used i.e. [Apache Drill](https://drill.apache.org/), [AWS Athena](https://aws.amazon.com/athena/), newer versions of [PostgreSQL](https://www.postgresql.org/), and many others.
+
+## Custom Tables
+The main mucor3 python script creates a pivot table by taking the jsonl directly from the vcf_atomizer and setting the fields ```CHROM, POS, REF, ALT``` as an index, pivoting on ```sample```, and displaying the ```AF``` for the combination of "index" and "pivot on" value. Using the mucor scripts directly allows for greater flexibility and manipulation. All scripts with the exception of jsonlcsv.py take jsonl as input and output jsonl.
+
+#### Merge
+merge.py helps combine rows together to ensure that when a pivot is performed that rows are unique to avoid duplications. The main mucor3 script uses this to ensure we have unique rows for any given variant so we should only have one occurrence of any combination of CHROM, POS, REF, ALT, and sample. merge.py can be used to combine rows in other ways, simply by specifying what column combinations should define a unique row.
+mucor3's merge would appear as such using the script directly:
+```
+cat data.jsonl | python merge.py sample CHROM POS REF ALT
+```
+merge.py will concatenate columns for rows that are duplicate based on the provided indices.
+
+| CHROM | POS  | REF | ALT    |   AF    | sample  | ANN_gene_name | ANN_hgvs_p | ANN_effect | ANN_transcript_id |
+|-------|------|-----|--------|---------|---------|---------------|------------|------------|-------------------|
+| chr1  | 2    | G   | T      | 0.7     | sample2 | foo           | p.Met1Ala  | missense   | 1                 |
+| chr1  | 2    | G   | T      | 0.7     | sample2 | foo           |            | synonymous | 2                 |
+| chr1  | 5    | C   | T      | 1       | sample1 | foo           |            | synonymous | 3                 |
+
+The above table would be changed to this:
+
+| CHROM | POS  | REF | ALT    |   AF    | sample  | ANN_gene_name | ANN_hgvs_p | ANN_effect          | ANN_transcript_id |
+|-------|------|-----|--------|---------|---------|---------------|------------|---------------------|-------------------|
+| chr1  | 2    | G   | T      | 0.7     | sample2 | foo           |            | missense;synonymous | 1;2               |
+| chr1  | 5    | C   | T      | 1       | sample1 | foo           |            | synonymous          | 3                 |
+
+This step is neccesary as the vcf_atomizer reports duplicate variant results for multiple SnpEff annotations as this is most efficient for filtering data using Elasticsearch or jq. We must use merge.py to later coelesce the rows back to representing a single variant.
+
+#### Aggregate
+#### Jsonl to TSV
