@@ -18,10 +18,6 @@ Mucor3 an iteration on the original [Mucor](https://github.com/blachlylab/mucor)
 
 ## Installation
 ```
-conda install -c bioconda -c conda-forge mucor3
-```
-or if you wish to build mucor3:
-```
 git clone --recurse-submodules https://github.com/blachlylab/mucor3.git
 cd vcf_atomizer
 make  #requires go
