@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/atomize_vcf
+atomize_vcf.so
+atomize_vcf.dylib
+atomize_vcf.dll
+atomize_vcf.a
+atomize_vcf.lib
+atomize_vcf-test-*
+*.exe
+*.o
+*.obj
+*.lst
