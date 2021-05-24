@@ -1,0 +1,9 @@
+{
+	"fileVersion": 1,
+	"versions": {
+		"asdf": "0.7.8",
+		"dhtslib": "0.12.3+htslib-1.10",
+		"mir-algorithm": "3.10.60",
+		"mir-core": "1.1.69"
+	}
+}
