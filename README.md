@@ -13,10 +13,12 @@
 
 
 ## Introduction
-Mucor3 an iteration on the original [Mucor](https://github.com/blachlylab/mucor). Mucor3 translates [VCF](https://samtools.github.io/hts-specs/VCFv4.2.pdf) files into tabular data and aggregates it into useful pivoted tables. VCFs are converted to line-delimited [json](http://jsonlines.org/) objects. This allows for great flexibility in filtering the VCF data before pivoting the data. After combining all variant jsonl into one file Mucor3 can convert it to a tabular format and generate pivoted tables that show by default each variant pivoted by sample while display the allele frequency of that variant for a particular sample. [depthgauge](https://github.com/blachlylab/depthGauge) serves to create a pivoted spreadsheet that shows the read depth at all positions in the pivoted allele frequency table.
+Mucor3 an iteration on the original [Mucor](https://github.com/blachlylab/mucor). Mucor3 encompasses a range of processes involved with not only creation of VCF variant reports but also line-delimited JSON manipulation. Mucor3 translates [VCF](https://samtools.github.io/hts-specs/VCFv4.2.pdf) files into tabular data and aggregates it into useful pivoted tables. VCFs are converted to line-delimited [json](http://jsonlines.org/) objects. This allows for great flexibility in filtering the VCF data before pivoting the data. After combining all variant jsonl into one file Mucor3 can convert it to a tabular format and generate pivoted tables that show by default each variant pivoted by sample while display the allele frequency of that variant for a particular sample. [depthgauge](https://github.com/blachlylab/depthGauge) serves to create a pivoted spreadsheet that shows the read depth at all positions in the pivoted allele frequency table. Mucor3 is broken into several steps that can be performed by a variety of programs to suit your needs. Generally the steps involve annotation, atomization, filtering, manipulation, and report generation.
+
+## Quick Guide
 
 
-## Installation
+### Installation
 ```
 git clone --recurse-submodules https://github.com/blachlylab/mucor3.git
 cd vcf_atomizer
@@ -28,34 +30,61 @@ cd ..
 python setup.py install
 ```
 
-## Run Mucor3
-VCFs must be atomized into line-delimited [json](http://jsonlines.org/). The [vcf_atomizer](https://github.com/blachlylab/vcf_atomizer) can take a vcf or gzipped vcf file and convert it to jsonl. Mucor3 is intended to be run on [GATK](https://software.broadinstitute.org/gatk/) VCFs that have undergone annotation with [SnpEff](http://snpeff.sourceforge.net/), however, Mucor3 and the vcf_atomizer should work for most VCFs that are properly formatted. If you find that we couldn't atomize your particular VCF or an annotation string from a software like SnpEff, please open an issue on the [vcf_atomizer github](https://github.com/blachlylab/vcf_atomizer/issues) with a sample of your VCF including the header.
+## Step 0: Annotation
+In order for VCFs to contain useful information about the mutations they contain, annotation is usually a neccessary step not included in most variant callers. Annotation can be performed by a variety of programs, however contrary to previous versions of this software, mucor3 does not. 
+This is to keep the goals of this project smaller and within scope. Also there are many existing programs to do this that are optimized for this purpose.
+Some notable annotation software we use is:
+1. snpEff
+2. snpSift
+3. vcfanno
+4. vep
 
-#### Atomize VCFs
-
-The VCF atomizer will convert your vcfs into line delimited json objects. A single json object represents an individual VCF record for a single sample or an individual annotation for a single VCF record for a single sample (assuming your VCF has annotation information and sample information). Read more about the VCF atomizer [here](https://github.com/blachlylab/vcf_atomizer).
+## Step 1: Atomization
+To allow for greater flexibility in the tools we can use with mucor3, we decided to use JSON as an intermediate representation. So we have atomizers to convert tables and VCFs to line-delimited JSON. 
+The VCF atomizer will convert your vcfs into line delimited json objects. A single json object represents an individual VCF record for a single sample or an individual annotation for a single VCF record for a single sample (if you intend on using elasticsearch for filtering). Read more about the VCF atomizer [here](https://github.com/blachlylab/vcf_atomizer).
 
 ```
 vcf_atomizer sample1.vcf.gz >sample1.jsonl
 vcf_atomizer sample2.vcf >sample2.jsonl
 ```
-#### Combine jsonl data
+
+#### Step 2: Combine VCF json information to one file
 ```
 cat sample1.jsonl sample2.jsonl ... > data.jsonl
 ```
-#### Filter Data (optional)
-The bioconda package includes [jq](https://github.com/stedolan/jq) as an option for simple filtering of JSONL variant data while combining:
+
+### Step 2.5: Linking sample information
+
+You can use the table atomizer to create JSON records from a sample spreadsheet.
 ```
-// select only jsonl rows where protein change annotation (ANN_hgvs_p) from snpeff
-// is not null and the variant allele frequency is > 0.01
-cat *.jsonl | jq -c 'select(.ANN_hgvs_p!=null and .AF > 0.01)' > data.jsonl
+table_atomizer samples.tsv > samples.jsonl
+table_atomizer samples.xlsx >samples.jsonl
 ```
-You can read more about jq syntax [here](https://stedolan.github.io/jq/).
 
+This data can then be used with the previously generated VCF data to link sample information to VCF variant data.
+After this data is linked, it can be used for filtering in later steps.
+```
+code for linking here
+```
 
-**Note:** If more extensive filtering is needed, Mucor3 should be flexible with any noSQL datastore that accepts 
-JSONL input and outputs JSONL output. i.e. [Elasticsearch](https://www.elastic.co/), [Apache Drill](https://drill.apache.org/), or [couchDB](http://couchdb.apache.org/). Example python scripts for Elasticsearch are availiable in the examples folder. These scripts are not included currently in the bioconda package.
+### Step 3: Filtering
+VCFs are often filled with millions of variants, and consequently can make the tables generated by Mucor3 very large. Filtering
+allows us to potentially reduce the spreadsheets to on variants that are important to us. A number of different tools can be used to 
+approach this. 
+Some programs that can be used to perform filtering:
+1. jq
+2. elasticsearch
+3. apache drill
+4. couchdb
 
+We provide python scripts to aid in the use of elasticsearch for filtering. We also provide a program called varquery that can perform
+filtering in a similar way to elasticsearch without the bulk of a full database.
+```
+varquery index data.jsonl > data.index
+varquery query data.index data.jsonl "/AF > 0.5 AND /INFO/ANN/EFFECT=(missense OR 5_prime_utr)"
+```
+
+More info on using varquery for filtering can be found here. More info on using elasticsearch for filtering can be found here.
 
 #### Running Mucor3
 Provide Mucor3 with your combined data and an output folder.
