@@ -1,0 +1,11 @@
+{
+	"name": "depthgauge",
+	"authors": [
+		"Thomas Gregory"
+	],
+	"description": "A supplement to mucor3. Replicates a mucor3 pivot table but reports depths in BAM files.",
+	"license": "MIT",
+	"dependencies": {
+		"dhtslib": "~>0.12.3+htslib-1.10"
+	}
+}
