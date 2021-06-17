@@ -2,7 +2,7 @@ import std.stdio;
 import std.datetime.stopwatch : StopWatch;
 
 import asdf : deserializeAsdf = deserialize;
-import varquery.index;
+import varquery.invertedindex;
 import varquery.query;
 import varquery.wideint : uint128;
 

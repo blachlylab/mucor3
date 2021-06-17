@@ -10,7 +10,8 @@ import std.conv : to;
 import std.format : format;
 import std.typecons : Tuple;
 
-import varquery.index;
+import varquery.singleindex;
+import varquery.invertedindex;
 
 
 /**
