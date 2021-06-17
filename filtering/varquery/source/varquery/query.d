@@ -51,6 +51,9 @@ auto simple_patterns = regex([
     //key1 = val1
     `%s[\s]*=[\s]*%s`.format(KEY_CAP_PATTERN, VAL_CAP_PATTERN), //simple
 
+    //key1 == val1
+    `%s[\s]*==[\s]*%s`.format(KEY_CAP_PATTERN, VAL_CAP_PATTERN), //numeric equals
+
     //key1 > val1
     `%s[\s]*>[\s]*%s`.format(KEY_CAP_PATTERN, NUM_CAP_PATTERN), //GT
 
@@ -69,6 +72,7 @@ auto simple_patterns = regex([
 enum QueryType
 {
     Equal,
+    EqualsNumeric,
     Range,
     GreaterThan,
     GreaterThanEqual,
@@ -110,16 +114,19 @@ auto parseSimpleQueries(string query)
             case 4: //simple
                 res.results ~= Query(m[1], [m[2]], QueryType.Equal);
                 break;
-            case 5: //GT
+            case 5: //equals numeric
+                res.results ~= Query(m[1], [m[2]], QueryType.EqualsNumeric);
+                break;
+            case 6: //GT
                 res.results ~= Query(m[1], [m[2]], QueryType.GreaterThan);
                 break;
-            case 6: //GTE
+            case 7: //GTE
                 res.results ~= Query(m[1], [m[2]], QueryType.GreaterThanEqual);
                 break;
-            case 7: //LT
+            case 8: //LT
                 res.results ~= Query(m[1], [m[2]], QueryType.LessThan);
                 break;
-            case 8: //LTE
+            case 9: //LTE
                 res.results ~= Query(m[1], [m[2]], QueryType.LessThanEqual);
                 break;
             default:
@@ -146,6 +153,8 @@ unittest
     auto q11 = "key=val OR key2=val2";
     auto q12 = "key=val AND key2=val2";
 
+    auto q13 = "key==1";
+
     assert(parseSimpleQueries(q1) == QueryParserResult(q1,"0",[Query("key",["val"],QueryType.Equal)]));
     assert(parseSimpleQueries(q2) == QueryParserResult(q2,"0",[Query("key",["0", "1"],QueryType.Range)]));
     assert(parseSimpleQueries(q3) == QueryParserResult(q3,"0",[Query("key",["val", "val2"],QueryType.AND)]));
@@ -158,6 +167,7 @@ unittest
     assert(parseSimpleQueries(q10) == QueryParserResult(q10,"(NOT 0 AND NOT 1)",[Query("key",["val"], QueryType.Equal), Query("key2", ["val2"],QueryType.Equal)]));
     assert(parseSimpleQueries(q11) == QueryParserResult(q11,"0 OR 1",[Query("key",["val"], QueryType.Equal), Query("key2", ["val2"],QueryType.Equal)]));
     assert(parseSimpleQueries(q12) == QueryParserResult(q12,"0 AND 1",[Query("key",["val"], QueryType.Equal), Query("key2", ["val2"],QueryType.Equal)]));
+    assert(parseSimpleQueries(q13) == QueryParserResult(q13,"0",[Query("key",["1"],QueryType.EqualsNumeric)]));
 }
 
 /// Patterns that combine base queries
@@ -274,9 +284,23 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
                 case QueryType.Equal:
                     queryResults ~= idx.query(query.key,query.values[0]);
                     break;
+                // key==val
+                case QueryType.EqualsNumeric:
+                    if(query.values[0][$-1] == 'f'){
+                        queryResults ~= idx.query(query.key,query.values[0].to!float);    
+                    }else{
+                        queryResults ~= idx.query(query.key,query.values[0].to!int);
+                    }
+                    break;
                 // key=val:val (numeric values only)
                 case QueryType.Range:
-                    queryResults ~= idx.queryRange(query.key, query.values[0].to!float, query.values[1].to!float);
+                    if(query.values[0][$-1] == 'f' && query.values[1][$-1] == 'f'){
+                        queryResults ~= idx.queryRange(query.key, query.values[0].to!float, query.values[1].to!float);
+                    }else if(query.values[0][$-1] == 'f' || query.values[1][$-1] == 'f'){
+                        throw new Exception("Range query does not allow mixin of int and float types, use a float only query");
+                    }else{
+                        queryResults ~= idx.queryRange(query.key, query.values[0].to!int, query.values[1].to!int);
+                    }
                     break;
                 // key>val (numeric values only)
                 case QueryType.GreaterThan:

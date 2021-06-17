@@ -1,7 +1,8 @@
 module varquery.index;
 
 import std.algorithm.setops;
-import std.algorithm : sort, uniq, map, filter;
+import std.algorithm : sort, uniq, map, filter, canFind;
+import std.math : isClose;
 import std.range : iota;
 import std.array : array;
 import std.conv : to;
@@ -47,7 +48,7 @@ struct InvertedIndex{
         this.type=type;
     }
 
-    ulong[] filter(T)(T[] items){
+    ulong[] filter(T:string)(T[] items){
         assert(type==TYPES.STRING);
         ulong[] ret;
         foreach (item; items)
@@ -55,6 +56,36 @@ struct InvertedIndex{
             if(serialize(&item) in hashmap) 
                 ret~=hashmap[serialize(&item)];
         } 
+        return ret.sort.uniq.array;
+    }
+
+    ulong[] filter(T:int)(T[] items){
+        assert(type==TYPES.FLOAT);
+        ulong[] ret;
+        auto vals = hashmap.keys
+                            .map!(x=>deserialize!T(x))
+                            .filter!(x=> items.canFind(x))
+                            .array;
+        foreach (item; vals)
+        {
+            if(serialize(&item) in hashmap)
+                ret~=hashmap[serialize(&item)];
+        }
+        return ret.sort.uniq.array;
+    }
+    
+    ulong[] filter(T:float)(T[] items){
+        assert(type==TYPES.FLOAT);
+        ulong[] ret;
+        auto vals = hashmap.keys
+                            .map!(x=>deserialize!T(x))
+                            .filter!(x=> items.canFind!isClose(x))
+                            .array;
+        foreach (item; vals)
+        {
+            if(serialize(&item) in hashmap)
+                ret~=hashmap[serialize(&item)];
+        }
         return ret.sort.uniq.array;
     }
 
@@ -348,25 +379,25 @@ struct JSONInvertedIndex{
     }
 }
 
-unittest{
-    import asdf:Asdf,AsdfNode,parseJson;
-    import varquery.fields;
-    string ann = "\"A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"~
-                "protein_coding||1/6|ENST00000381657.2:c.-21-26C>A|||||,A|intron_variant|MODIFIER"~
-                "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding||1/7|ENST00000381663.3:c.-21-26C>A||"~
-                "|||\"";
-    auto root = AsdfNode(`{"INFO":{}}`.parseJson);
-    root["INFO","ANN"] = AsdfNode(ann.parseJson);
-    import std.stdio;
-    JSONInvertedIndex idx;
-    idx.addJsonObject(cast(Asdf)parseAnnotationField(root,"ANN",ANN_FIELDS[],ANN_TYPES[]),"1");
-    ann = "\"A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"~
-                "protein_coding||1/6|ENST00000381657.2:c.-21-26C>A|||||,A|missense_variant|MODIFIER"~
-                "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding||1/7|ENST00000381663.3:c.-21-26C>A||"~
-                "|||\"";
-    root["INFO","ANN"] = AsdfNode(ann.parseJson);
-    idx.addJsonObject(cast(Asdf)parseAnnotationField(root,"ANN",ANN_FIELDS[],ANN_TYPES[]),"2");
-    writeln(idx.fields["/INFO/ANN/effect"]);
-    writeln(idx.fields["/INFO/ANN/effect"].hashmap.keys.map!(x=>deserialize!string(x)));
-    writeln(idx.fields["/INFO/ANN/effect"].filter(["missense_variant"]));
-}
+// unittest{
+//     import asdf:Asdf,AsdfNode,parseJson;
+//     import varquery.fields;
+//     string ann = "\"A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"~
+//                 "protein_coding||1/6|ENST00000381657.2:c.-21-26C>A|||||,A|intron_variant|MODIFIER"~
+//                 "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding||1/7|ENST00000381663.3:c.-21-26C>A||"~
+//                 "|||\"";
+//     auto root = AsdfNode(`{"INFO":{}}`.parseJson);
+//     root["INFO","ANN"] = AsdfNode(ann.parseJson);
+//     import std.stdio;
+//     JSONInvertedIndex idx;
+//     idx.addJsonObject(cast(Asdf)parseAnnotationField(root,"ANN",ANN_FIELDS[],ANN_TYPES[]),"1");
+//     ann = "\"A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"~
+//                 "protein_coding||1/6|ENST00000381657.2:c.-21-26C>A|||||,A|missense_variant|MODIFIER"~
+//                 "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding||1/7|ENST00000381663.3:c.-21-26C>A||"~
+//                 "|||\"";
+//     root["INFO","ANN"] = AsdfNode(ann.parseJson);
+//     idx.addJsonObject(cast(Asdf)parseAnnotationField(root,"ANN",ANN_FIELDS[],ANN_TYPES[]),"2");
+//     writeln(idx.fields["/INFO/ANN/effect"]);
+//     writeln(idx.fields["/INFO/ANN/effect"].hashmap.keys.map!(x=>deserialize!string(x)));
+//     writeln(idx.fields["/INFO/ANN/effect"].filter(["missense_variant"]));
+// }
