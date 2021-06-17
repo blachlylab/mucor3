@@ -1,12 +1,14 @@
 module varquery.index;
 
 import std.algorithm.setops;
-import std.algorithm : sort, uniq, map, filter, canFind;
+import std.regex;
+import std.algorithm : sort, uniq, map, std_filter = filter, canFind, joiner;
 import std.math : isClose;
 import std.range : iota;
 import std.array : array;
 import std.conv : to;
 import std.format : format;
+import std.string : indexOf;
 
 import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import varquery.wideint : uint128;
@@ -56,7 +58,7 @@ struct InvertedIndex{
             if(serialize(&item) in hashmap) 
                 ret~=hashmap[serialize(&item)];
         } 
-        return ret.sort.uniq.array;
+        return ret;
     }
 
     ulong[] filter(T:int)(T[] items){
@@ -64,14 +66,14 @@ struct InvertedIndex{
         ulong[] ret;
         auto vals = hashmap.keys
                             .map!(x=>deserialize!T(x))
-                            .filter!(x=> items.canFind(x))
+                            .std_filter!(x=> items.canFind(x))
                             .array;
         foreach (item; vals)
         {
             if(serialize(&item) in hashmap)
                 ret~=hashmap[serialize(&item)];
         }
-        return ret.sort.uniq.array;
+        return ret;
     }
     
     ulong[] filter(T:float)(T[] items){
@@ -79,14 +81,14 @@ struct InvertedIndex{
         ulong[] ret;
         auto vals = hashmap.keys
                             .map!(x=>deserialize!T(x))
-                            .filter!(x=> items.canFind!isClose(x))
+                            .std_filter!(x=> items.canFind!isClose(x))
                             .array;
         foreach (item; vals)
         {
             if(serialize(&item) in hashmap)
                 ret~=hashmap[serialize(&item)];
         }
-        return ret.sort.uniq.array;
+        return ret;
     }
 
     ulong[] filterRange(T)(T[] range){
@@ -94,22 +96,22 @@ struct InvertedIndex{
         assert(range[0]<=range[1]);
         auto vals = hashmap.keys
                             .map!(x=>deserialize!T(x))
-                            .filter!(x=>x>=range[0])
-                            .filter!(x=>x<range[1]).array;
+                            .std_filter!(x=>x>=range[0])
+                            .std_filter!(x=>x<range[1]).array;
         ulong[] ret;
         foreach (item; vals)
         {
             if(serialize(&item) in hashmap)
                 ret~=hashmap[serialize(&item)];
         }
-        return ret.sort.uniq.array;
+        return ret;
     }
 
     ulong[] filterOp(string op)(float val){
         mixin("auto func = (float x) => x " ~ op ~" val;");
         auto vals = hashmap.keys
                         .map!(x=>deserialize!float(x))
-                        .filter!func.array;
+                        .std_filter!func.array;
         ulong[] ret;
         foreach (item; vals)
         {
@@ -340,34 +342,57 @@ struct JSONInvertedIndex{
         // return this.recordMd5s;
     }
 
+    InvertedIndex*[] getFields(string key)
+    {
+        if(key[0] != '/') throw new Exception("key is missing leading /");
+        auto wildcard = key.indexOf('*');
+        if(wildcard == -1){
+            auto p = key in fields;
+            if(!p) throw new Exception(" key "~key~" is not found");
+            return [p];
+        }else{
+            key = key[0..wildcard] ~"."~ key[wildcard..$];
+            wildcard = key.indexOf('*');
+            while(wildcard != -1){
+                key = key[0..wildcard] ~"."~ key[wildcard..$];
+                wildcard = key.indexOf('*');
+            }
+            auto reg = regex("^" ~ key ~"$");
+            return fields.byKey.std_filter!(x => !(x.matchFirst(reg).empty)).map!(x=> &(fields[x])).array;
+        }
+    }
+
     ulong[] query(T)(string key,T value){
-        auto p = key in fields;
-        if(!p) throw new Exception(" key "~key~" is not found");
-        return (*p).filter([value]).array;
+        auto matchingFields = getFields(key);
+        return matchingFields
+                .map!(x=> (*x).filter([value]))
+                .joiner.array.sort.uniq.array;
     }
     ulong[] queryRange(T)(string key,T first,T second){
-        auto p = key in fields;
-        if(!p) throw new Exception(" key "~key~" is not found");
-        return (*p).filterRange([first,second]).array;
+        auto matchingFields = getFields(key);
+        return matchingFields
+                .map!(x=> (*x).filterRange([first,second]))
+                .joiner.array.sort.uniq.array;
     }
     ulong[] queryOp(string op)(string key,float val){
-        auto p = key in fields;
-        if(!p) throw new Exception(" key "~key~" is not found");
-        return (*p).filterOp!op(val).array;
+        auto matchingFields = getFields(key);
+        return matchingFields
+                .map!(x=> (*x).filterOp!op(val))
+                .joiner.array.sort.uniq.array;
     }
     ulong[] queryAND(T)(string key,T[] values){
-        auto p = key in fields;
-        if(!p) throw new Exception(" key "~key~" is not found");
-        auto results = values.map!(x=>(*p).filter([x]).array).array;
-        auto intersect = results[0];
-        foreach (item; results)
-            intersect = setIntersection(intersect,item).array;
-        return intersect;
+        auto matchingFields = getFields(key);
+        return matchingFields.map!((x){
+            auto results = values.map!(y=>(*x).filter([y]).sort.uniq.array).array;
+            auto intersect = results[0];
+            foreach (item; results)
+                intersect = setIntersection(intersect,item).array;
+            return intersect.array;
+        }).joiner.array.sort.uniq.array;
     }
     ulong[] queryOR(T)(string key,T[] values){
-        auto p = key in fields;
-        if(!p) throw new Exception(" key "~key~" is not found");
-        return (*p).filter(values).array;
+        auto matchingFields = getFields(key);
+        return matchingFields.map!(x=> (*x).filter(values)).joiner.array.sort.uniq.array;
     }
     ulong[] queryNOT(ulong[] values){
         return allIds.sort.uniq.setDifference(values).array;

@@ -28,10 +28,10 @@ import varquery.index;
 **/
 
 /// Capture a Key
-enum KEY_CAP_PATTERN = `([A-Za-z0-9._/]+)`;
+enum KEY_CAP_PATTERN = `([A-Za-z0-9._/*]+)`;
 
 /// Capture a numeric
-enum NUM_CAP_PATTERN = `([-]?[0-9.e]+)`;
+enum NUM_CAP_PATTERN = `([-]?[0-9.ef]+)`;
 
 /// No operators (capture a value)
 enum VAL_CAP_PATTERN = `([^\s\:=<>\(\)]+)`;
