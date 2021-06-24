@@ -24,18 +24,27 @@ void filter(string[] args){
     import asdf:parseJsonByLine;
     import std.range:enumerate;
     import std.conv:to;
-
+    StopWatch sw;
+    sw.start;
+ 
     JSONInvertedIndex idx = JSONInvertedIndex(File(args[0]).byChunk(4096).parseJsonByLine.front);
     // auto idxs = idx.fields[args[1]].filter(args[2..$]);
     // float[] range = [args[2].to!float,args[3].to!float];
-    StopWatch sw;
+    stderr.writeln("Time to load index: ",sw.peek.total!"seconds"," seconds");
+    sw.stop;
+    sw.reset;
     sw.start;
     auto idxs = evalQuery(args[2],&idx);
+    stderr.writeln("Time to parse query: ",sw.peek.total!"seconds"," seconds");
+    stderr.writeln(idxs.length," records matched your query");
+    sw.stop;
+    sw.reset;
     bool[uint128] hashmap;
     foreach (key; idxs)
     {
         hashmap[key] = true;
     }
+    sw.start;
     foreach(line;File(args[1]).byChunk(4096).parseJsonByLine){
         if(idxs.length==0) break;
         uint128 a;
