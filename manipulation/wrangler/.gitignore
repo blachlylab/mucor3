@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/wrangler
+wrangler.so
+wrangler.dylib
+wrangler.dll
+wrangler.a
+wrangler.lib
+wrangler-test-*
+*.exe
+*.o
+*.obj
+*.lst
