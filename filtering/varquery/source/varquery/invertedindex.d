@@ -1,12 +1,15 @@
 module varquery.invertedindex;
 import std.algorithm.setops;
 import std.regex;
-import std.algorithm : sort, uniq, map, std_filter = filter, joiner;
+import std.algorithm : sort, uniq, map, std_filter = filter, joiner, each;
 import std.range : iota;
-import std.array : array;
+import std.array : array, replace;
 import std.conv : to;
 import std.format : format;
 import std.string : indexOf;
+import std.bitmanip: nativeToLittleEndian, littleEndianToNative;
+import std.stdio;
+import std.exception : enforce;
 
 import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import varquery.wideint : uint128;
@@ -17,36 +20,8 @@ char sep = '/';
 struct JSONInvertedIndex{
     uint128[] recordMd5s;
     InvertedIndex[char[]] fields;
-    this(Asdf root){
-        recordMd5s = root["md5s"].deserializeAsdf!(string[]).map!((x){ uint128 a; a.fromHexString(x); return a;}).array;
-        root["md5s"].remove;
-        foreach (field,idx; root.byKeyValue)
-        {
-            fields[field] = InvertedIndex(deserializeAsdf!string(idx.byKeyValue.front.value["type"]).to!TYPES);
-            foreach (key, value; idx.byKeyValue)
-            {
-                float floatval;
-                string stringval;
-                bool boolval;
-                switch(fields[field].type){
-                    case TYPES.FLOAT:
-                        floatval=key.to!float;
-                        fields[field].hashmap[serialize(&floatval)]=deserializeAsdf!(ulong[])(value["values"]);
-                        break;
-                    case TYPES.STRING:
-                        stringval = key.dup;
-                        fields[field].hashmap[serialize(&stringval)]=deserializeAsdf!(ulong[])(value["values"]);
-                        break;
-                    case TYPES.BOOL:
-                        boolval=key.to!bool;
-                        fields[field].hashmap[serialize(&boolval)]=deserializeAsdf!(ulong[])(value["values"]);
-                        break;
-                    default:
-                        break;
-                }
-            }
-        }
-
+    this(File f){
+        fromFile(f);
     }
     void addJsonObject(Asdf root, const(char)[] path = ""){
         if(path == ""){
@@ -58,51 +33,21 @@ struct JSONInvertedIndex{
         }
         foreach (key,value; root.byKeyValue)
         {
-            const(byte)[] valkey;
-            float floatval;
-            string stringval;
-            bool boolval;
-            TYPES keytype;
-            final switch(value.kind){
-                    case Asdf.Kind.number:
-                        floatval =deserializeAsdf!float(value);
-                        valkey = serialize(&floatval);
-                        keytype = TYPES.FLOAT;
-                        break;
-                    case Asdf.Kind.string:
-                        stringval =deserializeAsdf!string(value);
-                        if(stringval=="nan") goto case Asdf.Kind.number;
-                        valkey = serialize(&stringval);
-                        keytype = TYPES.STRING;
-                        break;
-                    case Asdf.Kind.true_:
-                        boolval =true;
-                        valkey = serialize(&boolval);
-                        keytype = TYPES.BOOL;
-                        break;
-                    case Asdf.Kind.false_:
-                        boolval =false;
-                        valkey = serialize(&boolval);
-                        keytype = TYPES.BOOL;
-                        break;
-                    case Asdf.Kind.object:
-                        addJsonObject(value, path~sep~key);
-                        keytype = TYPES.NULL;
-                        break;
-                    case Asdf.Kind.array:
-                        addJsonArray(value, path~sep~key);
-                        keytype = TYPES.NULL;
-                        break;
-                    case Asdf.Kind.null_:
-                        keytype = TYPES.NULL;
-                        break;
-                }
-            if(keytype==TYPES.NULL) continue;
+            JSONValue valkey;
+            if(value.kind == Asdf.Kind.object){
+                addJsonObject(value, path~sep~key);
+            }else if(value.kind == Asdf.Kind.array){
+                addJsonArray(value, path~sep~key);
+            }else if(value.kind == Asdf.Kind.null_){
+                continue;
+            }else{
+                valkey = JSONValue(value);
+            }
             auto p = path~sep~key in fields;
             if(p){
                 (*p).hashmap[valkey]~= this.recordMd5s.length - 1; 
             }else{
-                fields[path~sep~key] = InvertedIndex(keytype);
+                fields[path~sep~key] = InvertedIndex();
                 fields[path~sep~key].hashmap[valkey] ~= this.recordMd5s.length - 1;
             }
         }
@@ -112,100 +57,132 @@ struct JSONInvertedIndex{
         assert(path != "");
         foreach (value; root.byElement)
         {
-            const(byte)[] valkey;
-            float floatval;
-            string stringval;
-            bool boolval;
-            TYPES keytype;
-            // import std.stdio;
-            // writeln(path," ",value);
-            final switch(value.kind){
-                    case Asdf.Kind.number:
-                        floatval =deserializeAsdf!float(value);
-                        // writeln(floatval);
-                        valkey = serialize(&floatval);
-                        // writeln(valkey);
-                        // writeln(deserialize!float(valkey));
-                        keytype = TYPES.FLOAT;
-                        break;
-                    case Asdf.Kind.string:
-                        stringval =deserializeAsdf!string(value);
-                        if(stringval=="nan") goto case Asdf.Kind.number;
-                        valkey = serialize(&stringval);
-                        keytype = TYPES.STRING;
-                        break;
-                    case Asdf.Kind.true_:
-                        boolval =true;
-                        valkey = serialize(&boolval);
-                        keytype = TYPES.BOOL;
-                        break;
-                    case Asdf.Kind.false_:
-                        boolval =false;
-                        valkey = serialize(&boolval);
-                        keytype = TYPES.BOOL;
-                        break;
-                    case Asdf.Kind.object:
-                        addJsonObject(value,path);
-                        keytype = TYPES.NULL;
-                        break;
-                    case Asdf.Kind.array:
-                        addJsonArray(value,path);
-                        keytype = TYPES.NULL;
-                        break;
-                    case Asdf.Kind.null_:
-                        keytype = TYPES.NULL;
-                        break;
-                }
-            if(keytype==TYPES.NULL) continue;
+            JSONValue valkey;
+            if(value.kind == Asdf.Kind.object){
+                addJsonObject(value, path);
+            }else if(value.kind == Asdf.Kind.array){
+                addJsonArray(value, path);
+            }else if(value.kind == Asdf.Kind.null_){
+                continue;
+            }else{
+                valkey = JSONValue(value);
+            }
             auto p = path in fields;
             if(p){
                 (*p).hashmap[valkey]~= this.recordMd5s.length - 1; 
             }else{
-                fields[path] = InvertedIndex(keytype);
+                fields[path] = InvertedIndex();
                 fields[path].hashmap[valkey] ~= this.recordMd5s.length - 1;
             }
         }
         
     }
 
-    Asdf toJson(){
-        AsdfNode root = AsdfNode("{}".parseJson);
-        root["md5s"] = AsdfNode(serializeToAsdf(this.recordMd5s.map!(x => format("%x", x)).array));
-        foreach (field,idx; fields)
+    void fromFile(File f){
+        auto buf = new ubyte[8];
+        f.rawRead(buf);
+        enforce((cast(string)buf) == "VQ_INDEX","File doesn't contain VQ_INDEX sequence");
+        buf = new ubyte[ulong.sizeof];
+        f.rawRead(buf);
+        this.recordMd5s.length = littleEndianToNative!(ulong, 8)(buf[0..8]);
+        buf = new ubyte[ulong.sizeof + ulong.sizeof];
+        foreach(ref md5; this.recordMd5s){
+            f.rawRead(buf);
+            md5.hi = littleEndianToNative!(ulong, 8)(buf[0..8]);
+            md5.lo = littleEndianToNative!(ulong, 8)(buf[8..16]);
+        }
+        buf = new ubyte[ulong.sizeof];
+        f.rawRead(buf);
+        auto numfields = littleEndianToNative!(ulong, 8)(buf[0..8]);
+        foreach (i; iota(numfields))
         {
-            if(field.length>255) continue;
-            root[field] = AsdfNode("{}".parseJson);
-            foreach (key, value; idx.hashmap)
+            InvertedIndex idx;
+            buf = new ubyte[ulong.sizeof];
+            f.rawRead(buf);
+            auto keyLen = littleEndianToNative!(ulong, 8)(buf[0..8]);
+            buf = new ubyte[keyLen];
+            f.rawRead(buf);
+            auto field = (cast(string) buf.idup);
+            buf = new ubyte[ulong.sizeof];
+            f.rawRead(buf);
+            auto numValues = littleEndianToNative!(ulong, 8)(buf[0..8]);
+            foreach (j; iota(numValues))
             {
-                string newkey;
-                switch(idx.type){
+                JSONValue key;
+                buf = new ubyte[1];
+                f.rawRead(buf);
+                key.type = buf[0].to!TYPES;
+                final switch(key.type){
                     case TYPES.FLOAT:
-                        newkey = deserialize!float(key).to!string;
-                        if(newkey.length>255) continue;
-                        root[field,newkey]=AsdfNode("{}".parseJson);
-                        root[field,newkey,"values"] = AsdfNode(serializeToAsdf(value));
-                        root[field,newkey,"type"] = AsdfNode(serializeToAsdf(TYPES.FLOAT));
+                        buf = new ubyte[double.sizeof];
+                        f.rawRead(buf);
+                        key.val.f = littleEndianToNative!(double, 8)(buf[0..8]);
                         break;
                     case TYPES.STRING:
-                        newkey = deserialize!string(key);
-                        if(newkey.length>255) continue;
-                        root[field,newkey]=AsdfNode("{}".parseJson);
-                        root[field,newkey,"values"] = AsdfNode(serializeToAsdf(value));
-                        root[field,newkey,"type"] = AsdfNode(serializeToAsdf(TYPES.STRING));
+                        buf = new ubyte[ulong.sizeof];
+                        f.rawRead(buf);
+                        key.val.s.length = littleEndianToNative!(ulong, 8)(buf[0..8]);
+                        buf = new ubyte[key.val.s.length];
+                        f.rawRead(buf);
+                        key.val.s = (cast(string) buf.idup);
+                        break;
+                    case TYPES.INT:
+                        buf = new ubyte[long.sizeof];
+                        f.rawRead(buf);
+                        key.val.f = littleEndianToNative!(long, 8)(buf[0..8]);
                         break;
                     case TYPES.BOOL:
-                        newkey = deserialize!bool(key).to!string;
-                        if(newkey.length>255) continue;
-                        root[field,newkey]=AsdfNode("{}".parseJson);
-                        root[field,newkey,"values"] = AsdfNode(serializeToAsdf(value));
-                        root[field,newkey,"type"] = AsdfNode(serializeToAsdf(TYPES.BOOL));
-                        break;
-                    default:
+                        buf = new ubyte[bool.sizeof];
+                        f.rawRead(buf);
+                        key.val.b = buf[0].to!bool;
                         break;
                 }
+                ulong[] values;
+                buf = new ubyte[ulong.sizeof];
+                f.rawRead(buf);
+                values.length = littleEndianToNative!(ulong, 8)(buf[0..8]);
+                foreach(ref v; values){
+                    f.rawRead(buf);
+                    v = littleEndianToNative!(ulong, 8)(buf[0..8]);
+                }
+                idx.hashmap[key] = values;
+            }
+            fields[field] = idx;
+        }
+    }
+
+    void writeToFile(File f){
+        f.rawWrite("VQ_INDEX");
+        f.rawWrite(this.recordMd5s.length.nativeToLittleEndian);
+        this.recordMd5s.each!(x=> f.rawWrite(x.hi.nativeToLittleEndian ~ x.lo.nativeToLittleEndian));
+        f.rawWrite(fields.length.nativeToLittleEndian);
+        foreach (field,idx; fields)
+        {
+            f.rawWrite(field.length.nativeToLittleEndian);
+            f.rawWrite(field);
+            f.rawWrite(idx.hashmap.length.nativeToLittleEndian);
+            foreach (key, value; idx.hashmap)
+            {
+                f.rawWrite([cast(ubyte)key.type]);
+                final switch(key.type){
+                    case TYPES.FLOAT:
+                        f.rawWrite(key.val.f.nativeToLittleEndian);
+                        break;
+                    case TYPES.STRING:
+                        f.rawWrite(key.val.s.length.nativeToLittleEndian);
+                        f.rawWrite(key.val.s);
+                        break;
+                    case TYPES.INT:
+                        f.rawWrite(key.val.i.nativeToLittleEndian);
+                        break;
+                    case TYPES.BOOL:
+                        f.rawWrite(key.val.b.nativeToLittleEndian);
+                        break;
+                }
+                f.rawWrite(value.length.nativeToLittleEndian);
+                value.each!(x=> f.rawWrite(x.nativeToLittleEndian));
             }
         }
-        return cast(Asdf) root;
     }
 
     ulong[] allIds(){
@@ -215,22 +192,27 @@ struct JSONInvertedIndex{
 
     InvertedIndex*[] getFields(string key)
     {
+        auto keycopy = key.idup;
         if(key[0] != '/') throw new Exception("key is missing leading /");
+        InvertedIndex*[] ret;
         auto wildcard = key.indexOf('*');
         if(wildcard == -1){
             auto p = key in fields;
             if(!p) throw new Exception(" key "~key~" is not found");
-            return [p];
-        }else{
-            key = key[0..wildcard] ~"."~ key[wildcard..$];
-            wildcard = key.indexOf('*');
-            while(wildcard != -1){
-                key = key[0..wildcard] ~"."~ key[wildcard..$];
-                wildcard = key.indexOf('*');
+            ret = [p];
+            if(ret.length == 0){
+                stderr.writeln("Warning: Key"~ keycopy ~" was not found in index!");
             }
+        }else{
+            key = key.replace("*",".*");
             auto reg = regex("^" ~ key ~"$");
-            return fields.byKey.std_filter!(x => !(x.matchFirst(reg).empty)).map!(x=> &(fields[x])).array;
+            ret = fields.byKey.std_filter!(x => !(x.matchFirst(reg).empty)).map!(x=> &(fields[x])).array;
+            if(ret.length == 0){
+                stderr.writeln("Warning: Key wildcards sequence "~ keycopy ~" matched no keys in index!");
+            }
         }
+        
+        return ret;
     }
 
     ulong[] query(T)(string key,T value){

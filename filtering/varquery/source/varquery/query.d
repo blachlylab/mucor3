@@ -288,7 +288,7 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
                 // key==val
                 case QueryType.EqualsNumeric:
                     if(query.values[0][$-1] == 'f'){
-                        queryResults ~= idx.query(query.key,query.values[0][0..$-1].to!float);    
+                        queryResults ~= idx.query(query.key,query.values[0][0..$-1].to!double);    
                     }else{
                         queryResults ~= idx.query(query.key,query.values[0].to!int);
                     }
@@ -296,7 +296,7 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
                 // key=val:val (numeric values only)
                 case QueryType.Range:
                     if(query.values[0][$-1] == 'f' && query.values[1][$-1] == 'f'){
-                        queryResults ~= idx.queryRange(query.key, query.values[0][0..$-1].to!float, query.values[1][0..$-1].to!float);
+                        queryResults ~= idx.queryRange(query.key, query.values[0][0..$-1].to!double, query.values[1][0..$-1].to!double);
                     }else if(query.values[0][$-1] == 'f' || query.values[1][$-1] == 'f'){
                         throw new Exception("Range query does not allow mixin of int and float types, use a float only query");
                     }else{
@@ -307,25 +307,25 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
                 case QueryType.GreaterThan:
                     if(query.values[0][$-1] == 'f')
                         query.values[0] = query.values[0][0..$-1];
-                    queryResults ~= idx.queryOp!">"(query.key,query.values[0].to!float);
+                    queryResults ~= idx.queryOp!">"(query.key,query.values[0].to!double);
                     break;
                 // key>=val (numeric values only)
                 case QueryType.GreaterThanEqual:
                     if(query.values[0][$-1] == 'f')
                         query.values[0] = query.values[0][0..$-1];
-                    queryResults ~= idx.queryOp!">="(query.key,query.values[0].to!float);
+                    queryResults ~= idx.queryOp!">="(query.key,query.values[0].to!double);
                     break;
                 // key<val (numeric values only)
                 case QueryType.LessThan:
                     if(query.values[0][$-1] == 'f')
                         query.values[0] = query.values[0][0..$-1];
-                    queryResults ~= idx.queryOp!"<"(query.key,query.values[0].to!float);
+                    queryResults ~= idx.queryOp!"<"(query.key,query.values[0].to!double);
                     break;
                 // key<=val (numeric values only)
                 case QueryType.LessThanEqual:
                     if(query.values[0][$-1] == 'f')
                         query.values[0] = query.values[0][0..$-1];
-                    queryResults ~= idx.queryOp!"<="(query.key,query.values[0].to!float);
+                    queryResults ~= idx.queryOp!"<="(query.key,query.values[0].to!double);
                     break;
                 // key=(val AND val)
                 case QueryType.AND:
@@ -354,7 +354,7 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
                     break;
                 // 0 OR 1
                 case QueryType.OR:
-                    queryResults ~= multiwayUnion(query.values.map!(x=>queryResults[x.to!int]).array).array;
+                    queryResults ~= multiwayUnion(query.values.map!(x=>queryResults[x.to!ulong]).array).array;
                     break;
                 // NOT 0 
                 case QueryType.NOT:

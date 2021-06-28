@@ -2,120 +2,179 @@ module varquery.singleindex;
 
 import std.algorithm.setops;
 import std.regex;
-import std.algorithm : sort, uniq, map, std_filter = filter, canFind;
+import std.algorithm : sort, uniq, map, std_filter = filter, canFind, joiner;
 import std.math : isClose;
 import std.array : array;
-import std.conv : to;
+import std.conv : to, ConvException;
+import std.traits;
+import std.meta;
 
-import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
+import asdf: deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import varquery.wideint : uint128;
 
 
 /// JSON types
 enum TYPES{
-    FLOAT,
+    FLOAT = 0,
     INT,
     STRING,
-    BOOL,
-    NULL
+    BOOL
+}
+alias DTYPES = AliasSeq!(double, long, string, bool);
+
+/// Union that can store all json types
+union JSONData
+{
+    double f;
+    long i;
+    string s;
+    bool b;
 }
 
-pragma(inline,true)
-const(byte)[] serialize(T)(T* v){
-    return (cast(const(byte)*) v)[0 .. T.sizeof].dup;
-}
-
-pragma(inline,true)
-const(byte)[] serialize(string* v){
-    return cast(const(byte)[])((*v).idup);
-}
-
-pragma(inline,true)
-T deserialize(T)(const(byte)[] v){
-    return *(cast(T*)(v[0 .. T.sizeof].ptr));
-}
-
-pragma(inline,true)
-T deserialize(T:string)(const(byte)[] v){
-    return cast(string)(v);
-}
-
-struct InvertedIndex{
-    ulong[][const(byte)[]] hashmap;
+/// Struct that represents JSON data
+/// and can be used with a hashmap
+struct JSONValue
+{
     TYPES type;
-    this(TYPES type){
-        this.type=type;
+    JSONData val;
+
+    this(Asdf json)
+    {
+        final switch(json.kind){
+            case Asdf.Kind.array:
+            case Asdf.Kind.object:
+                throw new Exception("Cannot store objects or arrays in JSONValue types");
+            case Asdf.Kind.number:
+                try {
+                    json.to!string.to!long;
+                    val.i = deserialize!long(json);
+                    type = TYPES.INT;
+                } catch (ConvException e){
+                    json.to!string.to!double;
+                    val.f = deserialize!double(json);
+                    type = TYPES.FLOAT;
+                }
+                break;
+            case Asdf.Kind.string:
+                val.s = deserialize!string(json);
+                type = TYPES.STRING;
+                break;
+            case Asdf.Kind.null_:
+                throw new Exception("No nulls should reach this point");
+            case Asdf.Kind.false_:
+                type = TYPES.BOOL;
+                val.b = false;
+                break;
+            case Asdf.Kind.true_:
+                type = TYPES.BOOL;
+                val.b = true;
+                break;
+        }
     }
 
-    ulong[] filter(T:string)(T[] items){
-        assert(type==TYPES.STRING);
-        ulong[] ret;
-        foreach (item; items)
+    this(T)(T item)
+    {
+        static if(isIntegral!T)
         {
-            if(serialize(&item) in hashmap) 
-                ret~=hashmap[serialize(&item)];
-        } 
-        return ret;
+            val.i = item.to!long;
+            type = TYPES.INT;
+        }else static if(isFloatingPoint!T){
+            val.f = item.to!double;
+            type = TYPES.FLOAT;
+        }else static if(isSomeString!T){
+            val.s = item.to!string;
+            type = TYPES.STRING;
+        }else static if(isBoolean!T){
+            val.b = item.to!bool;
+            type = TYPES.BOOL;
+        }else{
+            static assert(0, "not a compatible type for JSONValue");
+        }
     }
 
-    ulong[] filter(T:int)(T[] items){
-        assert(type==TYPES.FLOAT);
-        ulong[] ret;
-        auto vals = hashmap.keys
-                            .map!(x=>deserialize!T(x))
-                            .std_filter!(x=> items.canFind(x))
-                            .array;
-        foreach (item; vals)
-        {
-            if(serialize(&item) in hashmap)
-                ret~=hashmap[serialize(&item)];
+    size_t toHash() const pure nothrow
+    {
+        final switch(type){
+            case TYPES.FLOAT:
+                return hashOf(val.f);
+            case TYPES.INT:
+                return hashOf(val.i);
+            case TYPES.STRING:
+                return hashOf(val.s);
+            case TYPES.BOOL:
+                return hashOf(val.b);
         }
-        return ret;
     }
-    
-    ulong[] filter(T:float)(T[] items){
-        assert(type==TYPES.FLOAT);
-        ulong[] ret;
-        auto vals = hashmap.keys
-                            .map!(x=>deserialize!T(x))
-                            .std_filter!(x=> items.canFind!isClose(x))
-                            .array;
-        foreach (item; vals)
-        {
-            if(serialize(&item) in hashmap)
-                ret~=hashmap[serialize(&item)];
+
+    int opCmp(JSONValue other) const pure nothrow
+    {
+        if(type != other.type){
+            return -1;
         }
-        return ret;
+        final switch(type){
+            case TYPES.FLOAT:
+                return val.f < other.val.f;
+            case TYPES.INT:
+                return val.i < other.val.i;
+            case TYPES.STRING:
+                return val.s < other.val.s;
+            case TYPES.BOOL:
+                return val.b < other.val.b;
+        }
+    }
+
+    bool opEquals(JSONValue other) const pure nothrow
+    {
+        if(type != other.type){
+            return false;
+        }
+        final switch(type){
+            case TYPES.FLOAT:
+                return val.f == other.val.f;
+            case TYPES.INT:
+                return val.i == other.val.i;
+            case TYPES.STRING:
+                return val.s == other.val.s;
+            case TYPES.BOOL:
+                return val.b == other.val.b;
+        }
+    }
+}
+
+/**
+* Single inverted index for one field and one type.
+* Holds a single field's values as keys and record 
+* number as value.
+*/
+struct InvertedIndex
+{
+    ulong[][JSONValue] hashmap;
+
+    ulong[] filter(T)(T[] items){
+        return items.map!(x => JSONValue(x))
+                    .std_filter!(x=> x in hashmap)
+                    .map!(x => hashmap[x])
+                    .joiner.array; 
     }
 
     ulong[] filterRange(T)(T[] range){
         assert(range.length==2);
         assert(range[0]<=range[1]);
-        auto vals = hashmap.keys
-                            .map!(x=>deserialize!T(x))
-                            .std_filter!(x=>x>=range[0])
-                            .std_filter!(x=>x<range[1]).array;
-        ulong[] ret;
-        foreach (item; vals)
-        {
-            if(serialize(&item) in hashmap)
-                ret~=hashmap[serialize(&item)];
-        }
-        return ret;
+        JSONValue[2] r = [JSONValue(range[0]), JSONValue(range[1])];
+        return hashmap.keys
+                    .std_filter!(x => x.type == staticIndexOf!(T,DTYPES))
+                    .std_filter!(x=>x >= r[0])
+                    .std_filter!(x=>x < r[1])
+                    .map!(x => hashmap[x]).joiner.array;
     }
 
-    ulong[] filterOp(string op)(float val){
-        mixin("auto func = (float x) => x " ~ op ~" val;");
-        auto vals = hashmap.keys
-                        .map!(x=>deserialize!float(x))
-                        .std_filter!func.array;
-        ulong[] ret;
-        foreach (item; vals)
-        {
-            if(serialize(&item) in hashmap)
-                ret~=hashmap[serialize(&item)];
-        }
-        return ret.sort.uniq.array;
+    ulong[] filterOp(string op, T)(T val){
+        mixin("auto func = (JSONValue x) => x " ~ op ~" JSONValue(val);");
+        return hashmap.keys
+                        .std_filter!(x => x.type == staticIndexOf!(T,DTYPES))
+                        .std_filter!func
+                        .map!(x => hashmap[x]).joiner.array
+                        .sort.uniq.array;
     }
 }
 
