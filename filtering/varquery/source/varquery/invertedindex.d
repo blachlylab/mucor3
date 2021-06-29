@@ -36,8 +36,10 @@ struct JSONInvertedIndex{
             JSONValue valkey;
             if(value.kind == Asdf.Kind.object){
                 addJsonObject(value, path~sep~key);
+                continue;
             }else if(value.kind == Asdf.Kind.array){
                 addJsonArray(value, path~sep~key);
+                continue;
             }else if(value.kind == Asdf.Kind.null_){
                 continue;
             }else{
@@ -45,10 +47,12 @@ struct JSONInvertedIndex{
             }
             auto p = path~sep~key in fields;
             if(p){
-                (*p).hashmap[valkey]~= this.recordMd5s.length - 1; 
+                auto val = (*p).hashmap.require(valkey,[]);
+                (*val) ~= this.recordMd5s.length - 1;
             }else{
                 fields[path~sep~key] = InvertedIndex();
-                fields[path~sep~key].hashmap[valkey] ~= this.recordMd5s.length - 1;
+                auto val = fields[path~sep~key].hashmap.require(valkey,[]);
+                (*val) ~= this.recordMd5s.length - 1;
             }
         }
         
@@ -60,8 +64,10 @@ struct JSONInvertedIndex{
             JSONValue valkey;
             if(value.kind == Asdf.Kind.object){
                 addJsonObject(value, path);
+                continue;
             }else if(value.kind == Asdf.Kind.array){
                 addJsonArray(value, path);
+                continue;
             }else if(value.kind == Asdf.Kind.null_){
                 continue;
             }else{
@@ -69,56 +75,76 @@ struct JSONInvertedIndex{
             }
             auto p = path in fields;
             if(p){
-                (*p).hashmap[valkey]~= this.recordMd5s.length - 1; 
+                auto val = (*p).hashmap.require(valkey,[]);
+                (*val) ~= this.recordMd5s.length - 1; 
             }else{
                 fields[path] = InvertedIndex();
-                fields[path].hashmap[valkey] ~= this.recordMd5s.length - 1;
+                auto val = fields[path].hashmap.require(valkey,[]);
+                (*val) ~= this.recordMd5s.length - 1;
             }
         }
         
     }
 
     void fromFile(File f){
+        // read const sequence
         auto buf = new ubyte[8];
         f.rawRead(buf);
         enforce((cast(string)buf) == "VQ_INDEX","File doesn't contain VQ_INDEX sequence");
+
+        // read md5 array length
         buf = new ubyte[ulong.sizeof];
         f.rawRead(buf);
         this.recordMd5s.length = littleEndianToNative!(ulong, 8)(buf[0..8]);
+
+        // read md5 array
         buf = new ubyte[ulong.sizeof + ulong.sizeof];
         foreach(ref md5; this.recordMd5s){
             f.rawRead(buf);
             md5.hi = littleEndianToNative!(ulong, 8)(buf[0..8]);
             md5.lo = littleEndianToNative!(ulong, 8)(buf[8..16]);
         }
+
+        // read number of fields
         buf = new ubyte[ulong.sizeof];
         f.rawRead(buf);
         auto numfields = littleEndianToNative!(ulong, 8)(buf[0..8]);
         foreach (i; iota(numfields))
         {
             InvertedIndex idx;
+
+            // read key length
             buf = new ubyte[ulong.sizeof];
             f.rawRead(buf);
             auto keyLen = littleEndianToNative!(ulong, 8)(buf[0..8]);
+
+            // read key
             buf = new ubyte[keyLen];
             f.rawRead(buf);
             auto field = (cast(string) buf.idup);
+
+            // read number of values
             buf = new ubyte[ulong.sizeof];
             f.rawRead(buf);
             auto numValues = littleEndianToNative!(ulong, 8)(buf[0..8]);
             foreach (j; iota(numValues))
             {
                 JSONValue key;
+
+                // read JSONValue type
                 buf = new ubyte[1];
                 f.rawRead(buf);
                 key.type = buf[0].to!TYPES;
                 final switch(key.type){
-                    case TYPES.FLOAT:
+                    case TYPES.NULL:
+                        debug assert(0); // Shouldn't be writing any nulls
+                        else continue;
+                    case TYPES.FLOAT: // read JSONValue float
                         buf = new ubyte[double.sizeof];
                         f.rawRead(buf);
                         key.val.f = littleEndianToNative!(double, 8)(buf[0..8]);
                         break;
-                    case TYPES.STRING:
+                    case TYPES.STRING: // read JSONValue str
                         buf = new ubyte[ulong.sizeof];
                         f.rawRead(buf);
                         key.val.s.length = littleEndianToNative!(ulong, 8)(buf[0..8]);
@@ -126,27 +152,33 @@ struct JSONInvertedIndex{
                         f.rawRead(buf);
                         key.val.s = (cast(string) buf.idup);
                         break;
-                    case TYPES.INT:
+                    case TYPES.INT: // read JSONValue int
                         buf = new ubyte[long.sizeof];
                         f.rawRead(buf);
                         key.val.f = littleEndianToNative!(long, 8)(buf[0..8]);
                         break;
-                    case TYPES.BOOL:
+                    case TYPES.BOOL: // read JSONValue bool
                         buf = new ubyte[bool.sizeof];
                         f.rawRead(buf);
                         key.val.b = buf[0].to!bool;
                         break;
                 }
+                // read id values array length
                 ulong[] values;
                 buf = new ubyte[ulong.sizeof];
                 f.rawRead(buf);
                 values.length = littleEndianToNative!(ulong, 8)(buf[0..8]);
+
+                // read id values array
                 foreach(ref v; values){
                     f.rawRead(buf);
                     v = littleEndianToNative!(ulong, 8)(buf[0..8]);
                 }
+
+                // assign key and values in hashmap
                 idx.hashmap[key] = values;
             }
+            // assign InvertedIndex in hashmap
             fields[field] = idx;
         }
     }
@@ -160,11 +192,17 @@ struct JSONInvertedIndex{
         {
             f.rawWrite(field.length.nativeToLittleEndian);
             f.rawWrite(field);
-            f.rawWrite(idx.hashmap.length.nativeToLittleEndian);
-            foreach (key, value; idx.hashmap)
+            f.rawWrite(idx.hashmap.count.to!ulong.nativeToLittleEndian);
+            import std.stdio;
+            foreach (key; idx.hashmap.byKey)
             {
+                auto value = idx.hashmap[key];
+                assert(key.type != TYPES.NULL);
                 f.rawWrite([cast(ubyte)key.type]);
                 final switch(key.type){
+                    case TYPES.NULL:
+                        debug assert(0); // Shouldn't be reading any nulls
+                        else continue;
                     case TYPES.FLOAT:
                         f.rawWrite(key.val.f.nativeToLittleEndian);
                         break;

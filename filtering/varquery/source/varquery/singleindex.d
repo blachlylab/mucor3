@@ -11,16 +11,18 @@ import std.meta;
 
 import asdf: deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import varquery.wideint : uint128;
+import varquery.khashl;
 
 
 /// JSON types
 enum TYPES{
-    FLOAT = 0,
+    NULL = 0,
+    FLOAT,
     INT,
     STRING,
     BOOL
 }
-alias DTYPES = AliasSeq!(double, long, string, bool);
+alias DTYPES = AliasSeq!(null, double, long, string, bool);
 
 /// Union that can store all json types
 union JSONData
@@ -95,6 +97,8 @@ struct JSONValue
     size_t toHash() const pure nothrow
     {
         final switch(type){
+            case TYPES.NULL:
+                return hashOf(null);
             case TYPES.FLOAT:
                 return hashOf(val.f);
             case TYPES.INT:
@@ -112,6 +116,8 @@ struct JSONValue
             return -1;
         }
         final switch(type){
+            case TYPES.NULL:
+                return 0;
             case TYPES.FLOAT:
                 return val.f < other.val.f;
             case TYPES.INT:
@@ -129,6 +135,8 @@ struct JSONValue
             return false;
         }
         final switch(type){
+            case TYPES.NULL:
+                return true;
             case TYPES.FLOAT:
                 return val.f == other.val.f;
             case TYPES.INT:
@@ -137,6 +145,23 @@ struct JSONValue
                 return val.s == other.val.s;
             case TYPES.BOOL:
                 return val.b == other.val.b;
+
+        }
+    }
+
+    string toString() const
+    {
+        final switch(type){
+            case TYPES.NULL:
+                return null.to!string;
+            case TYPES.FLOAT:
+                return val.f.to!string;
+            case TYPES.INT:
+                return val.i.to!string;
+            case TYPES.STRING:
+                return val.s;
+            case TYPES.BOOL:
+                return val.b.to!string;
         }
     }
 }
@@ -148,7 +173,8 @@ struct JSONValue
 */
 struct InvertedIndex
 {
-    ulong[][JSONValue] hashmap;
+    // ulong[][JSONValue] hashmap;
+    khashl!(JSONValue, ulong[]) hashmap;
 
     ulong[] filter(T)(T[] items){
         return items.map!(x => JSONValue(x))
@@ -161,7 +187,7 @@ struct InvertedIndex
         assert(range.length==2);
         assert(range[0]<=range[1]);
         JSONValue[2] r = [JSONValue(range[0]), JSONValue(range[1])];
-        return hashmap.keys
+        return hashmap.byKey
                     .std_filter!(x => x.type == staticIndexOf!(T,DTYPES))
                     .std_filter!(x=>x >= r[0])
                     .std_filter!(x=>x < r[1])
@@ -170,7 +196,7 @@ struct InvertedIndex
 
     ulong[] filterOp(string op, T)(T val){
         mixin("auto func = (JSONValue x) => x " ~ op ~" JSONValue(val);");
-        return hashmap.keys
+        return hashmap.byKey
                         .std_filter!(x => x.type == staticIndexOf!(T,DTYPES))
                         .std_filter!func
                         .map!(x => hashmap[x]).joiner.array
@@ -178,21 +204,21 @@ struct InvertedIndex
     }
 }
 
-unittest{
-    import std.stdio;
-    InvertedIndex idx = InvertedIndex(TYPES.STRING);
-    string[] v = ["hi","I","am","t"];
-    idx.hashmap[serialize(&v[0])]=[1,2];
-    idx.hashmap[serialize(&v[1])]=[1,3];
-    idx.hashmap[serialize(&v[2])]=[4];
-    idx.hashmap[serialize(&v[3])]=[5];
-    writeln(idx.filter(["hi","I","am"]));
+// unittest{
+//     import std.stdio;
+//     InvertedIndex idx = InvertedIndex();
+//     string[] v = ["hi","I","am","t"];
+//     idx.hashmap[serialize(&v[0])]=[1,2];
+//     idx.hashmap[serialize(&v[1])]=[1,3];
+//     idx.hashmap[serialize(&v[2])]=[4];
+//     idx.hashmap[serialize(&v[3])]=[5];
+//     writeln(idx.filter(["hi","I","am"]));
 
-    InvertedIndex idx2 = InvertedIndex(TYPES.FLOAT);
-    auto v2 = [0.1,0.4,0.6,0.9];
-    idx2.hashmap[serialize(&v2[0])]=[1,2];
-    idx2.hashmap[serialize(&v2[1])]=[1,3];
-    idx2.hashmap[serialize(&v2[2])]=[4];
-    idx2.hashmap[serialize(&v2[3])]=[5];
-    writeln(idx2.filterRange([0.1,0.8]));
-}
+//     InvertedIndex idx2 = InvertedIndex(TYPES.FLOAT);
+//     auto v2 = [0.1,0.4,0.6,0.9];
+//     idx2.hashmap[serialize(&v2[0])]=[1,2];
+//     idx2.hashmap[serialize(&v2[1])]=[1,3];
+//     idx2.hashmap[serialize(&v2[2])]=[4];
+//     idx2.hashmap[serialize(&v2[3])]=[5];
+//     writeln(idx2.filterRange([0.1,0.8]));
+// }

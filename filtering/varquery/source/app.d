@@ -27,7 +27,7 @@ void filter(string[] args){
     StopWatch sw;
     sw.start;
  
-    JSONInvertedIndex idx = JSONInvertedIndex(File(args[0]));
+    JSONInvertedIndex idx = JSONInvertedIndex(File(args[1]));
     // auto idxs = idx.fields[args[1]].filter(args[2..$]);
     // float[] range = [args[2].to!float,args[3].to!float];
     stderr.writeln("Time to load index: ",sw.peek.total!"seconds"," seconds");
@@ -45,7 +45,7 @@ void filter(string[] args){
         hashmap[key] = true;
     }
     sw.start;
-    foreach(line;File(args[1]).byChunk(4096).parseJsonByLine){
+    foreach(line;File(args[0]).byChunk(4096).parseJsonByLine){
         if(idxs.length==0) break;
         uint128 a;
         a.fromHexString(deserializeAsdf!string(line["md5"]));

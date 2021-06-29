@@ -9,5 +9,5 @@
 	"description": "Query variants",
 	"license": "MIT",
 	"name": "varquery",
-	"dflags-ldc": ["-mattr=+sse4.2"]
+	"dflags-ldc": ["-mcpu=native"]
 }
