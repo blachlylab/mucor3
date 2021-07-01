@@ -164,6 +164,30 @@ struct JSONValue
                 return val.b.to!string;
         }
     }
+
+    ubyte[] toBytes() const
+    {
+        import std.bitmanip: nativeToLittleEndian;
+        assert(type != TYPES.NULL);
+        ubyte[] ret = [cast(ubyte)type];
+        final switch(type){
+            case TYPES.NULL:
+            case TYPES.FLOAT:
+                ret ~= val.f.nativeToLittleEndian;
+                break;
+            case TYPES.STRING:
+                ret ~= val.s.length.nativeToLittleEndian;
+                ret ~= cast(ubyte[])val.s;
+                break;
+            case TYPES.INT:
+                ret ~= val.i.nativeToLittleEndian;
+                break;
+            case TYPES.BOOL:
+                ret ~= val.b.nativeToLittleEndian;
+                break;
+        }
+        return ret;
+    }
 }
 
 /**

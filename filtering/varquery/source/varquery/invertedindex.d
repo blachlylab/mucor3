@@ -2,7 +2,7 @@ module varquery.invertedindex;
 import std.algorithm.setops;
 import std.regex;
 import std.algorithm : sort, uniq, map, std_filter = filter, joiner, each;
-import std.range : iota;
+import std.range : iota, takeExactly;
 import std.array : array, replace;
 import std.conv : to;
 import std.format : format;
@@ -20,7 +20,7 @@ char sep = '/';
 struct JSONInvertedIndex{
     uint128[] recordMd5s;
     InvertedIndex[char[]] fields;
-    this(File f){
+    this(string f){
         fromFile(f);
     }
     void addJsonObject(Asdf root, const(char)[] path = ""){
@@ -86,93 +86,89 @@ struct JSONInvertedIndex{
         
     }
 
-    void fromFile(File f){
+    void fromFile(string f){
+        import std.file : read;
+        auto bytesRange = cast(ubyte[])(f.read());
+        ubyte[] buf;
         // read const sequence
-        auto buf = new ubyte[8];
-        f.rawRead(buf);
-        enforce((cast(string)buf) == "VQ_INDEX","File doesn't contain VQ_INDEX sequence");
+        enforce((cast(string)bytesRange[0..8]) == "VQ_INDEX","File doesn't contain VQ_INDEX sequence");
+        bytesRange = bytesRange[8..$];
 
         // read md5 array length
-        buf = new ubyte[ulong.sizeof];
-        f.rawRead(buf);
-        this.recordMd5s.length = littleEndianToNative!(ulong, 8)(buf[0..8]);
+        this.recordMd5s.length = littleEndianToNative!(ulong, 8)(bytesRange[0..8]);
+        bytesRange = bytesRange[8..$];
 
         // read md5 array
-        buf = new ubyte[ulong.sizeof + ulong.sizeof];
-        foreach(ref md5; this.recordMd5s){
-            f.rawRead(buf);
-            md5.hi = littleEndianToNative!(ulong, 8)(buf[0..8]);
-            md5.lo = littleEndianToNative!(ulong, 8)(buf[8..16]);
+        buf = bytesRange[0 .. (ulong.sizeof + ulong.sizeof)*this.recordMd5s.length];
+        bytesRange = bytesRange[(ulong.sizeof + ulong.sizeof)*this.recordMd5s.length..$];
+
+        // convert array
+        foreach(i,ref md5; this.recordMd5s){
+            md5.hi = littleEndianToNative!(ulong, 8)(buf[(i*8)..(i*8)+8][0..8]);
+            md5.lo = littleEndianToNative!(ulong, 8)(buf[(i*8)+8..(i*8)+16][0..8]);
         }
 
         // read number of fields
-        buf = new ubyte[ulong.sizeof];
-        f.rawRead(buf);
-        auto numfields = littleEndianToNative!(ulong, 8)(buf[0..8]);
+        auto numfields = littleEndianToNative!(ulong, 8)(bytesRange[0..8]);
+        bytesRange = bytesRange[8..$];
         foreach (i; iota(numfields))
         {
             InvertedIndex idx;
 
             // read key length
-            buf = new ubyte[ulong.sizeof];
-            f.rawRead(buf);
-            auto keyLen = littleEndianToNative!(ulong, 8)(buf[0..8]);
+            auto keyLen = littleEndianToNative!(ulong, 8)(bytesRange[0..8]);
+            bytesRange = bytesRange[8..$];
 
             // read key
-            buf = new ubyte[keyLen];
-            f.rawRead(buf);
+            buf = bytesRange[0..keyLen];
             auto field = (cast(string) buf.idup);
+            bytesRange = bytesRange[keyLen..$];
 
-            // read number of values
-            buf = new ubyte[ulong.sizeof];
-            f.rawRead(buf);
-            auto numValues = littleEndianToNative!(ulong, 8)(buf[0..8]);
-            foreach (j; iota(numValues))
+            // read size of the values in bytes
+            auto valuesSize = littleEndianToNative!(ulong, 8)(bytesRange[0..8]);
+            bytesRange = bytesRange[8..$];
+
+            // load values as bytes
+            buf = bytesRange[0 .. valuesSize];
+            while(buf!=[])
             {
                 JSONValue key;
 
-                // read JSONValue type
-                buf = new ubyte[1];
-                f.rawRead(buf);
                 key.type = buf[0].to!TYPES;
+                buf = buf[1..$];
+
                 final switch(key.type){
                     case TYPES.NULL:
                         debug assert(0); // Shouldn't be writing any nulls
                         else continue;
                     case TYPES.FLOAT: // read JSONValue float
-                        buf = new ubyte[double.sizeof];
-                        f.rawRead(buf);
                         key.val.f = littleEndianToNative!(double, 8)(buf[0..8]);
+                        buf = buf[8..$];
                         break;
                     case TYPES.STRING: // read JSONValue str
-                        buf = new ubyte[ulong.sizeof];
-                        f.rawRead(buf);
                         key.val.s.length = littleEndianToNative!(ulong, 8)(buf[0..8]);
-                        buf = new ubyte[key.val.s.length];
-                        f.rawRead(buf);
-                        key.val.s = (cast(string) buf.idup);
+                        buf = buf[8..$];
+                        key.val.s = (cast(string) buf[0..key.val.s.length].idup);
+                        buf = buf[key.val.s.length..$];
                         break;
                     case TYPES.INT: // read JSONValue int
-                        buf = new ubyte[long.sizeof];
-                        f.rawRead(buf);
-                        key.val.f = littleEndianToNative!(long, 8)(buf[0..8]);
+                        key.val.i = littleEndianToNative!(long, 8)(buf[0..8]);
+                        buf = buf[8..$];
                         break;
                     case TYPES.BOOL: // read JSONValue bool
-                        buf = new ubyte[bool.sizeof];
-                        f.rawRead(buf);
                         key.val.b = buf[0].to!bool;
+                        buf = buf[1..$];
                         break;
                 }
                 // read id values array length
                 ulong[] values;
-                buf = new ubyte[ulong.sizeof];
-                f.rawRead(buf);
                 values.length = littleEndianToNative!(ulong, 8)(buf[0..8]);
+                buf = buf[8..$];
 
                 // read id values array
                 foreach(ref v; values){
-                    f.rawRead(buf);
                     v = littleEndianToNative!(ulong, 8)(buf[0..8]);
+                    buf = buf[8..$];
                 }
 
                 // assign key and values in hashmap
@@ -180,46 +176,42 @@ struct JSONInvertedIndex{
             }
             // assign InvertedIndex in hashmap
             fields[field] = idx;
+            bytesRange = bytesRange[valuesSize..$];
         }
     }
 
     void writeToFile(File f){
+
+        // write constant
         f.rawWrite("VQ_INDEX");
+
+        // write md5 length
         f.rawWrite(this.recordMd5s.length.nativeToLittleEndian);
-        this.recordMd5s.each!(x=> f.rawWrite(x.hi.nativeToLittleEndian ~ x.lo.nativeToLittleEndian));
+        // write md5 array
+        f.rawWrite(this.recordMd5s.map!(x=> x.hi.nativeToLittleEndian ~ x.lo.nativeToLittleEndian).joiner.array);
+        // write num fields
         f.rawWrite(fields.length.nativeToLittleEndian);
         foreach (field,idx; fields)
         {
+            // write field length
             f.rawWrite(field.length.nativeToLittleEndian);
+            // write field string
             f.rawWrite(field);
-            f.rawWrite(idx.hashmap.count.to!ulong.nativeToLittleEndian);
+
+            // generate values bytes
             import std.stdio;
+            ubyte[] towrite = [];
             foreach (key; idx.hashmap.byKey)
             {
                 auto value = idx.hashmap[key];
-                assert(key.type != TYPES.NULL);
-                f.rawWrite([cast(ubyte)key.type]);
-                final switch(key.type){
-                    case TYPES.NULL:
-                        debug assert(0); // Shouldn't be reading any nulls
-                        else continue;
-                    case TYPES.FLOAT:
-                        f.rawWrite(key.val.f.nativeToLittleEndian);
-                        break;
-                    case TYPES.STRING:
-                        f.rawWrite(key.val.s.length.nativeToLittleEndian);
-                        f.rawWrite(key.val.s);
-                        break;
-                    case TYPES.INT:
-                        f.rawWrite(key.val.i.nativeToLittleEndian);
-                        break;
-                    case TYPES.BOOL:
-                        f.rawWrite(key.val.b.nativeToLittleEndian);
-                        break;
-                }
-                f.rawWrite(value.length.nativeToLittleEndian);
-                value.each!(x=> f.rawWrite(x.nativeToLittleEndian));
+                towrite ~= key.toBytes;
+                towrite ~= value.length.nativeToLittleEndian;
+                towrite ~= value.map!(x=> x.nativeToLittleEndian.dup).joiner.array;
             }
+            // write values byte size
+            f.rawWrite(towrite.length.nativeToLittleEndian);
+            // write values bytes
+            f.rawWrite(towrite);
         }
     }
 

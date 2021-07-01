@@ -27,7 +27,7 @@ void filter(string[] args){
     StopWatch sw;
     sw.start;
  
-    JSONInvertedIndex idx = JSONInvertedIndex(File(args[1]));
+    JSONInvertedIndex idx = JSONInvertedIndex(args[1]);
     // auto idxs = idx.fields[args[1]].filter(args[2..$]);
     // float[] range = [args[2].to!float,args[3].to!float];
     stderr.writeln("Time to load index: ",sw.peek.total!"seconds"," seconds");
@@ -73,6 +73,12 @@ void index(string[] args){
         idx.addJsonObject(line);
         count++;
     }
-    stderr.writeln("Avg time to index record: ",sw.peek.total!"usecs"/count," usecs");
+    sw.stop;
+    stderr.writefln("Indexed %d records in %d secs",count,sw.peek.total!"seconds");
+    stderr.writefln("Avg time to index record: %f usecs",float(sw.peek.total!"usecs") / float(count));
+    sw.reset;
+    sw.start;
     idx.writeToFile(File(args[1], "wb"));
+    sw.stop;
+    stderr.writefln("Wrote index in %d secs",sw.peek.total!"seconds");
 }
