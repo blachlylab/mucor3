@@ -26,6 +26,7 @@ struct JSONInvertedIndex{
     void addJsonObject(Asdf root, const(char)[] path = ""){
         if(path == ""){
             uint128 a;
+            debug if(root["md5"] == Asdf.init) stderr.writeln("record with no md5");
             auto md5 = root["md5"].deserializeAsdf!string;
             root["md5"].remove;
             a.fromHexString(md5);
@@ -104,8 +105,8 @@ struct JSONInvertedIndex{
 
         // convert array
         foreach(i,ref md5; this.recordMd5s){
-            md5.hi = littleEndianToNative!(ulong, 8)(buf[(i*8)..(i*8)+8][0..8]);
-            md5.lo = littleEndianToNative!(ulong, 8)(buf[(i*8)+8..(i*8)+16][0..8]);
+            md5.hi = littleEndianToNative!(ulong, 8)(buf[(i*16)..(i*16)+8][0..8]);
+            md5.lo = littleEndianToNative!(ulong, 8)(buf[(i*16)+8..(i*16)+16][0..8]);
         }
 
         // read number of fields
@@ -241,7 +242,7 @@ struct JSONInvertedIndex{
                 stderr.writeln("Warning: Key wildcards sequence "~ keycopy ~" matched no keys in index!");
             }
         }
-        
+        debug stderr.writefln("Key %s matched %d keys",keycopy,ret.length);
         return ret;
     }
 
@@ -257,12 +258,16 @@ struct JSONInvertedIndex{
                 .map!(x=> (*x).filterRange([first,second]))
                 .joiner.array.sort.uniq.array;
     }
-    ulong[] queryOp(string op)(string key,float val){
-        auto matchingFields = getFields(key);
-        return matchingFields
-                .map!(x=> (*x).filterOp!op(val))
-                .joiner.array.sort.uniq.array;
+    template queryOp(string op)
+    {
+        ulong[] queryOp(T)(string key,T val){
+            auto matchingFields = getFields(key);
+            return matchingFields
+                    .map!(x=> (*x).filterOp!op(val))
+                    .joiner.array.sort.uniq.array;
+        }
     }
+    
     ulong[] queryAND(T)(string key,T[] values){
         auto matchingFields = getFields(key);
         return matchingFields.map!((x){

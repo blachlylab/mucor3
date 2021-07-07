@@ -13,6 +13,15 @@ import asdf: deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import varquery.wideint : uint128;
 import varquery.khashl;
 
+pragma(inline,true)
+bool isNumericStringInteger(string val)
+{
+    foreach (c; val)
+    {
+        if(c < '0' || c > '9') return false;
+    }
+    return true;
+}
 
 /// JSON types
 enum TYPES{
@@ -47,12 +56,11 @@ struct JSONValue
             case Asdf.Kind.object:
                 throw new Exception("Cannot store objects or arrays in JSONValue types");
             case Asdf.Kind.number:
-                try {
-                    json.to!string.to!long;
+                auto numStr = json.to!string;
+                if(isNumericStringInteger(numStr)){
                     val.i = deserialize!long(json);
                     type = TYPES.INT;
-                } catch (ConvException e){
-                    json.to!string.to!double;
+                }else{
                     val.f = deserialize!double(json);
                     type = TYPES.FLOAT;
                 }

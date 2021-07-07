@@ -290,7 +290,7 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
                     if(query.values[0][$-1] == 'f'){
                         queryResults ~= idx.query(query.key,query.values[0][0..$-1].to!double);    
                     }else{
-                        queryResults ~= idx.query(query.key,query.values[0].to!int);
+                        queryResults ~= idx.query(query.key,query.values[0].to!long);
                     }
                     break;
                 // key=val:val (numeric values only)
@@ -300,32 +300,48 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
                     }else if(query.values[0][$-1] == 'f' || query.values[1][$-1] == 'f'){
                         throw new Exception("Range query does not allow mixin of int and float types, use a float only query");
                     }else{
-                        queryResults ~= idx.queryRange(query.key, query.values[0].to!int, query.values[1].to!int);
+                        queryResults ~= idx.queryRange(query.key, query.values[0].to!long, query.values[1].to!long);
                     }
                     break;
                 // key>val (numeric values only)
                 case QueryType.GreaterThan:
-                    if(query.values[0][$-1] == 'f')
+                    if(query.values[0][$-1] == 'f'){
                         query.values[0] = query.values[0][0..$-1];
-                    queryResults ~= idx.queryOp!">"(query.key,query.values[0].to!double);
+                        queryResults ~= idx.queryOp!">"(query.key,query.values[0].to!double);
+                    }else{
+                        query.values[0] = query.values[0][0..$-1];
+                        queryResults ~= idx.queryOp!">"(query.key,query.values[0].to!long);
+                    }
                     break;
                 // key>=val (numeric values only)
                 case QueryType.GreaterThanEqual:
-                    if(query.values[0][$-1] == 'f')
+                    if(query.values[0][$-1] == 'f'){
                         query.values[0] = query.values[0][0..$-1];
-                    queryResults ~= idx.queryOp!">="(query.key,query.values[0].to!double);
+                        queryResults ~= idx.queryOp!">="(query.key,query.values[0].to!double);
+                    }else{
+                        query.values[0] = query.values[0][0..$-1];
+                        queryResults ~= idx.queryOp!">="(query.key,query.values[0].to!long);
+                    }
                     break;
                 // key<val (numeric values only)
                 case QueryType.LessThan:
-                    if(query.values[0][$-1] == 'f')
+                    if(query.values[0][$-1] == 'f'){
                         query.values[0] = query.values[0][0..$-1];
-                    queryResults ~= idx.queryOp!"<"(query.key,query.values[0].to!double);
+                        queryResults ~= idx.queryOp!"<"(query.key,query.values[0].to!double);
+                    }else{
+                        query.values[0] = query.values[0][0..$-1];
+                        queryResults ~= idx.queryOp!"<"(query.key,query.values[0].to!long);
+                    }
                     break;
                 // key<=val (numeric values only)
                 case QueryType.LessThanEqual:
-                    if(query.values[0][$-1] == 'f')
+                    if(query.values[0][$-1] == 'f'){
                         query.values[0] = query.values[0][0..$-1];
-                    queryResults ~= idx.queryOp!"<="(query.key,query.values[0].to!double);
+                        queryResults ~= idx.queryOp!"<="(query.key,query.values[0].to!double);
+                    }else{
+                        query.values[0] = query.values[0][0..$-1];
+                        queryResults ~= idx.queryOp!"<="(query.key,query.values[0].to!long);
+                    }
                     break;
                 // key=(val AND val)
                 case QueryType.AND:
@@ -340,6 +356,8 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
                 default:
                     throw new Exception("Bad query");
             }
+            debug stderr.writeln(query);
+            debug stderr.writefln("basic query return %d results", queryResults[$-1].length);
         }else{
             // if there isn't a key involved its a compound 
             // query bc we have to use a previous queries
