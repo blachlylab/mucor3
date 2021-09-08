@@ -41,31 +41,31 @@ enum VAL_CAP_PATTERN = `([^\s\:=<>\(\)]+)`;
 auto simple_patterns = regex([
 
     //key1 = val1 : val2
-    `%s[\s]*=[\s]*%s[\s]*:[\s]*%s`.format(KEY_CAP_PATTERN, NUM_CAP_PATTERN, NUM_CAP_PATTERN), //range
+    `%s = %s : %s`.replace(" ", `[\s]*`).format(KEY_CAP_PATTERN, NUM_CAP_PATTERN, NUM_CAP_PATTERN),//range
 
     //key1 = (val1 AND val2)
-    `%s[\s]*=[\s]*\(((?:[\s]*%s[\s]+AND[\s]+)+(?:[^\s]+))\)`.format(KEY_CAP_PATTERN, VAL_CAP_PATTERN), //and
+    `%s = \(((?: %s[\s]+AND[\s]+)+(?:[^\s\)]+ ))\)`.replace(" ", `[\s]*`).format(KEY_CAP_PATTERN, VAL_CAP_PATTERN), //and
 
     //key1 = (val1 OR val2)
-    `%s[\s]*=[\s]*\(((?:[\s]*%s[\s]+OR[\s]+)+(?:[^\s]+))\)`.format(KEY_CAP_PATTERN, VAL_CAP_PATTERN), //or
+    `%s = \(((?: %s[\s]+OR[\s]+)+(?:[^\s\)]+ ))\)`.replace(" ", `[\s]*`).format(KEY_CAP_PATTERN, VAL_CAP_PATTERN), //or
 
     //key1 = val1
-    `%s[\s]*=[\s]*%s`.format(KEY_CAP_PATTERN, VAL_CAP_PATTERN), //simple
+    `%s = %s`.replace(" ", `[\s]*`).format(KEY_CAP_PATTERN, VAL_CAP_PATTERN), //simple
 
     //key1 == val1
-    `%s[\s]*==[\s]*%s`.format(KEY_CAP_PATTERN, VAL_CAP_PATTERN), //numeric equals
+    `%s == %s`.replace(" ", `[\s]*`).format(KEY_CAP_PATTERN, VAL_CAP_PATTERN), //numeric equals
 
     //key1 > val1
-    `%s[\s]*>[\s]*%s`.format(KEY_CAP_PATTERN, NUM_CAP_PATTERN), //GT
+    `%s > %s`.replace(" ", `[\s]*`).format(KEY_CAP_PATTERN, NUM_CAP_PATTERN), //GT
 
     //key1 >= val1
-    `%s[\s]*>=[\s]*%s`.format(KEY_CAP_PATTERN, NUM_CAP_PATTERN), //GTE
+    `%s >= %s`.replace(" ", `[\s]*`).format(KEY_CAP_PATTERN, NUM_CAP_PATTERN), //GTE
 
     //key1 < val1
-    `%s[\s]*<[\s]*%s`.format(KEY_CAP_PATTERN, NUM_CAP_PATTERN), //LT
+    `%s < %s`.replace(" ", `[\s]*`).format(KEY_CAP_PATTERN, NUM_CAP_PATTERN), //LT
 
     //key1 <= val1
-    `%s[\s]*<=[\s]*%s`.format(KEY_CAP_PATTERN, NUM_CAP_PATTERN), //LTE
+    `%s <= %s`.replace(" ", `[\s]*`).format(KEY_CAP_PATTERN, NUM_CAP_PATTERN), //LTE
 ]);
 
 /// Describes a query subunit's
@@ -187,6 +187,8 @@ auto logic_patterns = regex([
     `((?:[0-9]+[\s]+AND[\s]+)+[0-9]+)`, //and
     //1 OR 2
     `\(((?:[0-9]+[\s]+OR[\s]+)+[0-9]+)\)`, //or
+    //(1)
+    `\((?:[0-9]+)\)`
 ]);
 
 /// Parse secondary queries (used after basic queries are parse)
@@ -197,6 +199,7 @@ auto parseLogicalStatements(string query, ulong i)
     res.query = query;
     outer: while(true)
     {
+        query = query.replaceAll!(x => x[1])(regex(`\(([0-9]+)\)`));
         auto matches = query.matchAll(logic_patterns);
         if(matches.empty == true) break;
         foreach(m;matches){
@@ -270,6 +273,7 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
 {
     /// Parse queries into basic steps
     auto primaryQueries = parseSimpleQueries(q);
+    stderr.writeln(primaryQueries.leftover);
     auto secondaryQueries = parseLogicalStatements(primaryQueries.leftover, primaryQueries.results.length);
 
     auto allQueries = primaryQueries.results ~ secondaryQueries.results;
@@ -278,6 +282,7 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
     ulong[][] queryResults; 
     foreach (query; allQueries)
     {
+        stderr.writeln(query.key," ",query.values," ", query.type);
         // if there is a key involved its a basic query
         if(query.key!=""){
             switch(query.type){
@@ -383,6 +388,7 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
             }
         }
     }
+    stderr.writeln(secondaryQueries.leftover);
     // at the end convert internal ids to md5sums
     return idx.convertIds(queryResults[secondaryQueries.leftover.to!ulong]);
 }
