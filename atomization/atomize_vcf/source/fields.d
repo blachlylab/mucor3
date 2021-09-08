@@ -73,7 +73,7 @@ AsdfNode parseAnnotationField(AsdfNode root, string key, string[] field_identifi
                         ann_root[field_identifiers[i]]=AsdfNode(serializeToAsdf(values));
                     break;
                 case TYPES.FLOAT:
-                    writeln(field_identifiers[i]," ",values);
+                    //writeln(field_identifiers[i]," ",values);
                     if(values.length==1)         
                         ann_root[field_identifiers[i]]=AsdfNode(serializeToAsdf(values[0].to!float));
                     else
