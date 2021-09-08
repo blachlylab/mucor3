@@ -18,7 +18,7 @@ void main(string[] args)
             wrangler.merge.run(args[2..$]);
             return;
         case "table":
-            wrangler.table.run(args[2..$]);
+            wrangler.table.run(args[1..$]);
             return;
         case "pivot":
             wrangler.pivot.run(args[1..$]);

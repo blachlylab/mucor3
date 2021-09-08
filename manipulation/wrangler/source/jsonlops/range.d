@@ -142,53 +142,37 @@ template pivot(fun...)
         auto pivot(Range)(Range range, string on, string val, string[] extraCols=[])
         if(is(ElementType!Range == GroupByObject))
         {
-            return range.map!((x){
-                auto ret = AsdfNode(`{}`.parseJson);
-                assert(x.keys.find(on), "pivot on value must be in groupby index");
-
-                // set onVal and add keys to return obj
-                Asdf onVal;
-                foreach (i,idx; x.index)
-                {
-                    if(x.keys[i] == on)
-                        onVal = idx;
-                    else
+            return range.map!((x) {
+                return x.objs.map!((y) {
+                    auto ret = AsdfNode(`{}`.parseJson);
+                    foreach (i,idx; x.index)
+                    {
                         ret[x.keys[i]] = AsdfNode(idx);
-                }
-                // collect and add any extra columns
-                foreach (col; extraCols)
-                {
-                    auto vals = x.objs.map!(y => y[col]).array;
-                    if(vals.length == 1){
-                        ret[col] = AsdfNode(vals[0]);
-                    }else if(vals.length == 0){
-                        ret[col] = AsdfNode(Asdf.init);
-                    }else{
-                        ret[col] = AsdfNode(makeAsdfArray(vals));
                     }
-                }
-                auto vals = x.objs.map!(y => y[val]).array;
-                // convert onVal to a string
-                string onStr;
-                switch(onVal.kind){
-                    case Asdf.Kind.array:
-                    case Asdf.Kind.object:
-                        onStr = onVal.to!string;
-                        break;
-                    default:
-                        onStr = deserialize!string(onVal);
-                }
-                
-                // assign vals to onStr in ret obj
-                if(vals.length == 1){
-                    ret[onStr] = AsdfNode(vals[0]);
-                }else if(vals.length == 0){
-                    ret[onStr] = AsdfNode(Asdf.init);
-                }else{
-                    ret[onStr] = AsdfNode(makeAsdfArray(vals));
-                }
-                return cast(Asdf) ret;
-            });
+                    assert(y[on] != Asdf.init, "pivot on value must be in groupby index");
+                    auto onFields = on.split("/");
+                    auto onVal = y[on];
+                    string onStr;
+                    foreach (col; extraCols)
+                    {
+                        auto colFields = col.split("/");
+                        if(y[colFields] != Asdf.init)
+                            ret[col] = AsdfNode(y[colFields]);
+                    }
+                    switch(onVal.kind){
+                        case Asdf.Kind.array:
+                        case Asdf.Kind.object:
+                            onStr = onVal.to!string;
+                            break;
+                        default:
+                            onStr = deserialize!string(onVal);
+                    }
+                    auto valFields = val.split("/");
+                    if(y[valFields] != Asdf.init)
+                        ret[onStr] = AsdfNode(y[valFields]);
+                    return cast(Asdf) ret;
+                }).fold!merge.unique;
+           });
         }
     }else{
 
