@@ -56,11 +56,13 @@ def main():
         master["Total_depth"]=master["Ref_Depth"]+master["Alt_depths"].apply(sum)
     samples=set(master["sample"])
 
-    missing_fields = set(args.extra.split(",")) - set(master.columns)
-    if(len(missing_fields)!=0):
-        print("Warning: missing column ",missing_fields)
+    extra_fields=[]
+    if args.extra is not None:
+        missing_fields = set(args.extra.split(",")) - set(master.columns)
+        if(len(missing_fields)!=0):
+            print("Warning: missing column ",missing_fields)
 
-    extra_fields=list(set(master.columns) & set(args.extra.split(",")))
+        extra_fields=list(set(master.columns) & set(args.extra.split(",")))
 
     print("sorting")
     master.set_index(required_fields+[col for col in master if col.startswith('ANN_')],inplace=True)
