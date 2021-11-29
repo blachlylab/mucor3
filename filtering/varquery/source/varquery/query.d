@@ -186,9 +186,7 @@ auto logic_patterns = regex([
     //1 AND 2
     `((?:[0-9]+[\s]+AND[\s]+)+[0-9]+)`, //and
     //1 OR 2
-    `\(((?:[0-9]+[\s]+OR[\s]+)+[0-9]+)\)`, //or
-    //(1)
-    `\((?:[0-9]+)\)`
+    `((?:[0-9]+[\s]+OR[\s]+)+[0-9]+)`, //or
 ]);
 
 /// Parse secondary queries (used after basic queries are parse)
@@ -196,40 +194,49 @@ auto parseLogicalStatements(string query, ulong i)
 {
     // auto processedQueries = parseSimpleQueries(query);
     QueryParserResult res; //= processedQueries.results;
+    stderr.writeln("Starting query: ", query);
+    query = query.replaceAll!(x => x[1])(regex(`\(([0-9]+)\)`));
+    stderr.writeln("Removed non-queries: ", query);
     res.query = query;
     outer: while(true)
     {
-        query = query.replaceAll!(x => x[1])(regex(`\(([0-9]+)\)`));
         auto matches = query.matchAll(logic_patterns);
         if(matches.empty == true) break;
         foreach(m;matches){
             query = query.replace(m[0],i.to!string);
             switch(m.whichPattern){
                 case 1: //(0 AND 1)
+                    stderr.writeln("Matched AND: ", query);
                     string[] vals = m[1].splitter(regex(`[\s]+AND[\s]+`)).array;
                     res.results ~= Query("", vals, QueryType.AND);
                     break;
                 case 2: //(0 OR 1)
+                    stderr.writeln("Matched OR: ", query);
                     string[] vals = m[1].splitter(regex(`[\s]+OR[\s]+`)).array;
                     res.results ~= Query("", vals, QueryType.OR);
                     break;
                 case 3: //simple
+                    stderr.writeln("Matched NOT: ", query);
                     res.results ~= Query("", [m[1]], QueryType.NOT);
                     break;
                 case 4: //0 AND 1
+                    stderr.writeln("Matched AND: ", query);
                     string[] vals = m[1].splitter(regex(`[\s]+AND[\s]+`)).array;
                     res.results ~= Query("", vals, QueryType.AND);
                     break;
                 case 5: //0 OR 1
+                    stderr.writeln("Matched OR: ", query);
                     string[] vals = m[1].splitter(regex(`[\s]+OR[\s]+`)).array;
                     res.results ~= Query("", vals, QueryType.OR);
                     break;
                 default:
+                   stderr.writeln("No match: ", query);
                     break outer;
             }
             i++;
         }
     }
+
     res.leftover = query;
     return res;
 }
@@ -388,7 +395,7 @@ auto evalQuery(string q, JSONInvertedIndex * idx)
             }
         }
     }
-    stderr.writeln(secondaryQueries.leftover);
+    debug stderr.writeln(secondaryQueries.leftover);
     // at the end convert internal ids to md5sums
     return idx.convertIds(queryResults[secondaryQueries.leftover.to!ulong]);
 }

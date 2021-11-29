@@ -539,56 +539,56 @@ pragma(inline,true)
 /* --- END OF HASH FUNCTIONS --- */
 
 
-unittest
-{
-    import std.stdio : writeln, writefln;
-
-    writeln("khashl unit tests");
-
-    // test: numeric key type must be unsigned
-    assert(__traits(compiles, khashl!(int, int)) is false);
-    assert(__traits(compiles, khashl!(uint,int)) is true);
-
-//    auto kh = khash!(uint, char).kh_init();
-
-    //int absent;
-    //auto k = khash!(uint, char).kh_put(kh, 5, &absent);
-    ////khash!(uint, char).kh_value(kh, k) = 10;
-    //kh.vals[k] = 'J';
-
-//    (*kh)[5] = 'J';
-//    writeln("Entry value:", (*kh)[5]);
-    
-//    khash!(uint, char).kh_destroy(kh);
-
-    auto kh = khashl!(uint, char)();
-    kh[5] = 'J';
-    assert(kh[5] == 'J');
-
-    kh[1] = 'O';
-    kh[99] = 'N';
-
-    // test: foreach by key
-    /*foreach(k; kh.byKey())
-        writefln("Key: %s", k);*/
-    import std.array : array;
-    assert(kh.byKey().array == [1, 99, 5]);
-
-    // test: byKey on Empty hash table
-    auto kh_empty = khashl!(uint, char)(); // @suppress(dscanner.suspicious.unmodified)
-    assert(kh_empty.byKey.array == []);
-
-    // test: keytype string
-    auto kh_string = khashl!(string, int)();
-    kh_string["test"] = 5;
-    assert( kh_string["test"] == 5 );
-
-    // test: valtype string
-    auto kh_valstring = khashl!(uint, string)();
-    kh_valstring[42] = "Adams";
-    assert( kh_valstring[42] == "Adams" );
-
-    // test: require
-    const auto fw = kh_string.require("flammenwerfer", 21);
-    assert(fw == 21);
-}
+//unittest
+//{
+//    import std.stdio : writeln, writefln;
+//
+//    writeln("khashl unit tests");
+//
+//    // test: numeric key type must be unsigned
+//    assert(__traits(compiles, khashl!(int, int)) is false);
+//    assert(__traits(compiles, khashl!(uint,int)) is true);
+//
+////    auto kh = khash!(uint, char).kh_init();
+//
+//    //int absent;
+//    //auto k = khash!(uint, char).kh_put(kh, 5, &absent);
+//    ////khash!(uint, char).kh_value(kh, k) = 10;
+//    //kh.vals[k] = 'J';
+//
+////    (*kh)[5] = 'J';
+////    writeln("Entry value:", (*kh)[5]);
+//    
+////    khash!(uint, char).kh_destroy(kh);
+//
+//    auto kh = khashl!(uint, char)();
+//    kh[5] = 'J';
+//    assert(kh[5] == 'J');
+//
+//    kh[1] = 'O';
+//    kh[99] = 'N';
+//
+//    // test: foreach by key
+//    /*foreach(k; kh.byKey())
+//        writefln("Key: %s", k);*/
+//    import std.array : array;
+//    assert(kh.byKey().array == [1, 99, 5]);
+//
+//    // test: byKey on Empty hash table
+//    auto kh_empty = khashl!(uint, char)(); // @suppress(dscanner.suspicious.unmodified)
+//    assert(kh_empty.byKey.array == []);
+//
+//    // test: keytype string
+//    auto kh_string = khashl!(string, int)();
+//    kh_string["test"] = 5;
+//    assert( kh_string["test"] == 5 );
+//
+//    // test: valtype string
+//    auto kh_valstring = khashl!(uint, string)();
+//    kh_valstring[42] = "Adams";
+//    assert( kh_valstring[42] == "Adams" );
+//
+//    // test: require
+//    const auto fw = kh_string.require("flammenwerfer", 21);
+//    assert(fw == 21);
+//}
