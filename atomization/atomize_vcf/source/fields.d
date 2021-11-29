@@ -36,7 +36,7 @@ string[16] ANN_FIELDS = [
 string[4] LOF_FIELDS =["Gene","ID","num_transcripts","percent_affected"];
 TYPES[4] LOF_TYPES =[TYPES.STRING,TYPES.STRING,TYPES.INT,TYPES.FLOAT];
 
-AsdfNode parseAnnotationField(AsdfNode root, string key, string[] field_identifiers, TYPES[] types = []){
+AsdfNode parseAnnotationField(AsdfNode root, string key, string[] field_identifiers, TYPES[] types = [], bool condense = true){
     if(!(key in root["INFO"].children)) return root;
     if(types == []) {
         types.length = field_identifiers.length;
@@ -61,26 +61,27 @@ AsdfNode parseAnnotationField(AsdfNode root, string key, string[] field_identifi
         if(ann[$-1]==')') ann=ann[0..$-1];
         AsdfNode ann_root = AsdfNode("{}".parseJson);
         foreach(i,field;ann.splitter("|").array){
-            if(field=="") continue;
+            if(field=="" && condense == true) continue;
+            else if(field=="") field=".";
             string[] values = field.splitter("&").array;
             int[] int_values;
             float[] float_values;
             final switch(types[i]){
                 case TYPES.STRING:
-                    if(values.length==1)         
+                    if(values.length==1 && condense == true)         
                         ann_root[field_identifiers[i]]=AsdfNode(serializeToAsdf(values[0]));
                     else
                         ann_root[field_identifiers[i]]=AsdfNode(serializeToAsdf(values));
                     break;
                 case TYPES.FLOAT:
                     //writeln(field_identifiers[i]," ",values);
-                    if(values.length==1)         
+                    if(values.length==1 && condense == true)         
                         ann_root[field_identifiers[i]]=AsdfNode(serializeToAsdf(values[0].to!float));
                     else
                         ann_root[field_identifiers[i]]=AsdfNode(serializeToAsdf(values.map!(to!float).array));
                     break;
                 case TYPES.INT:
-                    if(values.length==1)         
+                    if(values.length==1 && condense == true)         
                         ann_root[field_identifiers[i]]=AsdfNode(serializeToAsdf(values[0].to!int));
                     else
                         ann_root[field_identifiers[i]]=AsdfNode(serializeToAsdf(values.map!(to!int).array));
