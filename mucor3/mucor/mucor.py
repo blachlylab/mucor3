@@ -1,18 +1,34 @@
 import mucor.aggregate as aggregate
 import mucor.merge as merge
-import argparse
 import mucor.jsonlcsv as jsonlcsv
+import argparse
 from shutil import copyfile
 import os
 import sys
 import pandas as pd
 
+# convert arrays to strings and fix excel wrapping issue
+def fix_cells(x):
+    ret = x
+    if type(x) is list:
+        new_list = list()
+        for item in x:
+            if type(item) is list:
+                new_list.append("&".join([str(y) for y in item]))
+            else:
+                new_list.append(str(item))
+        ret = ",".join([str(y) for y in new_list])
+    if type(ret) is str:
+        if len(ret) > 32767:
+            ret = ret[0::32767]
+    return ret
 
 def form_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     #default=["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"]
     parser.add_argument("-e","--extra",help="comma delimited list of extra columns to include in pivoted table index",type=str)
     parser.add_argument("-a","--value",default="AF", help="Value to be displayed in pivoted table values")
+    parser.add_argument("-m","--merge", action="store_true", help="Merge rows togther to deal with annotation explosion")
     parser.add_argument("datafile", help="input jsonl data from vcf_atomizer")
     parser.add_argument("prefix", help="directory for output")
     return parser
@@ -65,28 +81,36 @@ def main():
         extra_fields=list(set(master.columns) & set(args.extra.split(",")))
 
     print("sorting")
-    master.set_index(required_fields+[col for col in master if col.startswith('ANN_')],inplace=True)
+    master.set_index(required_fields, inplace=True)
+    cols = list(master)
+    for x in extra_fields[::-1]:
+        cols.insert(0, cols.pop(cols.index(x)))
+    master = master.loc[:, cols]
     master.sort_index(inplace=True)
     master.reset_index(inplace=True)
-    print("merging")
-    #write the merged datasets - merged on CHROM POS REF ALT sample to remove duplicate entrys related to alternate annotations
-    write_jsonl(merge.merge_rows(master,required_fields),os.path.join(args.prefix,"__merge_sample.jsonl"))
-    write_jsonl(merge.merge_rows_unique(master,required_fields),os.path.join(args.prefix,"__merge_sample_u.jsonl"))
 
-    #import merged dataset
-    merged=pd.read_json(os.path.join(args.prefix,"__merge_sample.jsonl"),orient="records",lines=True)
+    merged = master
+    condensed = master
+    if args.merge:
+        print("merging")
+        #write the merged datasets - merged on CHROM POS REF ALT sample to remove duplicate entrys related to alternate annotations
+        write_jsonl(merge.merge_rows(master,required_fields),os.path.join(args.prefix,"__merge_sample.jsonl"))
+        write_jsonl(merge.merge_rows_unique(master,required_fields),os.path.join(args.prefix,"__merge_sample_u.jsonl"))
+
+        #import merged dataset
+        merged=pd.read_json(os.path.join(args.prefix,"__merge_sample.jsonl"),orient="records",lines=True)
 
     #write master tsv
     jsonlcsv.jsonl2tsv(
         merged,
-        required_fields + extra_fields,
+        required_fields,
         os.path.join(args.prefix,"master.tsv")
     )
     condensed=merge.merge_rows_unique(merged,["CHROM","POS","REF","ALT"])
     #write Variants tsv
     jsonlcsv.jsonl2tsv(
         condensed,
-        required_fields + extra_fields,
+        required_fields,
         os.path.join(args.prefix,"Variants.tsv")
     )
 
@@ -102,16 +126,27 @@ def main():
     for x in (samples-set(pivot.columns)):
         pivot[x]="."
         print(x)
+    if args.merge:
+        pivot=aggregate.join_columns(condensed,pivot,["CHROM", "POS", "REF", "ALT"],
+                                     extra_fields)
+    else:
+        pivot=aggregate.join_columns_unmerged(master,pivot,
+                                              ["CHROM", "POS", "REF", "ALT"],
+                                                extra_fields)
+    pivot.set_index(["CHROM", "POS", "REF", "ALT"],inplace=True)
 
-    pivot=aggregate.join_columns(condensed,pivot,["CHROM", "POS", "REF", "ALT"],
-                                 extra_fields)
-    pivot.set_index(["CHROM", "POS", "REF", "ALT"]+extra_fields,inplace=True)
+    cols = list(pivot)
+    for x in extra_fields[::-1]:
+        cols.insert(0, cols.pop(cols.index(x)))
+    pivot = pivot.loc[:, cols]
+
     pivot.reset_index(inplace=True)
     pivot=aggregate.add_result_metrics(pivot,["CHROM", "POS", "REF", "ALT"]+extra_fields)
+    pivot = pivot.applymap(fix_cells)
 
     #write AF pivot table
     jsonlcsv.jsonl2tsv(pivot,
-                       ["CHROM", "POS", "REF", "ALT"]+extra_fields,
+                       ["CHROM", "POS", "REF", "ALT"],
                        os.path.join(args.prefix,"AF.tsv")
     )
 

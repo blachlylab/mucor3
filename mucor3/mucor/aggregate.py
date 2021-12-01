@@ -86,6 +86,31 @@ def join_columns(master: pd.DataFrame, piv: pd.DataFrame, index: list, join: lis
     piv.reset_index(inplace=True)
     return piv
 
+def join_columns_unmerged(master: pd.DataFrame, piv: pd.DataFrame, index: list, join: list):
+    """
+    Creates a pivot table using master dataframe and the arguments provided at runtime.
+
+    :param master: Dataframe to merge columns from.
+    :type master: pd.Dataframe
+    :param master: pivoted Dataframe.
+    :type master: pd.Dataframe
+    :param index: list of columns for indexing dataframes
+    :type index: list
+    :param join: list of columns to join from master
+    :type join: list
+    :return: pd.Dataframe
+    """
+    gb = master.groupby(index).head(1)
+    gb.set_index(index,inplace=True)
+    piv.set_index(index,inplace=True)
+    gb.sort_index(inplace=True)
+    piv.sort_index(inplace=True)
+    piv=piv.join(gb[join])
+    piv.reset_index(inplace=True)
+    return piv
+
+
+
 def form_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("-pi", "--pivot_index", nargs="+",required=True)
