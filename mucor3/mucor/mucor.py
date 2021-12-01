@@ -6,6 +6,7 @@ from shutil import copyfile
 import os
 import sys
 import pandas as pd
+import numpy as np
 
 # convert arrays to strings and fix excel wrapping issue
 def fix_cells(x):
@@ -17,7 +18,7 @@ def fix_cells(x):
                 new_list.append("&".join([str(y) for y in item]))
             else:
                 new_list.append(str(item))
-        ret = ",".join([str(y) for y in new_list])
+        ret = ",".join([str(y) for y in np.unique(new_list).tolist()])
     if type(ret) is str:
         if len(ret) > 32767:
             ret = ret[0::32767]
@@ -76,9 +77,9 @@ def main():
     if args.extra is not None:
         missing_fields = set(args.extra.split(",")) - set(master.columns)
         if(len(missing_fields)!=0):
-            print("Warning: missing column ",missing_fields)
+            print("Warning: missing column(s) ",missing_fields)
 
-        extra_fields=list(set(master.columns) & set(args.extra.split(",")))
+        extra_fields=[x for x in args.extra.split(",") if x in list(master)]
 
     print("sorting")
     master.set_index(required_fields, inplace=True)
