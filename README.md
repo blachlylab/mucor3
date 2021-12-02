@@ -21,12 +21,8 @@ Mucor3 an iteration on the original [Mucor](https://github.com/blachlylab/mucor)
 ### Installation
 ```
 git clone --recurse-submodules https://github.com/blachlylab/mucor3.git
-cd vcf_atomizer
-make  #requires go
-cd ..
-cd depthGauge
-dub build --build release #requires dlang: dub and (ldc2 or dmd)
-cd ..
+make 
+cd mucor3
 python setup.py install
 ```
 
@@ -44,7 +40,7 @@ To allow for greater flexibility in the tools we can use with mucor3, we decided
 The VCF atomizer will convert your vcfs into line delimited json objects. A single json object represents an individual VCF record for a single sample or an individual annotation for a single VCF record for a single sample (if you intend on using elasticsearch for filtering). Read more about the VCF atomizer [here](https://github.com/blachlylab/vcf_atomizer).
 
 ```
-vcf_atomizer sample1.vcf.gz >sample1.jsonl
+atomization/atomize_vcf/atomize_vcf sample1.vcf.gz >sample1.jsonl
 vcf_atomizer sample2.vcf >sample2.jsonl
 ```
 
