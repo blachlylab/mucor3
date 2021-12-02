@@ -3,48 +3,36 @@ module vcf;
 import std.stdio;
 import std.string : toStringz, fromStringz;
 import std.algorithm : map;
-import std.array : array;
+import std.array : array, split;
 import std.datetime.stopwatch : StopWatch, AutoStart;
 import std.digest.md : MD5Digest, toHexString;
 import std.math : isNaN;
+import std.traits : EnumMembers;
+import std.range : enumerate;
 
 import dhtslib.vcf;
+import dhtslib.coordinates;
 import htslib.vcf;
 import htslib.hts;
+import htslib.hts_log;
 import asdf;
 import fields;
 
-
 /// Parse VCF to JSONL
-void parseVCF(string fn, int threads=4){
+void parseVCF(string fn, int threads = 4){
     //open vcf
-    auto fp = vcf_open(toStringz(fn),"r"c.ptr);
-    if(!fp) throw new Exception("Could not open vcf");
+    auto vcf = VCFReader(fn);
 
     //set extra threads
-    hts_set_threads(fp,threads);
+    hts_set_threads(vcf.fp, threads);
     //get header
-    auto header = bcf_hdr_read(fp);
-    
-    //get seqs and number of samples
-    auto nsamples = bcf_hdr_nsamples(header);
-    int nseqs;
-    auto seqs_ptr = bcf_hdr_seqnames(header,&nseqs); 
-    auto seqs = seqs_ptr[0..nseqs].map!(x=>fromStringz(x)).array;
-    auto samples = header.samples[0..nsamples].map!(x=>fromStringz(x)).array;
-    int success = 0;
-    //initialize bcf1_t
-    // auto b = bcf_init1();
-    // b.max_unpack = BCF_UN_ALL;
     StopWatch sw;
     sw.start;
     auto count =0;
     // loop over records and parse
-    foreach (b; VCFRange(fp,header))
+    foreach (b; vcf)
     {
-        // 0 = good, -1 = EOF, -2 = error
-        bcf_unpack(b,BCF_UN_ALL);
-        parseRecord(b,header,seqs,samples);
+        parseRecord(b);
         count++;
     }
     stderr.writeln("Avg. time per record: ",sw.peek.total!"usecs"/count," usecs");
@@ -52,108 +40,45 @@ void parseVCF(string fn, int threads=4){
 }
 
 /// Parse individual records to JSON
-void parseRecord(bcf1_t * record,bcf_hdr_t * header,const(char)[][] seqs,char[][] samples){
-    // create md5 object
-    auto md5 = new MD5Digest();
+void parseRecord(VCFRecord record){
+    record.unpack(UnpackLevel.All);
+    
 
     // create root json object
     auto root = AsdfNode("{}".parseJson);
 
     // parse standard fields
-    root["CHROM"] = AsdfNode(serializeToAsdf(seqs[record.rid]));
-    root["POS"] = AsdfNode(serializeToAsdf(record.pos));
-    root["ID"] = AsdfNode(serializeToAsdf(fromStringz(record.d.id)));
+    root["CHROM"] = AsdfNode(record.chrom.serializeToAsdf);
+    root["POS"] = AsdfNode(record.pos.to!OB.pos.serializeToAsdf);
+    root["ID"] = AsdfNode(record.id.serializeToAsdf);
     if(!isNaN(record.qual)) // ignore if nan
-        root["QUAL"] = AsdfNode(serializeToAsdf(record.qual));
+        root["QUAL"] = AsdfNode(record.qual.serializeToAsdf);
     
     // parse ref and alt alleles
-    char[][] vars;
-    int n_alleles = record.n_allele;
-    bcf_info_t[] infos = record.d.info[0..record.n_info];
-    bcf_fmt_t[] fmts = record.d.fmt[0..record.n_fmt];
-    for(int i =0;i < n_alleles;i++){
-        vars~=fromStringz(record.d.allele[i]);
-    }
-    root["REF"] = AsdfNode(serializeToAsdf(vars[0]));
-    if(vars.length>2){
-        root["ALT"] = AsdfNode(serializeToAsdf(vars[1..$]));
-    }else if(vars.length>1){
-        root["ALT"] = AsdfNode(serializeToAsdf(vars[1]));
+    auto alleles = record.allelesAsArray;
+
+    root["REF"] = AsdfNode(alleles[0].serializeToAsdf);
+    if (alleles.length > 2) {
+        root["ALT"] = AsdfNode(alleles[1..$].serializeToAsdf);
+    }else if (alleles.length > 1) {
+        root["ALT"] = AsdfNode(alleles[1].serializeToAsdf);
     }
 
     // parse filters if any
     const(char)[][] filters;
-    for(int i = 0;i < record.d.n_flt;i++){
-        filters~=fromStringz(header.id[BCF_DT_ID][ record.d.flt[i]].key);
+    for(int i = 0;i < record.line.d.n_flt;i++){
+        filters~=fromStringz(record.vcfheader.hdr.id[BCF_DT_ID][ record.line.d.flt[i]].key);
     }
     if(filters != [])
-        root["FILTER"] = AsdfNode(serializeToAsdf(filters));
+        root["FILTER"] = AsdfNode(filters.serializeToAsdf);
 
     // prepare info root object
-    auto info_root=AsdfNode("{}".parseJson);
+    auto info_root = AsdfNode(parseInfoFields(record));
 
     // Go by each vcf info field and by type
     // convert to native type then to asdf
     //  
-    enum LOWER_TYPE_MASK =0b1111;
-    foreach (info; infos)
-    {
-        switch(info.type&LOWER_TYPE_MASK){
-            // char/string
-            case BCF_BT_CHAR:
-                info_root[
-                    fromStringz(header.id[BCF_DT_ID][info.key].key)
-                ]=AsdfNode(serializeToAsdf((cast(char *)info.vptr)[0..info.vptr_len]));
-                break;
-            // float or float array
-            case BCF_BT_FLOAT:
-                if(info.len>1)
-                    info_root[
-                        fromStringz(header.id[BCF_DT_ID][info.key].key)
-                    ]=AsdfNode(serializeToAsdf((cast(float *)info.vptr)[0..info.len]));
-                else
-                    info_root[
-                        fromStringz(header.id[BCF_DT_ID][info.key].key)
-                    ]=AsdfNode(serializeToAsdf(info.v1.f));
-                break;
-            // byte or byte array
-            case BCF_BT_INT8:
-                if(info.len>1)
-                    info_root[
-                        fromStringz(header.id[BCF_DT_ID][info.key].key)
-                    ]=AsdfNode(serializeToAsdf(info.vptr[0..info.len]));
-                else
-                    info_root[
-                        fromStringz(header.id[BCF_DT_ID][info.key].key)
-                    ]=AsdfNode(serializeToAsdf(info.v1.i));
-                break;
-            // short or short array
-            case BCF_BT_INT16:
-                if(info.len>1)
-                    info_root[
-                        fromStringz(header.id[BCF_DT_ID][info.key].key)
-                    ]=AsdfNode(serializeToAsdf((cast(short *)info.vptr)[0..info.len]));
-                else
-                    info_root[
-                        fromStringz(header.id[BCF_DT_ID][info.key].key)
-                    ]=AsdfNode(serializeToAsdf(info.v1.i));
-                break;
-            // int or int array
-            case BCF_BT_INT32:
-                if(info.len>1)
-                    info_root[
-                        fromStringz(header.id[BCF_DT_ID][info.key].key)
-                    ]=AsdfNode(serializeToAsdf((cast(int *)info.vptr)[0..info.len]));
-                else
-                    info_root[
-                        fromStringz(header.id[BCF_DT_ID][info.key].key)
-                    ]=AsdfNode(serializeToAsdf(info.v1.i));
-                break;
-            default:
-                break;
-        }
-        //root[header.id[BCF_DT_ID][info.id]]=
-    }
+    
 
     // add info fields to root and 
     // parse any annotation fields
@@ -163,8 +88,7 @@ void parseRecord(bcf1_t * record,bcf_hdr_t * header,const(char)[][] seqs,char[][
     root =parseAnnotationField(root,"LOF",LOF_FIELDS[],LOF_TYPES[]);
 
     // if no samples/format info, write
-    if(samples.length==0){
-        root["md5"] = AsdfNode(serializeToAsdf(md5.digest((cast(Asdf) root).data).toHexString));
+    if(record.vcfheader.nsamples==0){
         writeln(cast(Asdf)root);
     }
 
@@ -173,74 +97,192 @@ void parseRecord(bcf1_t * record,bcf_hdr_t * header,const(char)[][] seqs,char[][
     // fromat field and convert to native type
     // and then convert to asdf
     // and write one record per sample
-    foreach(i,sample;samples){
-        auto fmt_root=AsdfNode("{}".parseJson);
-        auto has_allele =false;
-        for(int j=0;j<fmts[0].n;j++){
-            if(fmts[0].p[i*fmts[0].n+j]!=0){
-                has_allele=true;
+    auto fmt_root = AsdfNode(parseFormatFields(record));
+    // add root to format and write
+    root["FORMAT"] = fmt_root;
+    writeln(cast(Asdf) root);
+}
+
+Asdf parseInfoFields(VCFRecord record) {
+    // prepare info root object
+    auto info_root=AsdfNode("{}".parseJson);
+    info_root["by_allele"] = AsdfNode("{}".parseJson);
+    auto alleles = record.allelesAsArray();
+    foreach (allele; alleles[1..$])
+    {
+        info_root["by_allele"][allele] = AsdfNode("{}".parseJson);
+    }
+    auto infos = record.getInfos;
+    // Go by each vcf info field and by type
+    // convert to native type then to asdf
+    //  
+    foreach (key, info; infos)
+    {
+        auto hRec = record.vcfheader.getHeaderRecord(HeaderRecordType.Info, key);
+        
+        final switch(info.type){
+            // char/string
+            case BcfRecordType.Char:
+                info_root[key]=AsdfNode(info.to!string.serializeToAsdf);
+                break;
+            // float or float array
+            case BcfRecordType.Float:
+                parseFieldsMixin!(InfoField, float)(info_root, info, key, alleles, [], hRec);
+                break;
+            // int type or array
+            case BcfRecordType.Int8:
+            case BcfRecordType.Int16:
+            case BcfRecordType.Int32:
+            case BcfRecordType.Int64:
+                parseFieldsMixin!(InfoField, long)(info_root, info, key, alleles, [], hRec);
+                break;
+            case BcfRecordType.Null:
+                info_root[key]=AsdfNode("null".parseJson);
+                break;
+        }
+    }
+    return cast(Asdf) info_root;
+}
+
+Asdf parseFormatFields(VCFRecord record) {
+    // prepare info root object
+    auto format_root=AsdfNode("{}".parseJson);
+    auto alleles = record.allelesAsArray();
+    auto samples = record.vcfheader.getSamples;
+    auto genotypes = record.getGenotypes;
+    foreach (sample; samples)
+    {
+        format_root[sample] = AsdfNode("{}".parseJson);
+        format_root[sample]["by_allele"] = AsdfNode("{}".parseJson);
+        foreach (allele; alleles[1..$])
+        {
+            format_root[sample]["by_allele"][allele] = AsdfNode("{}".parseJson);
+        }
+    }
+    auto fmts = record.getFormats;
+    fmts.remove("GT");
+    // Go by each vcf info field and by type
+    // convert to native type then to asdf
+    //  
+    foreach (i,sample; samples) {
+        format_root[sample]["GT"]= AsdfNode(genotypes[i].toString.serializeToAsdf);
+    }
+    foreach (key, fmt; fmts)
+    {
+        auto hRec = record.vcfheader.getHeaderRecord(HeaderRecordType.Format, key);
+        
+        final switch(fmt.type){
+            // char/string
+            case BcfRecordType.Char:
+                auto vals = fmt.to!string;
+                foreach (i,sample; samples) {
+                    format_root[sample][key]= AsdfNode(vals[i][0].serializeToAsdf);
+                }
+                break;
+            // float or float array
+            case BcfRecordType.Float:
+                parseFieldsMixin!(FormatField, float)(format_root, fmt, key, alleles, samples, hRec);
+                break;
+            // int type or array
+            case BcfRecordType.Int8:
+            case BcfRecordType.Int16:
+            case BcfRecordType.Int32:
+            case BcfRecordType.Int64:
+                parseFieldsMixin!(FormatField, long)(format_root, fmt, key, alleles, samples, hRec);
+                break;
+            case BcfRecordType.Null:
+                format_root[key]=AsdfNode("null".parseJson);
+                break;
+        }
+    }
+    return cast(Asdf) format_root;
+}
+
+void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, string[] alleles, string[] samples, HeaderRecord hRec) {
+    static if(is(T == FormatField)) {
+        auto itemLen = item.n;
+        alias vtype = V;
+    } else {
+        auto itemLen = item.len;
+        alias vtype = V[];
+    }
+    switch(hRec.lenthType){
+        case HeaderLengths.OnePerAllele:
+            if(alleles.length != itemLen) {
+                hts_log_warning(__FUNCTION__,T.stringof ~" "~key~" doesn't have same number of values as header indicates! Skipping...");
                 break;
             }
-        }
-        if(!has_allele) continue;
-        foreach (fmt; fmts){
-            switch(fmt.type&LOWER_TYPE_MASK){
-                case BCF_BT_CHAR:
-                    fmt_root[
-                        fromStringz(header.id[BCF_DT_ID][fmt.id].key)
-                    ]=AsdfNode(serializeToAsdf((cast(char *)fmt.p)[i*fmt.n..(i+1)*fmt.n]));
-                    break;
-                case BCF_BT_FLOAT:
-                    if(fmt.n>1)
-                        fmt_root[
-                            fromStringz(header.id[BCF_DT_ID][fmt.id].key)
-                        ]=AsdfNode(serializeToAsdf((cast(float *)fmt.p)[i*fmt.n..(i+1)*fmt.n]));
-                    else
-                        fmt_root[
-                            fromStringz(header.id[BCF_DT_ID][fmt.id].key)
-                        ]=AsdfNode(serializeToAsdf((cast(float *)fmt.p)[i*fmt.n]));
-                    break;
-                case BCF_BT_INT8:
-                    if(fmt.n>1)
-                        fmt_root[
-                            fromStringz(header.id[BCF_DT_ID][fmt.id].key)
-                        ]=AsdfNode(serializeToAsdf(fmt.p[i*fmt.n..(i+1)*fmt.n]));
-                    else
-                        fmt_root[
-                            fromStringz(header.id[BCF_DT_ID][fmt.id].key)
-                        ]=AsdfNode(serializeToAsdf(fmt.p[i*fmt.n]));
-                    break;
-                case BCF_BT_INT16:
-                    if(fmt.n>1)
-                        fmt_root[
-                            fromStringz(header.id[BCF_DT_ID][fmt.id].key)
-                        ]=AsdfNode(serializeToAsdf((cast(short *)fmt.p)[i*fmt.n..(i+1)*fmt.n]));
-                    else
-                        fmt_root[
-                            fromStringz(header.id[BCF_DT_ID][fmt.id].key)
-                        ]=AsdfNode(serializeToAsdf((cast(short *)fmt.p)[i*fmt.n]));
-                    break;
-                case BCF_BT_INT32:
-                    if(fmt.n>1)
-                        fmt_root[
-                            fromStringz(header.id[BCF_DT_ID][fmt.id].key)
-                        ]=AsdfNode(serializeToAsdf((cast(int *)fmt.p)[i*fmt.n..(i+1)*fmt.n]));
-                    else
-                        fmt_root[
-                            fromStringz(header.id[BCF_DT_ID][fmt.id].key)
-                        ]=AsdfNode(serializeToAsdf((cast(int *)fmt.p)[i*fmt.n]));
-                    break;
-                default:
-                    break;
+            auto vals = item.to!vtype;
+            static if(is(T == FormatField)) {
+                foreach (i,val; vals.enumerate)
+                {
+                    auto sam = samples[i];
+                    auto parent = root[sam]["by_allele"];
+                    for(auto j=0; j< itemLen; j++){
+                        if (j==0) continue;
+                        parent[alleles[j]][key] = AsdfNode([val[0], val[j]].serializeToAsdf);
+                    }
+                }
+            } else {
+                foreach (i,val; vals)
+                {
+                    if (i==0) continue;
+                    root["by_allele"][alleles[i]][key] = AsdfNode([vals[0], val].serializeToAsdf);
+                }
+            }     
+            break;
+        case HeaderLengths.OnePerAltAllele:
+            if((alleles.length - 1) != itemLen) {
+                hts_log_warning(__FUNCTION__,"Format field "~key~" doesn't have same number of values as header indicates! Skipping...");
+                break;
             }
-        }
-
-        // add root to format and write
-        fmt_root["sample"]=AsdfNode(serializeToAsdf(sample));
-        fmt_root.add(cast(Asdf)root);
-        fmt_root["md5"] = AsdfNode(serializeToAsdf(md5.digest((cast(Asdf) fmt_root).data).toHexString));
-        writeln(cast(Asdf)fmt_root);
+            auto vals = item.to!vtype;
+            static if(is(T == FormatField)) {
+                foreach (i,val; vals.enumerate)
+                {
+                    auto sam = samples[i];
+                    auto parent = root[sam]["by_allele"];
+                    for(auto j=0; j< itemLen; j++){
+                        parent[alleles[j+1]][key] = AsdfNode(val[j].serializeToAsdf);
+                    }
+                }
+            } else {
+                foreach (i,val; vals)
+                {
+                    root["by_allele"][alleles[i+1]][key] = AsdfNode(val.serializeToAsdf);
+                }
+            }
+            
+            break;
+        default:
+            auto vals = item.to!vtype;
+            static if(is(T == FormatField)) {
+                foreach (i,val; vals.enumerate)
+                {
+                    auto sam = samples[i];
+                    for(auto j=0; j< itemLen; j++){
+                        if(val.length == 1)
+                            root[sam][key] = AsdfNode(val[0].serializeToAsdf);
+                        else
+                            root[sam][key] = AsdfNode(val.serializeToAsdf);
+                    }
+                }
+            } else {
+                if(itemLen > 1)
+                    root[key]=AsdfNode(vals.serializeToAsdf);
+                else
+                    root[key]=AsdfNode(vals[0].serializeToAsdf);
+            }
+            break;
     }
+}
+
+Asdf md5sumObject(Asdf obj) {
+    // create md5 object
+    auto md5 = new MD5Digest();
+    auto root = AsdfNode(obj);
+    root["md5"] = AsdfNode(serializeToAsdf(md5.digest(obj.data).toHexString));
+    return cast(Asdf)root;
 }
 
 

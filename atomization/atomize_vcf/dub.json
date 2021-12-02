@@ -7,7 +7,9 @@
 	"license": "MIT",
 	"name": "atomize_vcf",
 	"dependencies": {
-		"asdf": "~>0.7.8",
-		"dhtslib": "~>0.12.3+htslib-1.10"
+		"asdf": "~>0.7.13",
+		"dhtslib": {
+			"path":"../../../dhtslib"
+		}
 	}
 }
