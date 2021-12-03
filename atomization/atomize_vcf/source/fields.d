@@ -174,6 +174,7 @@ Asdf parseFormatFields(VCFRecord record) {
     //  
     foreach (i,sample; samples) {
         format_root[sample]["GT"]= AsdfNode(genotypes[i].toString.serializeToAsdf);
+        format_root[sample]["Ploidy"]= AsdfNode(genotypes[i].getPloidy.serializeToAsdf);
     }
     foreach (key, fmt; fmts)
     {

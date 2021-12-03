@@ -7,6 +7,7 @@ import vcf : parseVCF;
 bool multiSample;
 bool multiAllelic;
 bool splitAnnotations;
+bool keepEmpty;
 int threads = 0;
 
 
@@ -27,7 +28,7 @@ void main(string[] args)
 		"multi-sample|s", "don't split (and duplicate) records by sample", &multiSample,
 		"multi-allelic|m", "don't split (and duplicate) records by sample", &multiAllelic,
 		"annotation|a", "split (and duplicate) records by annotation", &splitAnnotations,
-		"keep-null|k", "keep sample entries with null genotypes e.g ./.", &multiAllelic
+		"keep-null|k", "keep sample entries with null genotypes e.g ./.", &keepEmpty
 		);
 
 	if (res.helpWanted | (args.length < 2))
@@ -37,7 +38,9 @@ void main(string[] args)
 		return;
 	}
 
-	ubyte con = (cast(ubyte)(!multiSample) << 2) | 
+	ubyte con = 
+		(cast(ubyte)(keepEmpty) << 3) | 
+		(cast(ubyte)(!multiSample) << 2) | 
 		(cast(ubyte)(!multiAllelic) << 1) | 
 		cast(ubyte)(splitAnnotations);
 	parseVCF(args[1], threads, con);

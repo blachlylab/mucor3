@@ -261,3 +261,21 @@ if (is(ElementType!R == Asdf))
         }
     }).joiner;
 }
+
+auto dropNullGenotypes(R)(R objs, bool active) 
+if (is(ElementType!R == Asdf))
+{
+    return objs.map!((x) {
+        if(active) {
+            if (x["FORMAT"] != Asdf.init) {
+                foreach(sample;x["FORMAT"].byKeyValue) {
+                    if (sample.value["GT"].deserialize!string[0] =='.')
+                        sample.value.remove();
+                }
+            }
+            return x;
+        }
+        else
+            return x;
+    });
+}

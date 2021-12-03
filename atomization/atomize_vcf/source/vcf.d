@@ -34,7 +34,7 @@ void parseVCF(string fn, int threads, ubyte con){
             auto obj = parseRecord(x);
             vcf_row_count++;
             return obj;
-        })
+        }).dropNullGenotypes(cast(bool)(con & 8))
         .expandBySample(cast(bool)(con & 4))
         .expandMultiAllelicSites(cast(bool)con & 2);
     foreach(x; range){
