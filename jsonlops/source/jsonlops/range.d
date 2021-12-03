@@ -200,10 +200,12 @@ unittest
 }
 
 
-auto expandBySample(R)(R objs) 
+auto expandBySample(R)(R objs, bool active) 
 if (is(ElementType!R == Asdf))
 {
     return objs.map!((x) {
+        if(!active)
+            return [x];
         if(x["FORMAT"] == Asdf.init)
             return [x];
         auto samples = x["FORMAT"].byKeyValue;
@@ -216,41 +218,44 @@ if (is(ElementType!R == Asdf))
     }).joiner;
 }
 
-auto expandMultiAllelicSites(R)(R objs) 
+auto expandMultiAllelicSites(R)(R objs, bool active) 
 if (is(ElementType!R == Asdf))
 {
     return objs.map!((x) {
-        if(x["FORMAT"] == asdf.init)
-            return [root];
-        if(x["FORMAT"]["by_allele"] == asdf.init)
-            return [root];
-        if(x["sample"] != asdf.init) {
+        if(!active)
+            return [x];
+        if(x["FORMAT"] == Asdf.init)
+            return [x];
+        if(x["FORMAT"]["by_allele"] == Asdf.init)
+            return [x];
+        if(x["sample"] != Asdf.init) {
             auto allele_vals = x["FORMAT"]["by_allele"].byElement;
-            return allele_vals.enumerate.map!((i,y) {
+            return allele_vals.enumerate.map!((y) {
                 auto root = Asdf(x.data.dup);
                 root["FORMAT"]["by_allele"].remove();
                 auto rootNode = AsdfNode(root);
-                foreach (obj; y.byKeyValue)
+                foreach (obj; y.value.byKeyValue)
                 {
-                    rootNode["FORMAT"][obj.key] = AsdfNode(obj.value.byElement.array[i]);
+                    rootNode["FORMAT"][obj.key] = AsdfNode(obj.value.byElement.array[y.index]);
                 }
-                rootNode["ALT"] = AsdfNode(root["ALT"].byElement.array[i]);
+                rootNode["ALT"] = AsdfNode(root["ALT"].byElement.array[y.index]);
                 return cast(Asdf) root;
             }).array;
         }else {
             auto allele_vals = x["ALT"].byElement;
-            return allele_vals.enumerate.map!((i,y) {
+            return allele_vals.enumerate.map!((y) {
                 auto root = Asdf(x.data.dup);
                 foreach(sample;root["FORMAT"].byKeyValue){
                     root["FORMAT"][sample.key]["by_allele"].remove;
                     auto rootNode = AsdfNode(root);
                     foreach (obj; x["FORMAT"][sample.key]["by_allele"].byKeyValue)
                     {
-                        rootNode["FORMAT"][sample.key][obj.key] = AsdfNode(obj.value.byElement.array[i]);
+                        rootNode["FORMAT"][sample.key][obj.key] = AsdfNode(obj.value.byElement.array[y.index]);
                     }
                     root = cast(Asdf) rootNode;
                 }
-                rootNode["ALT"] = AsdfNode(root["ALT"].byElement.array[i]);
+                auto rootNode = AsdfNode(root);
+                rootNode["ALT"] = AsdfNode(root["ALT"].byElement.array[y.index]);
                 return cast(Asdf) root;
             }).array;
         }

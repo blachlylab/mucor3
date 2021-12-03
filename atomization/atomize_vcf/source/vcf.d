@@ -15,10 +15,10 @@ import htslib.hts;
 import htslib.hts_log;
 import asdf;
 import fields;
-import ops;
+import jsonlops.range;
 
 /// Parse VCF to JSONL
-void parseVCF(string fn, int threads = 4){
+void parseVCF(string fn, int threads, ubyte con){
     //open vcf
     auto vcf = VCFReader(fn);
 
@@ -27,17 +27,26 @@ void parseVCF(string fn, int threads = 4){
     //get header
     StopWatch sw;
     sw.start;
-    auto count =0;
+    auto vcf_row_count = 0;
+    auto output_count = 0;
     // loop over records and parse
     auto range = vcf.map!((x) {
-        auto obj = parseRecord(x);
-        count++;
-        return obj;
-    }).expandBySample;
+            auto obj = parseRecord(x);
+            vcf_row_count++;
+            return obj;
+        })
+        .expandBySample(cast(bool)(con & 4))
+        .expandMultiAllelicSites(cast(bool)con & 2);
+    foreach(x; range){
+        writeln(x);
+        output_count++;
+    }
     range.each!(x => writeln(cast(Asdf) x));
-    if(count > 0)
-        stderr.writeln("Avg. time per record: ",sw.peek.total!"usecs"/count," usecs");
-    else
+    if(vcf_row_count > 0) {
+        stderr.writefln("Parsed %,3d records in %d seconds",vcf_row_count, sw.peek.total!"seconds");
+        stderr.writefln("Output %,3d json objects",output_count);
+        stderr.writeln("Avg. time per VCF record: ",sw.peek.total!"usecs"/vcf_row_count," usecs");
+    }else
         stderr.writeln("No records in this file!");
 }
 

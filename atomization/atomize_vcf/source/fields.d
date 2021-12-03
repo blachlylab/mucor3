@@ -4,11 +4,12 @@ import std.stdio;
 import std.algorithm : splitter, map;
 import std.array : array;
 import std.conv : to;
-import std.range : enumerate;
+import std.range : enumerate, chunks;
 
 import asdf;
 import dhtslib.vcf;
 import htslib.hts_log;
+import jsonlops.basic : makeAsdfArray;
 
 /// JSON types
 enum TYPES{
@@ -118,10 +119,8 @@ Asdf parseInfoFields(VCFRecord record) {
     auto info_root=AsdfNode("{}".parseJson);
     info_root["by_allele"] = AsdfNode("{}".parseJson);
     auto alleles = record.allelesAsArray();
-    foreach (allele; alleles[1..$])
-    {
-        info_root["by_allele"][allele] = AsdfNode("{}".parseJson);
-    }
+    AsdfNode[] info_values = new AsdfNode[(alleles.length - 1)]; 
+    info_values[] = AsdfNode("{}".parseJson);
     auto infos = record.getInfos;
     // Go by each vcf info field and by type
     // convert to native type then to asdf
@@ -137,20 +136,21 @@ Asdf parseInfoFields(VCFRecord record) {
                 break;
             // float or float array
             case BcfRecordType.Float:
-                parseFieldsMixin!(InfoField, float)(info_root, info, key, alleles, [], hRec);
+                parseFieldsMixin!(InfoField, float)(info_root, info, key, info_values, alleles, [], hRec);
                 break;
             // int type or array
             case BcfRecordType.Int8:
             case BcfRecordType.Int16:
             case BcfRecordType.Int32:
             case BcfRecordType.Int64:
-                parseFieldsMixin!(InfoField, long)(info_root, info, key, alleles, [], hRec);
+                parseFieldsMixin!(InfoField, long)(info_root, info, key, info_values, alleles, [], hRec);
                 break;
             case BcfRecordType.Null:
                 info_root[key]=AsdfNode("null".parseJson);
                 break;
         }
     }
+    info_root["by_allele"] = AsdfNode(makeAsdfArray(info_values.map!(x=>cast(Asdf)x).array));
     return cast(Asdf) info_root;
 }
 
@@ -160,14 +160,12 @@ Asdf parseFormatFields(VCFRecord record) {
     auto alleles = record.allelesAsArray();
     auto samples = record.vcfheader.getSamples;
     auto genotypes = record.getGenotypes;
-    foreach (sample; samples)
+    AsdfNode[] format_values = new AsdfNode[samples.length * (alleles.length - 1)]; 
+    format_values[] = AsdfNode("{}".parseJson);
+    foreach (i, sample; samples)
     {
         format_root[sample] = AsdfNode("{}".parseJson);
         format_root[sample]["by_allele"] = AsdfNode("{}".parseJson);
-        foreach (allele; alleles[1..$])
-        {
-            format_root[sample]["by_allele"][allele] = AsdfNode("{}".parseJson);
-        }
     }
     auto fmts = record.getFormats;
     fmts.remove("GT");
@@ -191,24 +189,29 @@ Asdf parseFormatFields(VCFRecord record) {
                 break;
             // float or float array
             case BcfRecordType.Float:
-                parseFieldsMixin!(FormatField, float)(format_root, fmt, key, alleles, samples, hRec);
+                parseFieldsMixin!(FormatField, float)(format_root, fmt, key, format_values, alleles, samples, hRec);
                 break;
             // int type or array
             case BcfRecordType.Int8:
             case BcfRecordType.Int16:
             case BcfRecordType.Int32:
             case BcfRecordType.Int64:
-                parseFieldsMixin!(FormatField, long)(format_root, fmt, key, alleles, samples, hRec);
+                parseFieldsMixin!(FormatField, long)(format_root, fmt, key, format_values, alleles, samples, hRec);
                 break;
             case BcfRecordType.Null:
                 format_root[key]=AsdfNode("null".parseJson);
                 break;
         }
     }
+    auto view = format_values.chunks(alleles.length - 1);
+    foreach (i, sample; samples)
+    {
+        format_root[sample]["by_allele"] = AsdfNode(makeAsdfArray(view[i].map!(x=>cast(Asdf)x).array));
+    }
     return cast(Asdf) format_root;
 }
 
-void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfNode[] allele_vals, string[] samples, HeaderRecord hRec) {
+void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfNode[] item_vals, string[] alleles, string[] samples, HeaderRecord hRec) {
     static if(is(T == FormatField)) {
         auto itemLen = item.n;
         alias vtype = V;
@@ -226,18 +229,16 @@ void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfN
             static if(is(T == FormatField)) {
                 foreach (i,val; vals.enumerate)
                 {
-                    auto sam = samples[i];
-                    auto parent = root[sam]["by_allele"];
                     for(auto j=0; j< itemLen; j++){
                         if (j==0) continue;
-                        allele_vals[j][key] = AsdfNode([val[0], val[j]].serializeToAsdf);
+                        item_vals[i * j][key] = AsdfNode([val[0], val[j]].serializeToAsdf);
                     }
                 }
             } else {
                 foreach (i,val; vals)
                 {
                     if (i==0) continue;
-                    root["by_allele"][alleles[i]][key] = AsdfNode([vals[0], val].serializeToAsdf);
+                    item_vals[i][key] = AsdfNode([vals[0], val].serializeToAsdf);
                 }
             }     
             break;
@@ -250,16 +251,14 @@ void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfN
             static if(is(T == FormatField)) {
                 foreach (i,val; vals.enumerate)
                 {
-                    auto sam = samples[i];
-                    auto parent = root[sam]["by_allele"];
                     for(auto j=0; j< itemLen; j++){
-                        parent[alleles[j+1]][key] = AsdfNode(val[j].serializeToAsdf);
+                        item_vals[i*j][key] = AsdfNode(val[j].serializeToAsdf);
                     }
                 }
             } else {
                 foreach (i,val; vals)
                 {
-                    root["by_allele"][alleles[i+1]][key] = AsdfNode(val.serializeToAsdf);
+                    item_vals[i][key] = AsdfNode(val.serializeToAsdf);
                 }
             }
             

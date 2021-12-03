@@ -10,6 +10,9 @@
 		"asdf": "~>0.7.13",
 		"dhtslib": {
 			"path":"../../../dhtslib"
+		},
+		"jsonlops": {
+			"path": "../../jsonlops"
 		}
 	}
 }
