@@ -208,7 +208,7 @@ Asdf parseFormatFields(VCFRecord record) {
     return cast(Asdf) format_root;
 }
 
-void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, string[] alleles, string[] samples, HeaderRecord hRec) {
+void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfNode[] allele_vals, string[] samples, HeaderRecord hRec) {
     static if(is(T == FormatField)) {
         auto itemLen = item.n;
         alias vtype = V;
@@ -230,7 +230,7 @@ void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, string[] 
                     auto parent = root[sam]["by_allele"];
                     for(auto j=0; j< itemLen; j++){
                         if (j==0) continue;
-                        parent[alleles[j]][key] = AsdfNode([val[0], val[j]].serializeToAsdf);
+                        allele_vals[j][key] = AsdfNode([val[0], val[j]].serializeToAsdf);
                     }
                 }
             } else {

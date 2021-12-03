@@ -2,7 +2,7 @@ module vcf;
 
 import std.stdio;
 import std.string : toStringz, fromStringz;
-import std.algorithm : map;
+import std.algorithm : map, each;
 import std.array : array, split;
 import std.datetime.stopwatch : StopWatch, AutoStart;
 import std.digest.md : MD5Digest, toHexString;
@@ -15,6 +15,7 @@ import htslib.hts;
 import htslib.hts_log;
 import asdf;
 import fields;
+import ops;
 
 /// Parse VCF to JSONL
 void parseVCF(string fn, int threads = 4){
@@ -28,17 +29,20 @@ void parseVCF(string fn, int threads = 4){
     sw.start;
     auto count =0;
     // loop over records and parse
-    foreach (b; vcf)
-    {
-        parseRecord(b);
+    auto range = vcf.map!((x) {
+        auto obj = parseRecord(x);
         count++;
-    }
-    stderr.writeln("Avg. time per record: ",sw.peek.total!"usecs"/count," usecs");
-
+        return obj;
+    }).expandBySample;
+    range.each!(x => writeln(cast(Asdf) x));
+    if(count > 0)
+        stderr.writeln("Avg. time per record: ",sw.peek.total!"usecs"/count," usecs");
+    else
+        stderr.writeln("No records in this file!");
 }
 
 /// Parse individual records to JSON
-void parseRecord(VCFRecord record){
+Asdf parseRecord(VCFRecord record){
     record.unpack(UnpackLevel.All);
     
 
@@ -98,7 +102,7 @@ void parseRecord(VCFRecord record){
     auto fmt_root = AsdfNode(parseFormatFields(record));
     // add root to format and write
     root["FORMAT"] = fmt_root;
-    writeln(cast(Asdf) root);
+   return cast(Asdf) root;
 }
 
 Asdf md5sumObject(Asdf obj) {
