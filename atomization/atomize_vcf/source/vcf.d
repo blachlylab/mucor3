@@ -36,12 +36,11 @@ void parseVCF(string fn, int threads, ubyte con){
             return obj;
         }).dropNullGenotypes(cast(bool)(con & 8))
         .expandBySample(cast(bool)(con & 4))
-        .expandMultiAllelicSites(cast(bool)con & 2);
+        .expandMultiAllelicSites(cast(bool)(con & 2));
     foreach(x; range){
         writeln(x);
         output_count++;
     }
-    range.each!(x => writeln(cast(Asdf) x));
     if(vcf_row_count > 0) {
         stderr.writefln("Parsed %,3d records in %d seconds",vcf_row_count, sw.peek.total!"seconds");
         stderr.writefln("Output %,3d json objects",output_count);

@@ -230,16 +230,15 @@ void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfN
             static if(is(T == FormatField)) {
                 foreach (i,val; vals.enumerate)
                 {
-                    for(auto j=0; j< itemLen; j++){
-                        if (j==0) continue;
-                        item_vals[i * j][key] = AsdfNode([val[0], val[j]].serializeToAsdf);
+                    for(auto j=1; j< itemLen; j++){
+                        item_vals[(i * samples.length) +(j - 1)][key] = AsdfNode([val[0], val[j]].serializeToAsdf);
                     }
                 }
             } else {
                 foreach (i,val; vals)
                 {
                     if (i==0) continue;
-                    item_vals[i][key] = AsdfNode([vals[0], val].serializeToAsdf);
+                    item_vals[i-1][key] = AsdfNode([vals[0], val].serializeToAsdf);
                 }
             }     
             break;

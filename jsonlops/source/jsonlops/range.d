@@ -226,25 +226,35 @@ if (is(ElementType!R == Asdf))
             return [x];
         if(x["FORMAT"] == Asdf.init)
             return [x];
-        if(x["FORMAT"]["by_allele"] == Asdf.init)
+        if(x["INFO"]["by_allele"] == Asdf.init)
             return [x];
+        // if expanded by sample already
         if(x["sample"] != Asdf.init) {
             auto allele_vals = x["FORMAT"]["by_allele"].byElement;
+            auto info_vals = x["INFO"]["by_allele"].byElement.array;
             return allele_vals.enumerate.map!((y) {
                 auto root = Asdf(x.data.dup);
                 root["FORMAT"]["by_allele"].remove();
+                root["INFO"]["by_allele"].remove();
                 auto rootNode = AsdfNode(root);
                 foreach (obj; y.value.byKeyValue)
                 {
                     rootNode["FORMAT"][obj.key] = AsdfNode(obj.value.byElement.array[y.index]);
+
                 }
-                rootNode["ALT"] = AsdfNode(root["ALT"].byElement.array[y.index]);
-                return cast(Asdf) root;
+                foreach (obj; info_vals[y.index].byKeyValue)
+                {
+                    rootNode["INFO"][obj.key] = AsdfNode(obj.value);
+                }
+                if (info_vals.length > 1)
+                    rootNode["ALT"] = AsdfNode(root["ALT"].byElement.array[y.index]);
+                return cast(Asdf) rootNode;
             }).array;
         }else {
-            auto allele_vals = x["ALT"].byElement;
-            return allele_vals.enumerate.map!((y) {
+            auto info_vals = x["INFO"]["by_allele"].byElement.array;
+            return info_vals.enumerate.map!((y) {
                 auto root = Asdf(x.data.dup);
+                root["INFO"]["by_allele"].remove();
                 foreach(sample;root["FORMAT"].byKeyValue){
                     root["FORMAT"][sample.key]["by_allele"].remove;
                     auto rootNode = AsdfNode(root);
@@ -255,8 +265,13 @@ if (is(ElementType!R == Asdf))
                     root = cast(Asdf) rootNode;
                 }
                 auto rootNode = AsdfNode(root);
-                rootNode["ALT"] = AsdfNode(root["ALT"].byElement.array[y.index]);
-                return cast(Asdf) root;
+                foreach (obj; info_vals[y.index].byKeyValue)
+                {
+                    rootNode["INFO"][obj.key] = AsdfNode(obj.value);
+                }
+                if (info_vals.length > 1)
+                    rootNode["ALT"] = AsdfNode(root["ALT"].byElement.array[y.index]);
+                return cast(Asdf) rootNode;
             }).array;
         }
     }).joiner;
