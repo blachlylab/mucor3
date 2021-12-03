@@ -8,9 +8,7 @@
 	"name": "atomize_vcf",
 	"dependencies": {
 		"asdf": "~>0.7.13",
-		"dhtslib": {
-			"path":"../../../dhtslib"
-		},
+		"dhtslib": "~vcf_fixes_and_gt",
 		"jsonlops": {
 			"path": "../../jsonlops"
 		}
