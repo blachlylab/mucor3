@@ -198,3 +198,61 @@ unittest
     auto exp = `[{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}},{"foo":["bar","bar"],"inner":{"c":["32","32"],"a":[true,true],"e":{},"b":[false,false],"d":[null,false]}}]`;
     assert(res == exp);
 }
+
+
+auto expandBySample(R)(R objs) 
+if (is(ElementType!R == Asdf))
+{
+    return objs.map!((x) {
+        if(x["FORMAT"] == Asdf.init)
+            return [x];
+        auto samples = x["FORMAT"].byKeyValue;
+        return samples.map!((y) {
+            auto root = AsdfNode(Asdf(x.data.dup));
+            root["sample"] = AsdfNode(y.key.serializeToAsdf);
+            root["FORMAT"] = AsdfNode(y.value);
+            return cast(Asdf)root;
+        }).array;
+    }).joiner;
+}
+
+auto expandMultiAllelicSites(R)(R objs) 
+if (is(ElementType!R == Asdf))
+{
+    return objs.map!((x) {
+        if(x["FORMAT"] == asdf.init)
+            return [root];
+        if(x["FORMAT"]["by_allele"] == asdf.init)
+            return [root];
+        if(x["sample"] != asdf.init) {
+            auto allele_vals = x["FORMAT"]["by_allele"].byElement;
+            return allele_vals.enumerate.map!((i,y) {
+                auto root = Asdf(x.data.dup);
+                root["FORMAT"]["by_allele"].remove();
+                auto rootNode = AsdfNode(root);
+                foreach (obj; y.byKeyValue)
+                {
+                    rootNode["FORMAT"][obj.key] = AsdfNode(obj.value.byElement.array[i]);
+                }
+                rootNode["ALT"] = AsdfNode(root["ALT"].byElement.array[i]);
+                return cast(Asdf) root;
+            }).array;
+        }else {
+            auto allele_vals = x["ALT"].byElement;
+            return allele_vals.enumerate.map!((i,y) {
+                auto root = Asdf(x.data.dup);
+                foreach(sample;root["FORMAT"].byKeyValue){
+                    root["FORMAT"][sample.key]["by_allele"].remove;
+                    auto rootNode = AsdfNode(root);
+                    foreach (obj; x["FORMAT"][sample.key]["by_allele"].byKeyValue)
+                    {
+                        rootNode["FORMAT"][sample.key][obj.key] = AsdfNode(obj.value.byElement.array[i]);
+                    }
+                    root = cast(Asdf) rootNode;
+                }
+                rootNode["ALT"] = AsdfNode(root["ALT"].byElement.array[i]);
+                return cast(Asdf) root;
+            }).array;
+        }
+    }).joiner;
+}
