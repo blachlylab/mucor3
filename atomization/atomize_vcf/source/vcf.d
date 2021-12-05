@@ -16,6 +16,17 @@ import htslib.hts_log;
 import asdf;
 import fields;
 import jsonlops.range;
+import jsonlops.basic;
+
+auto norm(R)(R range, bool active)
+{
+    return range.map!((x) {
+        if(!active)
+            return x;
+        else
+            return normalize(x);
+    });
+}
 
 /// Parse VCF to JSONL
 void parseVCF(string fn, int threads, ubyte con){
@@ -36,7 +47,8 @@ void parseVCF(string fn, int threads, ubyte con){
             return obj;
         }).dropNullGenotypes(cast(bool)(con & 8))
         .expandBySample(cast(bool)(con & 4))
-        .expandMultiAllelicSites(cast(bool)(con & 2));
+        .expandMultiAllelicSites(cast(bool)(con & 2))
+        .norm(cast(bool)(con & 16));
     foreach(x; range){
         writeln(x);
         output_count++;

@@ -8,6 +8,8 @@ bool multiSample;
 bool multiAllelic;
 bool splitAnnotations;
 bool keepEmpty;
+bool flatten;
+
 int threads = 0;
 
 
@@ -28,6 +30,7 @@ void main(string[] args)
 		"multi-sample|s", "don't split (and duplicate) records by sample", &multiSample,
 		"multi-allelic|m", "don't split (and duplicate) records by sample", &multiAllelic,
 		"annotation|a", "split (and duplicate) records by annotation", &splitAnnotations,
+        "flatten|f", "flatten sub-objects", &flatten,
 		"keep-null|k", "keep sample entries with null genotypes e.g ./.", &keepEmpty
 		);
 
@@ -39,6 +42,7 @@ void main(string[] args)
 	}
 
 	ubyte con = 
+        (cast(ubyte)(flatten) << 4) |
 		(cast(ubyte)(keepEmpty) << 3) | 
 		(cast(ubyte)(!multiSample) << 2) | 
 		(cast(ubyte)(!multiAllelic) << 1) | 
