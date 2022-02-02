@@ -57,7 +57,6 @@ def main(args):
     # Read files intp pandas dataframe
     index = __readInFile(args.index)
     rawFile = __readInFile(args.file)
-
     if not args.column is None:
         # Get the column that has the sample ID in them
         columnFrame = rawFile[args.column]
@@ -85,9 +84,10 @@ def main(args):
         # Get only a list of the accessions and replace the values in the pandas frame
         # header to be the accessions.
         accessions = list(overlapFrame["accession"])
-        out = pd.DataFrame(rawFile, columns=header[0:abs(len(accessions)-len(header))] + accessions)
+        header=header[0:abs(len(accessions)-len(header))] + accessions
+        rawFile.columns = header
         # Write out the file
-        out.to_csv(args.output, index=False, sep='\t')
+        rawFile.to_csv(args.output, index=False, sep='\t')
     print("Done")
 
 if __name__ == "__main__":
