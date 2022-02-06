@@ -1,4 +1,4 @@
-FROM charesgregory/dlang-ldc-static
+FROM charesgregory/dlang-htslib-static
 
 ADD . /home/mucor3
 WORKDIR /home/mucor3
