@@ -7,8 +7,12 @@
 	"license": "MIT",
 	"name": "wrangler",
 	"dependencies": {
-		"asdf": "~>0.7.8"
+		"asdf": "~>0.7.8",
+		"jsonlops": {
+			"path": "../../jsonlops"
+		}
 	},
+	"targetPath": "../../bin",
 	"configurations": [
 		{
 			"name": "standard",

@@ -9,6 +9,7 @@
 	"description": "Query variants",
 	"license": "MIT",
 	"name": "varquery",
+	"targetPath": "../../bin",
 	"configurations": [
 		{
 			"name": "standard",

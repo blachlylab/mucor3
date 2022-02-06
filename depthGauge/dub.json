@@ -8,6 +8,7 @@
 	"dependencies": {
 		"dhtslib": "~>0.13.3+htslib-1.13"
 	},
+	"targetPath": "../bin",
 	"configurations": [
 		{
 			"name": "standard",

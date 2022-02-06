@@ -10,6 +10,9 @@ docs/
 *.lst
 *.vcf.gz
 *.vcf
+bin/
+test.*
+*.tbi
 
 atomization/atomize_vcf/atomize_vcf
 atomize_vcf.so

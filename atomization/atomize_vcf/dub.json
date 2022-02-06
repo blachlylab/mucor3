@@ -16,6 +16,7 @@
 			"path": "../../jsonlops"
 		}
 	},
+	"targetPath": "../../bin",
 	"configurations": [
 		{
 			"name": "standard",
