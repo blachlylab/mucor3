@@ -41,13 +41,19 @@ string[16] ANN_FIELDS = [
 string[4] LOF_FIELDS =["Gene","ID","num_transcripts","percent_affected"];
 TYPES[4] LOF_TYPES =[TYPES.STRING,TYPES.STRING,TYPES.INT,TYPES.FLOAT];
 
-AsdfNode parseAnnotationField(AsdfNode root, string key, string[] field_identifiers, TYPES[] types = [], bool condense = true){
+AsdfNode parseAnnotationField(AsdfNode root, string key, string[] field_identifiers, TYPES[] types = [], bool condense = true)
+{
+    // if no INFO, return
     if(!(key in root["INFO"].children)) return root;
+
+    // if types empty, all types are encoded as strings
     if(types == []) {
         types.length = field_identifiers.length;
         types[] = TYPES.STRING;
     }
     string[] anns;
+
+    // if value is array
     if(root["INFO",key].data.kind==Asdf.Kind.array)
         anns = deserialize!(string[])(root["INFO",key].data);
     else
@@ -160,6 +166,8 @@ Asdf parseFormatFields(VCFRecord record) {
     auto alleles = record.allelesAsArray();
     auto samples = record.vcfheader.getSamples;
     auto genotypes = record.getGenotypes;
+
+    //
     AsdfNode[] format_values = new AsdfNode[samples.length * (alleles.length - 1)]; 
     format_values[] = AsdfNode("{}".parseJson);
     foreach (i, sample; samples)
@@ -230,8 +238,9 @@ void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfN
             static if(is(T == FormatField)) {
                 foreach (i,val; vals.enumerate)
                 {
+                    assert(itemLen == val.length);
                     for(auto j=1; j< itemLen; j++){
-                        item_vals[(i * samples.length) +(j - 1)][key] = AsdfNode([val[0], val[j]].serializeToAsdf);
+                        item_vals[i *(j - 1)][key] = AsdfNode([val[0], val[j]].serializeToAsdf);
                     }
                 }
             } else {
