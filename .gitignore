@@ -8,8 +8,10 @@ docs/
 *.o
 *.obj
 *.lst
+*.vcf.gz
+*.vcf
 
-/atomize_vcf
+atomization/atomize_vcf/atomize_vcf
 atomize_vcf.so
 atomize_vcf.dylib
 atomize_vcf.dll
@@ -17,7 +19,7 @@ atomize_vcf.a
 atomize_vcf.lib
 atomize_vcf-test-*
 
-/depthgauge
+depthGauge/depthgauge
 depthgauge.so
 depthgauge.dylib
 depthgauge.dll
@@ -25,7 +27,7 @@ depthgauge.a
 depthgauge.lib
 depthgauge-test-*
 
-/varquery
+filtering/varquery/varquery
 varquery.so
 varquery.dylib
 varquery.dll
@@ -33,7 +35,7 @@ varquery.a
 varquery.lib
 varquery-test-*
 
-/wrangler
+manipulation/wrangler/wrangler
 wrangler.so
 wrangler.dylib
 wrangler.dll
@@ -41,7 +43,7 @@ wrangler.a
 wrangler.lib
 wrangler-test-*
 
-/jsonlops
+jsonlops/jsonlops
 libjsonlops.so
 libjsonlops.dylib
 libjsonlops.dll
