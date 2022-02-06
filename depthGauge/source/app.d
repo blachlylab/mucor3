@@ -9,6 +9,7 @@ import std.conv:to;
 import std.parallelism:parallel,defaultPoolThreads;
 import std.getopt;
 import dhtslib.sam:SAMFile;
+import dhtslib.coordinates;
 
 int threads=0;
 
@@ -41,8 +42,7 @@ void main(string[] args)
 }
 
 auto depth_at_pos(ref SAMFile bam,int chr,uint pos){
-	//return bam[chr][pos..pos+1].makePileup(true,pos,pos,false).front.coverage;
-	return bam[chr,pos].count;
+	return bam[chr, OB(pos)].count;
 }
 
 void getDepths(ref Table t,string prefix){
