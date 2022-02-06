@@ -53,7 +53,19 @@ def __expandFrameOnDelimiter(frame, column):
                     }).assign(**{column:np.concatenate(listColumn[column].values)})[listColumn.columns.tolist()]
     return expandedFrame
 
-def main(args):
+def main():
+    parser = ap.ArgumentParser()
+    # Import the arguments from the user
+    parser.add_argument("--file","-f", type=str, required=True, 
+        help="Input file containing the unindexed IDs")
+    parser.add_argument("--index","-i", type=str, required=True,
+        help="File containing the column with a set of indentifers to be linked")
+    parser.add_argument("--column","-c", type=str, required=False,
+        help="Name of column that ID's exist in the input file")
+    parser.add_argument("--output","-o", type=str, required=True,
+        help="Name of file to be output")
+    args = parser.parse_args()
+
     # Read files intp pandas dataframe
     index = __readInFile(args.index)
     rawFile = __readInFile(args.file)
@@ -91,18 +103,7 @@ def main(args):
     print("Done")
 
 if __name__ == "__main__":
-    parser = ap.ArgumentParser()
-    # Import the arguments from the user
-    parser.add_argument("--file","-f", type=str, required=True, 
-        help="Input file containing the unindexed IDs")
-    parser.add_argument("--index","-i", type=str, required=True,
-        help="File containing the column with a set of indentifers to be linked")
-    parser.add_argument("--column","-c", type=str, required=False,
-        help="Name of column that ID's exist in the input file")
-    parser.add_argument("--output","-o", type=str, required=True,
-        help="Name of file to be output")
-    args = parser.parse_args()
-    main(args)
+    main()
 
 
 
