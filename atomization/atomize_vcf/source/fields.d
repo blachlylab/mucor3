@@ -168,7 +168,7 @@ Asdf parseFormatFields(VCFRecord record) {
     auto genotypes = record.getGenotypes;
 
     //
-    AsdfNode[] format_values = new AsdfNode[samples.length * (alleles.length - 1)]; 
+    AsdfNode[] format_values = new AsdfNode[samples.length * (alleles.length - 1)];
     format_values[] = AsdfNode("{}".parseJson);
     foreach (i, sample; samples)
     {
@@ -239,8 +239,10 @@ void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfN
                 foreach (i,val; vals.enumerate)
                 {
                     assert(itemLen == val.length);
-                    for(auto j=1; j< itemLen; j++){
-                        item_vals[i *(j - 1)][key] = AsdfNode([val[0], val[j]].serializeToAsdf);
+                    assert(itemLen == alleles.length);
+                    
+                    for(auto j=0; j < itemLen - 1; j++){
+                        item_vals[(i * (itemLen - 1)) + j][key] = AsdfNode([val[0], val[j + 1]].serializeToAsdf);
                     }
                 }
             } else {

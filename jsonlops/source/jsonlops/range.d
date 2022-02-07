@@ -239,8 +239,7 @@ if (is(ElementType!R == Asdf))
                 auto rootNode = AsdfNode(root);
                 foreach (obj; y.value.byKeyValue)
                 {
-                    rootNode["FORMAT"][obj.key] = AsdfNode(obj.value.byElement.array[y.index]);
-
+                    rootNode["FORMAT"][obj.key] = AsdfNode(obj.value);
                 }
                 foreach (obj; info_vals[y.index].byKeyValue)
                 {
