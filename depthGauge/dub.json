@@ -6,6 +6,31 @@
 	"description": "A supplement to mucor3. Replicates a mucor3 pivot table but reports depths in BAM files.",
 	"license": "MIT",
 	"dependencies": {
-		"dhtslib": "~>0.12.3+htslib-1.10"
-	}
+		"dhtslib": "~>0.13.3+htslib-1.13"
+	},
+	"targetPath": "../bin",
+	"configurations": [
+		{
+			"name": "standard",
+			"targetType": "executable"
+		},
+		{
+			"name":"static-alpine",
+			"targetType": "executable",
+			"dflags-ldc": [
+				"-link-defaultlib-shared=false",
+				"-static",
+				"--linker=gold",
+				"-L-lz",
+				"-L-lbz2",
+				"-L-ldeflate",
+				"-L-llzma",
+				"-L-lcurl", 
+				"-L-lssl", 
+				"-L-lssh2", 
+				"-L-lcrypto"
+			],
+			"sourceFiles": ["/usr/local/lib/mimalloc-2.0/mimalloc.o"]
+		},
+	]
 }

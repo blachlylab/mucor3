@@ -21,9 +21,14 @@ setup(
     author="Charles Gregory",
     author_email="charles.gregory@osumc.edu",
     url="https://github.com/blachlylab/mucor3",
-    packages=["mucor"],
+    packages=["mucor", "mucor_util"],
+    package_dir={'mucor_util':'utils'},
     include_package_data=True,
     zip_safe=False,
     install_requires=["pandas"],
-    entry_points={"console_scripts": ["mucor3 = mucor.mucor:main"]},
+    entry_points={
+        "console_scripts": [
+            "mucor3 = mucor.mucor:main",
+            "sample_indexer = mucor_util.sample_indexer:main"
+            ]},
 )

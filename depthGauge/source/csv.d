@@ -78,7 +78,7 @@ struct Record {
         chr=sam.target_id(line.front);
         line.popFront;
         //convert from 1-based to 0-based
-        pos=line.front.to!uint-1;
+        pos=line.front.to!uint;
         line.popFront;
         extra=line.array;
     }
