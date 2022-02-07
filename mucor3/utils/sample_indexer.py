@@ -53,11 +53,12 @@ def __expandFrameOnDelimiter(frame, column):
                     }).assign(**{column:np.concatenate(listColumn[column].values)})[listColumn.columns.tolist()]
     return expandedFrame
 
-def __replaceValuesWithDelimiter(rawFile, column, index):
+def __replaceValuesWithDelimiter(rawFile, column, accName, index):
     """ Converts all ID on the same line. This retains the 
     condensed format of a file if desired.
     Input: 
         rawFile - the file to convert
+        accName - nameof accession column
         column - the name of the column to convert
         index - The index file to get the conversion table from
     Output:
@@ -65,9 +66,9 @@ def __replaceValuesWithDelimiter(rawFile, column, index):
          A converted pandas frame
     """
     # Compare the lists to the column in pandas.
-    accessions = list(index["accession"])
-    ids = list(index["sample"])
-    rawIDs = list(rawFile["sample"])
+    accessions = list(index[accName])
+    ids = list(index[column])
+    rawIDs = list(rawFile[column])
     # Create a log for the id not found.
     failLog = open("idNotConverted.log", 'w')
     failLog.write("id_or_accession_not_converted\n")
@@ -96,34 +97,34 @@ def main(args):
         # Get the column that has the sample ID in them
         columnFrame = rawFile[args.column]
         # Rename the column for the index to match
-        index.columns = [args.column, "accession", "status"]
+        index.rename(columns = {args.idName:args.column}, inplace = True)
         # explode the semicolon seperators onto new lines. The assign function
         # allows for the columns with a ';' to be converted into a list and then
         # exploded out onto different lines.
-        expandedIndex = __expandFrameOnDelimiter(index, "accession")
+        expandedIndex = __expandFrameOnDelimiter(index, args.accName)
         expandedRaw = rawFile
         if args.split == "True":
             expandedRaw = __expandFrameOnDelimiter(rawFile, args.column)
             # Merge the data frames together and convert the series into dataframe
             bigDataFile = pd.merge(expandedIndex, expandedRaw, on=args.column)
-            bigDataFile[args.column] = bigDataFile["accession"]
-            out = bigDataFile.drop(columns=["accession", "status"])
+            bigDataFile[args.column] = bigDataFile[args.accName]
+            # May need to drop all header columns but args.idName here to get same file out
+            out = bigDataFile.drop(columns=[args.accName])
             # Write out the file
             out.to_csv(args.output, index=False, sep='\t')
         else:
-            expandedRaw = __replaceValuesWithDelimiter(rawFile, args.column, expandedIndex)
+            expandedRaw = __replaceValuesWithDelimiter(rawFile, args.column, args.accName, expandedIndex)
             expandedRaw.to_csv(args.output, index=False, sep='\t')
     else:
         # No column name provided
         print("No column name was provided to filter on, assuming values in header")
-        index.columns = ["sample", "accession", "status"]
         header = [x for x in list(rawFile.columns)]
-        samples = [x for x in header if x in list(index["sample"])]
+        samples = [x for x in header if x in list(index[args.idName])]
         # Subset by samples found in header
-        overlapFrame = index[index["sample"].isin(samples)] 
+        overlapFrame = index[index[args.idName].isin(samples)]
         # Get only a list of the accessions and replace the values in the pandas frame
         # header to be the accessions.
-        accessions = list(overlapFrame["accession"])
+        accessions = list(overlapFrame[args.accName])
         header=header[0:abs(len(accessions)-len(header))] + accessions
         rawFile.columns = header
         # Write out the file
@@ -138,7 +139,11 @@ if __name__ == "__main__":
     parser.add_argument("--index","-i", type=str, required=True,
         help="File containing the column with a set of indentifers to be linked")
     parser.add_argument("--column","-c", type=str, required=False,
-        help="Name of column that ID's exist in the input file")
+                help="Name of column that the ids exist in the input file")
+    parser.add_argument("--idName","-in", type=str, required=False,
+        help="Name of column that the ids exist in the index file")
+    parser.add_argument("--accName","-an", type=str, required=False,
+        help="Name of column that Accessions exist in the index file")
     parser.add_argument("--output","-o", type=str, required=True,
         help="Name of file to be output")
     parser.add_argument("--split","-s", type=str, required=False, default="Flase",
