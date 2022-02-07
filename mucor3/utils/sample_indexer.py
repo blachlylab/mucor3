@@ -53,6 +53,41 @@ def __expandFrameOnDelimiter(frame, column):
                     }).assign(**{column:np.concatenate(listColumn[column].values)})[listColumn.columns.tolist()]
     return expandedFrame
 
+def __replaceValuesWithDelimiter(rawFile, column, index):
+    """ Converts all ID on the same line. This retains the 
+    condensed format of a file if desired.
+    Input: 
+        rawFile - the file to convert
+        column - the name of the column to convert
+        index - The index file to get the conversion table from
+    Output:
+         A log file of Id that couldn't be converted
+         A converted pandas frame
+    """
+    # Compare the lists to the column in pandas.
+    accessions = list(index["accession"])
+    ids = list(index["sample"])
+    rawIDs = list(rawFile["sample"])
+    # Create a log for the id not found.
+    failLog = open("idNotConverted.log", 'w')
+    failLog.write("id_or_accession_not_converted\n")
+
+    # Replace the values in the rawIDs list with the values in the index.
+    replacement=rawIDs
+    for i in range(0,len(ids)):
+        if not pd.isna(ids[i]) and not pd.isna(accessions[i]):
+            replacement=[x.replace(ids[i],accessions[i]) for x in replacement]
+        else:
+            failLog.write(str(ids[i])+'_'+str(accessions[i])+'\n')
+    
+    # Double check everything was converted, should never fail.
+    assert(len(rawIDs) == len(replacement))
+    failLog.close()
+
+    rawFile[column] = replacement
+
+    return rawFile
+
 def main(args):
     # Read files intp pandas dataframe
     index = __readInFile(args.index)
@@ -66,19 +101,24 @@ def main(args):
         # allows for the columns with a ';' to be converted into a list and then
         # exploded out onto different lines.
         expandedIndex = __expandFrameOnDelimiter(index, "accession")
-        expandedRaw = __expandFrameOnDelimiter(rawFile, args.column)
-        # Merge the data frames together and convert the series into dataframe
-        bigDataFile = pd.merge(expandedIndex, expandedRaw, on=args.column)
-        bigDataFile[args.column] = bigDataFile["accession"]
-        out = bigDataFile.drop(columns=["accession", "status"])
-        # Write out the file
-        out.to_csv(args.output, index=False, sep='\t')
+        expandedRaw = rawFile
+        if args.split == "True":
+            expandedRaw = __expandFrameOnDelimiter(rawFile, args.column)
+            # Merge the data frames together and convert the series into dataframe
+            bigDataFile = pd.merge(expandedIndex, expandedRaw, on=args.column)
+            bigDataFile[args.column] = bigDataFile["accession"]
+            out = bigDataFile.drop(columns=["accession", "status"])
+            # Write out the file
+            out.to_csv(args.output, index=False, sep='\t')
+        else:
+            expandedRaw = __replaceValuesWithDelimiter(rawFile, args.column, expandedIndex)
+            expandedRaw.to_csv(args.output, index=False, sep='\t')
     else:
         # No column name provided
         print("No column name was provided to filter on, assuming values in header")
         index.columns = ["sample", "accession", "status"]
         header = [x for x in list(rawFile.columns)]
-        samples = [x for x in header if "CLL" in x]
+        samples = [x for x in header if x in list(index["sample"])]
         # Subset by samples found in header
         overlapFrame = index[index["sample"].isin(samples)] 
         # Get only a list of the accessions and replace the values in the pandas frame
@@ -101,6 +141,8 @@ if __name__ == "__main__":
         help="Name of column that ID's exist in the input file")
     parser.add_argument("--output","-o", type=str, required=True,
         help="Name of file to be output")
+    parser.add_argument("--split","-s", type=str, required=False, default="Flase",
+            help="Boolean for if ID representing on value should be kept condensed (False) or split onto seperate likes (True)")
     args = parser.parse_args()
     main(args)
 
