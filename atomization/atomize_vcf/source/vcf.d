@@ -35,14 +35,17 @@ void parseVCF(string fn, int threads, ubyte con){
 
     //set extra threads
     hts_set_threads(vcf.fp, threads);
-    //get header
+
+    //get info needed from header 
+    auto cfg = getHeaderConfig(vcf.vcfhdr);
+
     StopWatch sw;
     sw.start;
     auto vcf_row_count = 0;
     auto output_count = 0;
     // loop over records and parse
     auto range = vcf.map!((x) {
-            auto obj = parseRecord(x);
+            auto obj = parseRecord(x, cfg);
             vcf_row_count++;
             return obj;
         }).dropNullGenotypes(cast(bool)(con & 8))
@@ -61,10 +64,37 @@ void parseVCF(string fn, int threads, ubyte con){
         stderr.writeln("No records in this file!");
 }
 
+struct FieldInfo 
+{
+    HeaderTypes t;
+    HeaderLengths n;
+}
+
+struct HeaderConfig
+{
+    FieldInfo[string] fmts;
+    FieldInfo[string] infos;
+    string[] samples;
+}
+
+HeaderConfig getHeaderConfig(VCFHeader header)
+{
+    HeaderConfig cfg;
+    for(auto i=0; i < header.hdr.nhrec;i++)
+    {
+        auto hrec = HeaderRecord(header.hdr.hrec[i]);
+        if(hrec.recType == HeaderRecordType.Format)
+            cfg.fmts[hrec.getID()] = FieldInfo(hrec.valueType, hrec.lenthType);
+        else if (hrec.recType == HeaderRecordType.Info)
+            cfg.infos[hrec.getID()] = FieldInfo(hrec.valueType, hrec.lenthType);
+    }
+    cfg.samples = header.getSamples();
+    return cfg;
+}
+
 /// Parse individual records to JSON
-Asdf parseRecord(VCFRecord record){
+Asdf parseRecord(VCFRecord record, HeaderConfig cfg){
     record.unpack(UnpackLevel.All);
-    
 
     // create root json object
     auto root = AsdfNode("{}".parseJson);
@@ -95,7 +125,7 @@ Asdf parseRecord(VCFRecord record){
         root["FILTER"] = AsdfNode(filters.serializeToAsdf);
 
     // prepare info root object
-    auto info_root = AsdfNode(parseInfoFields(record));
+    auto info_root = AsdfNode(parseInfoFields(record, cfg));
 
     // Go by each vcf info field and by type
     // convert to native type then to asdf
@@ -119,7 +149,7 @@ Asdf parseRecord(VCFRecord record){
     // fromat field and convert to native type
     // and then convert to asdf
     // and write one record per sample
-    auto fmt_root = AsdfNode(parseFormatFields(record));
+    auto fmt_root = AsdfNode(parseFormatFields(record, cfg));
     // add root to format and write
     root["FORMAT"] = fmt_root;
    return cast(Asdf) root;

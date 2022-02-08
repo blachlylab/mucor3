@@ -9,6 +9,7 @@ import std.range : enumerate, chunks;
 import asdf;
 import dhtslib.vcf;
 import htslib.hts_log;
+import vcf;
 import jsonlops.basic : makeAsdfArray;
 
 /// JSON types
@@ -120,7 +121,7 @@ unittest{
     writeln(cast(Asdf)parseAnnotationField(root,"ANN",ANN_FIELDS[],ANN_TYPES[]));
 }
 
-Asdf parseInfoFields(VCFRecord record) {
+Asdf parseInfoFields(VCFRecord record, HeaderConfig cfg) {
     // prepare info root object
     auto info_root=AsdfNode("{}".parseJson);
     info_root["by_allele"] = AsdfNode("{}".parseJson);
@@ -133,7 +134,7 @@ Asdf parseInfoFields(VCFRecord record) {
     //  
     foreach (key, info; infos)
     {
-        auto hRec = record.vcfheader.getHeaderRecord(HeaderRecordType.Info, key);
+        auto hdrInfo = cfg.infos[key];
         
         final switch(info.type){
             // char/string
@@ -142,14 +143,14 @@ Asdf parseInfoFields(VCFRecord record) {
                 break;
             // float or float array
             case BcfRecordType.Float:
-                parseFieldsMixin!(InfoField, float)(info_root, info, key, info_values, alleles, [], hRec);
+                parseFieldsMixin!(InfoField, float)(info_root, info, key, info_values, alleles, [], hdrInfo);
                 break;
             // int type or array
             case BcfRecordType.Int8:
             case BcfRecordType.Int16:
             case BcfRecordType.Int32:
             case BcfRecordType.Int64:
-                parseFieldsMixin!(InfoField, long)(info_root, info, key, info_values, alleles, [], hRec);
+                parseFieldsMixin!(InfoField, long)(info_root, info, key, info_values, alleles, [], hdrInfo);
                 break;
             case BcfRecordType.Null:
                 info_root[key]=AsdfNode("null".parseJson);
@@ -160,17 +161,16 @@ Asdf parseInfoFields(VCFRecord record) {
     return cast(Asdf) info_root;
 }
 
-Asdf parseFormatFields(VCFRecord record) {
+Asdf parseFormatFields(VCFRecord record, HeaderConfig cfg) {
     // prepare info root object
     auto format_root=AsdfNode("{}".parseJson);
     auto alleles = record.allelesAsArray();
-    auto samples = record.vcfheader.getSamples;
     auto genotypes = record.getGenotypes;
 
     //
-    AsdfNode[] format_values = new AsdfNode[samples.length * (alleles.length - 1)];
+    AsdfNode[] format_values = new AsdfNode[cfg.samples.length * (alleles.length - 1)];
     format_values[] = AsdfNode("{}".parseJson);
-    foreach (i, sample; samples)
+    foreach (i, sample; cfg.samples)
     {
         format_root[sample] = AsdfNode("{}".parseJson);
         format_root[sample]["by_allele"] = AsdfNode("{}".parseJson);
@@ -180,32 +180,32 @@ Asdf parseFormatFields(VCFRecord record) {
     // Go by each vcf info field and by type
     // convert to native type then to asdf
     //  
-    foreach (i,sample; samples) {
+    foreach (i,sample; cfg.samples) {
         format_root[sample]["GT"]= AsdfNode(genotypes[i].toString.serializeToAsdf);
         format_root[sample]["Ploidy"]= AsdfNode(genotypes[i].getPloidy.serializeToAsdf);
     }
     foreach (key, fmt; fmts)
     {
-        auto hRec = record.vcfheader.getHeaderRecord(HeaderRecordType.Format, key);
+        auto hdrInfo = cfg.fmts[key];
         
         final switch(fmt.type){
             // char/string
             case BcfRecordType.Char:
                 auto vals = fmt.to!string;
-                foreach (i,sample; samples) {
+                foreach (i,sample; cfg.samples) {
                     format_root[sample][key]= AsdfNode(vals[i][0].serializeToAsdf);
                 }
                 break;
             // float or float array
             case BcfRecordType.Float:
-                parseFieldsMixin!(FormatField, float)(format_root, fmt, key, format_values, alleles, samples, hRec);
+                parseFieldsMixin!(FormatField, float)(format_root, fmt, key, format_values, alleles, cfg.samples, hdrInfo);
                 break;
             // int type or array
             case BcfRecordType.Int8:
             case BcfRecordType.Int16:
             case BcfRecordType.Int32:
             case BcfRecordType.Int64:
-                parseFieldsMixin!(FormatField, long)(format_root, fmt, key, format_values, alleles, samples, hRec);
+                parseFieldsMixin!(FormatField, long)(format_root, fmt, key, format_values, alleles, cfg.samples, hdrInfo);
                 break;
             case BcfRecordType.Null:
                 format_root[key]=AsdfNode("null".parseJson);
@@ -213,14 +213,14 @@ Asdf parseFormatFields(VCFRecord record) {
         }
     }
     auto view = format_values.chunks(alleles.length - 1);
-    foreach (i, sample; samples)
+    foreach (i, sample; cfg.samples)
     {
         format_root[sample]["by_allele"] = AsdfNode(makeAsdfArray(view[i].map!(x=>cast(Asdf)x).array));
     }
     return cast(Asdf) format_root;
 }
 
-void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfNode[] item_vals, string[] alleles, string[] samples, HeaderRecord hRec) {
+void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfNode[] item_vals, string[] alleles, string[] samples, FieldInfo hdrInfo) {
     static if(is(T == FormatField)) {
         auto itemLen = item.n;
         alias vtype = V;
@@ -228,7 +228,7 @@ void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfN
         auto itemLen = item.len;
         alias vtype = V[];
     }
-    switch(hRec.lenthType){
+    switch(hdrInfo.n){
         case HeaderLengths.OnePerAllele:
             if(alleles.length != itemLen) {
                 hts_log_warning(__FUNCTION__,T.stringof ~" "~key~" doesn't have same number of values as header indicates! Skipping...");
