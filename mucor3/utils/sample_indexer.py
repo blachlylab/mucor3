@@ -89,7 +89,25 @@ def __replaceValuesWithDelimiter(rawFile, column, accName, index):
 
     return rawFile
 
-def main(args):
+def main():
+    parser = ap.ArgumentParser()
+    # Import the arguments from the user
+    parser.add_argument("--file","-f", type=str, required=True, 
+        help="Input file containing the unindexed IDs")
+    parser.add_argument("--index","-i", type=str, required=True,
+        help="File containing the column with a set of indentifers to be linked")
+    parser.add_argument("--column","-c", type=str, required=False,
+                help="Name of column that the ids exist in the input file")
+    parser.add_argument("--idName","-in", type=str, required=False,
+        help="Name of column that the ids exist in the index file")
+    parser.add_argument("--accName","-an", type=str, required=False,
+        help="Name of column that Accessions exist in the index file")
+    parser.add_argument("--output","-o", type=str, required=True,
+        help="Name of file to be output")
+    parser.add_argument("--split","-s", type=str, required=False, default="Flase",
+            help="Boolean for if ID representing on value should be kept condensed (False) or split onto seperate likes (True)")
+    args = parser.parse_args()
+    
     # Read files intp pandas dataframe
     index = __readInFile(args.index)
     rawFile = __readInFile(args.file)
@@ -132,24 +150,7 @@ def main(args):
     print("Done")
 
 if __name__ == "__main__":
-    parser = ap.ArgumentParser()
-    # Import the arguments from the user
-    parser.add_argument("--file","-f", type=str, required=True, 
-        help="Input file containing the unindexed IDs")
-    parser.add_argument("--index","-i", type=str, required=True,
-        help="File containing the column with a set of indentifers to be linked")
-    parser.add_argument("--column","-c", type=str, required=False,
-                help="Name of column that the ids exist in the input file")
-    parser.add_argument("--idName","-in", type=str, required=False,
-        help="Name of column that the ids exist in the index file")
-    parser.add_argument("--accName","-an", type=str, required=False,
-        help="Name of column that Accessions exist in the index file")
-    parser.add_argument("--output","-o", type=str, required=True,
-        help="Name of file to be output")
-    parser.add_argument("--split","-s", type=str, required=False, default="Flase",
-            help="Boolean for if ID representing on value should be kept condensed (False) or split onto seperate likes (True)")
-    args = parser.parse_args()
-    main(args)
+    main()
 
 
 
