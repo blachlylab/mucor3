@@ -5,8 +5,9 @@ import std.string : toStringz, fromStringz;
 import std.algorithm : map, each;
 import std.array : array, split;
 import std.datetime.stopwatch : StopWatch, AutoStart;
-import std.digest.md : MD5Digest, toHexString;
 import std.math : isNaN;
+import std.parallelism;
+import core.sync.mutex: Mutex;
 
 import dhtslib.vcf;
 import dhtslib.coordinates;
@@ -15,8 +16,12 @@ import htslib.hts;
 import htslib.hts_log;
 import asdf;
 import fields;
+import jsonvalue;
+import vcfvalue;
+import khashl: khashl;
 import jsonlops.range;
 import jsonlops.basic;
+import std.parallelism: parallel;
 
 auto norm(R)(R range, bool active)
 {
@@ -31,30 +36,27 @@ auto norm(R)(R range, bool active)
 /// Parse VCF to JSONL
 void parseVCF(string fn, int threads, ubyte con){
     //open vcf
-    auto vcf = VCFReader(fn);
-
-    //set extra threads
-    hts_set_threads(vcf.fp, threads);
+    auto vcf = VCFReader(fn,threads, UnpackLevel.All);
 
     //get info needed from header 
     auto cfg = getHeaderConfig(vcf.vcfhdr);
 
     StopWatch sw;
     sw.start;
-    auto vcf_row_count = 0;
-    auto output_count = 0;
+    shared int vcf_row_count = 0;
+    shared int output_count = 0;
     // loop over records and parse
-    auto range = vcf.map!((x) {
-            auto obj = parseRecord(x, cfg);
-            vcf_row_count++;
-            return obj;
-        }).dropNullGenotypes(cast(bool)(con & 8))
-        .expandBySample(cast(bool)(con & 4))
-        .expandMultiAllelicSites(cast(bool)(con & 2))
-        .norm(cast(bool)(con & 16));
-    foreach(x; range){
-        writeln(x);
-        output_count++;
+    foreach(x; vcf){
+        auto obj = parseRecord(x, cfg);
+        applyOperations(
+            obj, 
+            cast(bool)(con & 1), 
+            cast(bool)(con & 2), 
+            cast(bool)(con & 4), 
+            cast(bool)(con & 8), 
+            cast(bool)(con & 16), 
+            &vcf_row_count, 
+            &output_count);
     }
     if(vcf_row_count > 0) {
         stderr.writefln("Parsed %,3d records in %d seconds",vcf_row_count, sw.peek.total!"seconds");
@@ -72,60 +74,62 @@ struct FieldInfo
 
 struct HeaderConfig
 {
-    FieldInfo[string] fmts;
-    FieldInfo[string] infos;
+    khashl!(string, FieldInfo) fmts;
+    khashl!(string, FieldInfo) infos;
     string[] samples;
 }
 
 HeaderConfig getHeaderConfig(VCFHeader header)
 {
+    import std.stdio;
     HeaderConfig cfg;
     for(auto i=0; i < header.hdr.nhrec;i++)
     {
         auto hrec = HeaderRecord(header.hdr.hrec[i]);
         if(hrec.recType == HeaderRecordType.Format)
-            cfg.fmts[hrec.getID()] = FieldInfo(hrec.valueType, hrec.lenthType);
+            cfg.fmts[hrec.getID().idup] = FieldInfo(hrec.valueType, hrec.lenthType);
         else if (hrec.recType == HeaderRecordType.Info)
-            cfg.infos[hrec.getID()] = FieldInfo(hrec.valueType, hrec.lenthType);
+            cfg.infos[hrec.getID().idup] = FieldInfo(hrec.valueType, hrec.lenthType);
     }
     cfg.samples = header.getSamples();
     return cfg;
 }
 
 /// Parse individual records to JSON
-Asdf parseRecord(VCFRecord record, HeaderConfig cfg){
+JsonValue * parseRecord(VCFRecord record, HeaderConfig cfg){
     record.unpack(UnpackLevel.All);
 
     // create root json object
-    auto root = AsdfNode("{}".parseJson);
+    auto root = makeJsonObject;
 
     // parse standard fields
-    root["CHROM"] = AsdfNode(record.chrom.serializeToAsdf);
-    root["POS"] = AsdfNode(record.pos.to!OB.pos.serializeToAsdf);
-    root["ID"] = AsdfNode(record.id.serializeToAsdf);
+    (*root)["CHROM"] = record.chrom;
+    (*root)["POS"] = record.pos.to!OB.pos;
+    (*root)["ID"] = record.id;
     if(!isNaN(record.qual)) // ignore if nan
-        root["QUAL"] = AsdfNode(record.qual.serializeToAsdf);
+        (*root)["QUAL"] = record.qual;
     
     // parse ref and alt alleles
     auto alleles = record.allelesAsArray;
 
-    root["REF"] = AsdfNode(alleles[0].serializeToAsdf);
+    (*root)["REF"] = alleles[0];
     if (alleles.length > 2) {
-        root["ALT"] = AsdfNode(alleles[1..$].serializeToAsdf);
+        (*root)["ALT"] = alleles[1..$];
     }else if (alleles.length > 1) {
-        root["ALT"] = AsdfNode(alleles[1].serializeToAsdf);
+        (*root)["ALT"] = alleles[1];
     }
 
     // parse filters if any
-    const(char)[][] filters;
+    string[] filters;
     for(int i = 0;i < record.line.d.n_flt;i++){
-        filters~=fromStringz(record.vcfheader.hdr.id[BCF_DT_ID][ record.line.d.flt[i]].key);
+        filters ~= fromStringz(record.vcfheader.hdr.id[BCF_DT_ID][ record.line.d.flt[i]].key).idup;
     }
     if(filters != [])
-        root["FILTER"] = AsdfNode(filters.serializeToAsdf);
+        (*root)["FILTER"] = filters;
 
+    auto infos = record.getInfos;
     // prepare info root object
-    auto info_root = AsdfNode(parseInfoFields(record, cfg));
+    auto info_root = parseInfos(&record, cfg, alleles.length - 1);
 
     // Go by each vcf info field and by type
     // convert to native type then to asdf
@@ -134,14 +138,15 @@ Asdf parseRecord(VCFRecord record, HeaderConfig cfg){
 
     // add info fields to root and 
     // parse any annotation fields
-    root["INFO"] = info_root;
-    root =parseAnnotationField(root,"ANN",ANN_FIELDS[]);
-    root =parseAnnotationField(root,"NMD",LOF_FIELDS[],LOF_TYPES[]);
-    root =parseAnnotationField(root,"LOF",LOF_FIELDS[],LOF_TYPES[]);
+
+    parseAnnotationField(info_root,"ANN",ANN_FIELDS[]);
+    parseAnnotationField(info_root,"NMD",LOF_FIELDS[],LOF_TYPES[]);
+    parseAnnotationField(info_root,"LOF",LOF_FIELDS[],LOF_TYPES[]);
+    (*root)["INFO"] = *info_root;
 
     // if no samples/format info, write
-    if(record.vcfheader.nsamples==0){
-        writeln(cast(Asdf)root);
+    if(cfg.samples.length==0){
+        return root;
     }
 
     // if there are samples
@@ -149,43 +154,10 @@ Asdf parseRecord(VCFRecord record, HeaderConfig cfg){
     // fromat field and convert to native type
     // and then convert to asdf
     // and write one record per sample
-    auto fmt_root = AsdfNode(parseFormatFields(record, cfg));
+    auto fmts = record.getFormats;
+    auto fmt_root = parseFormats(&record, cfg, alleles.length - 1, cfg.samples);
     // add root to format and write
-    root["FORMAT"] = fmt_root;
-   return cast(Asdf) root;
+    (*root)["FORMAT"] = *fmt_root;
+    (*root)["type"] = "vcf_record";
+   return root;
 }
-
-Asdf md5sumObject(Asdf obj) {
-    // create md5 object
-    auto md5 = new MD5Digest();
-    auto root = AsdfNode(obj);
-    root["md5"] = AsdfNode(serializeToAsdf(md5.digest(obj.data).toHexString));
-    return cast(Asdf)root;
-}
-
-
-/// basic helper for range based 
-/// access to vcf file
-struct VCFRange{
-    htsFile * fp;
-    bcf_hdr_t * header;
-    bcf1_t * b;
-    bool EOF = false;
-    this(htsFile * fp,bcf_hdr_t * header){
-        this.fp=fp;
-        this.header=header;
-        this.b = bcf_init1();
-    }
-    bcf1_t * front(){
-        return this.b;
-    }
-    void popFront(){
-        
-    }
-    bool empty(){
-        auto success = bcf_read(fp,header,b);
-        if(success==-1) EOF=true;
-        return EOF;
-    }
-}
-

@@ -79,13 +79,21 @@ Asdf makeAsdfArray(Asdf[] vals)
 {
     // create new array
     auto arr = `[]`.parseJson;
+    assert(arr.data.length == 5);
+
     // get new length
     auto newDataLen = vals.map!"a.data.length".sum;
     // set length
     auto lenPtr = cast(uint*)(arr.data[1..5].ptr);
     *lenPtr += newDataLen;
+
+    arr.data.reserve(5 + newDataLen);
+
     // append data
-    arr.data ~= vals.map!"a.data".joiner.array;
+    foreach (val; vals)
+    {
+        arr.data ~= val.data;
+    }
     return arr;
 }
 
@@ -94,6 +102,44 @@ unittest
     auto res = makeAsdfArray([`"32323"`.parseJson,`"32"`.parseJson,`"32323"`.parseJson]);
     assert(res == `["32323","32","32323"]`.parseJson);
 }
+
+pragma(inline, true)
+/// create a asdf array obj from an array of asdf objs 
+Asdf makeAsdfObject(Asdf[string] vals)
+{
+    // create new array
+    auto obj = `{}`.parseJson;
+    // get new length
+    auto newDataLen = vals.byKeyValue.map!(x => x.key.length + 1 + x.value.data.length).sum;
+    // set length
+    auto lenPtr = cast(uint*)(obj.data[1..5].ptr);
+    *lenPtr += newDataLen;
+
+    obj.data.reserve(5 + newDataLen);
+    // append data
+    foreach (val; vals.byKeyValue)
+    {
+        assert(val.key.length <= 256);
+        obj.data ~= cast(ubyte) val.key.length;
+        obj.data ~= cast(ubyte[])val.key;
+        obj.data ~= val.value.data;
+    }
+    return obj;
+}
+
+unittest
+{
+    Asdf[string] map;
+    map["test"] = "1".parseJson;
+    map["test2"] = `"33"`.parseJson;
+    map["test3"] = `{}`.parseJson;
+    map["test4"] = `[1,2]`.parseJson;
+    map["test5"] = `256`.parseJson;
+    import std.stdio;
+    writeln(makeAsdfObject(map).data);
+    assert(makeAsdfObject(map) == `{"test5":256,"test4":[1,2],"test":1,"test3":{},"test2":"33"}`.parseJson);
+}
+
 
 pragma(inline, true)
 /// recursively normalize or flatten asdf objects

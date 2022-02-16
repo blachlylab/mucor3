@@ -20,7 +20,12 @@
 	"configurations": [
 		{
 			"name": "standard",
-			"targetType": "executable"
+			"targetType": "executable",
+		},
+		{
+			"name": "unittest",
+			"excludedSourceFiles": ["source/app.d"],
+			"dflags-ldc":["-fsanitize=address"]
 		},
 		{
 			"name":"static-alpine",

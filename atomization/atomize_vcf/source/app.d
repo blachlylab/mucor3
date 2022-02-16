@@ -3,6 +3,7 @@ import std.getopt;
 import std.parallelism;
 
 import vcf : parseVCF;
+import htslib.hts_log;
 
 bool multiSample;
 bool multiAllelic;
@@ -29,7 +30,7 @@ void main(string[] args)
 		"threads|t","extra threads for parsing the VCF file", &threads,
 		"multi-sample|s", "don't split (and duplicate) records by sample", &multiSample,
 		"multi-allelic|m", "don't split (and duplicate) records by sample", &multiAllelic,
-		"annotation|a", "split (and duplicate) records by annotation", &splitAnnotations,
+		"annotation|a", "split (and duplicate) records by annotation (also sets -m flag)", &splitAnnotations,
         "flatten|f", "flatten sub-objects", &flatten,
 		"keep-null|k", "keep sample entries with null genotypes e.g ./.", &keepEmpty
 		);
@@ -39,6 +40,9 @@ void main(string[] args)
 		defaultGetoptPrinter(help,res.options);
 		stderr.writeln();
 		return;
+	}
+	if(splitAnnotations){
+		hts_log_warning(__FUNCTION__, "using -a also splits by allele");	
 	}
 
 	ubyte con = 
