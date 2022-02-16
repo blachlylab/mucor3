@@ -164,7 +164,6 @@ JsonValue * parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, strin
         }
         
         (*bySample)[samples[i]]["byAllele"] = *byAllele;
-        (*bySample)[samples[i]]["GT"] = rec.getGenotype(i).toString;
     }
 
     foreach(v; rec.line.d.fmt[0..rec.line.n_fmt]){
@@ -176,6 +175,14 @@ JsonValue * parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, strin
             continue;
         }
         auto hdrInfo = cfg.fmts[key];
+
+        if(key == "GT"){
+            for(auto i = 0; i < samples.length; i++){
+                auto gt = Genotype(fmt, i);
+                (*bySample)[samples[i]]["GT"] = gt.toString;
+            }
+            continue;
+        }
         
         JsonValue * data;
         final switch(fmt.type){
@@ -358,7 +365,7 @@ auto expandMultiAllelicSites(bool sampleExpanded)(JsonValue * obj, ulong numAlts
         auto i_exists = ("INFO" in (*(*obj).asObject)) != null;
         auto iba_exists = i_exists ? (("by_allele" in (*(*obj)["INFO"].asObject)) != null) : false;
 
-        auto info_vals = (*(*obj)["INFO"]["by_allele"].asArray);
+        auto info_vals = iba_exists ? (*(*obj)["INFO"]["by_allele"].asArray) : [];
         auto fmt = (*(*obj)["FORMAT"].asObject);
         return iota(numAlts).map!((i) {
 
@@ -437,7 +444,26 @@ void applyOperations(JsonValue * obj, bool anno, bool allele, bool sam, bool gen
                     atomicOp!"+="(*output_count, 1);
                 });
         }
-    } else if(sam) {
+    }else if(sam && allele){
+        auto numAlts = (*(*obj)["ALT"].value).tryMatch!(
+            (string x) => 1,
+            (JsonArray x) => x.length
+        );
+        auto range = expandBySample(obj)
+            .map!(x => expandMultiAllelicSites!true(x, numAlts)).joiner;
+        if(norm){
+            range.map!(x => normalize(x))
+                .each!((x) {
+                    writeln(x.serializeToAsdf.md5sumObject);
+                    atomicOp!"+="(*output_count, 1);
+                });
+        }else{
+            range.each!((x) {
+                    writeln(x.serializeToAsdf.md5sumObject);
+                    atomicOp!"+="(*output_count, 1);
+                });
+        }
+    }else if(sam) {
         auto range = expandBySample(obj);
         if(norm){
             range.map!(x => normalize(x))

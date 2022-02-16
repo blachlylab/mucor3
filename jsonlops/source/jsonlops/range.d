@@ -1,7 +1,7 @@
 module jsonlops.range;
 
 import std.range;
-import std.algorithm : map, fold, joiner, find;
+import std.algorithm : map, fold, joiner, find, uniq;
 import std.traits;
 import std.array : split;
 import std.conv : to;
@@ -304,7 +304,7 @@ if(is(ElementType!Range == Asdf))
 }
 
 
-Asdf subset(Range)(Asdf obj, string[] keys)
+Asdf subset(Asdf obj, string[] keys)
 {
     auto node =  AsdfNode("{}".parseJson);
     foreach (string key; keys)

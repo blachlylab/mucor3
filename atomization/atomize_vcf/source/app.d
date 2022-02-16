@@ -47,7 +47,7 @@ void main(string[] args)
 
 	ubyte con = 
         (cast(ubyte)(flatten) << 4) |
-		(cast(ubyte)(keepEmpty) << 3) | 
+		(cast(ubyte)(!keepEmpty) << 3) | 
 		(cast(ubyte)(!multiSample) << 2) | 
 		(cast(ubyte)(!multiAllelic) << 1) | 
 		cast(ubyte)(splitAnnotations);
