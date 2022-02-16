@@ -409,15 +409,6 @@ void dropNullGenotypes(JsonValue * obj)
     } 
 }
 
-
-Asdf md5sumObject(Asdf obj) {
-    // create md5 object
-    auto md5 = new MD5Digest();
-    auto root = AsdfNode(obj);
-    root["md5"] = AsdfNode(serializeToAsdf(md5.digest(obj.data).toHexString));
-    return cast(Asdf)root;
-}
-
 void applyOperations(JsonValue * obj, bool anno, bool allele, bool sam, bool gen, bool norm, shared int * input_count, shared int * output_count)
 {
     import std.stdio;

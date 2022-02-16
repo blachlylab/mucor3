@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/diff
+diff.so
+diff.dylib
+diff.dll
+diff.a
+diff.lib
+diff-test-*
+*.exe
+*.o
+*.obj
+*.lst

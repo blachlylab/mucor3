@@ -293,3 +293,24 @@ if (is(ElementType!R == Asdf))
             return x;
     });
 }
+
+auto subset(Range)(Range range, string[] keys)
+if(is(ElementType!Range == Asdf))
+{
+    string[] byVarKeys = ["CHROM", "POS", "REF", "ALT"];
+    string[] bySamVarKeys = ["sample", "CHROM", "POS", "REF", "ALT"];
+    return range.map!(x => subset(x, keys))
+        .uniq;
+}
+
+
+Asdf subset(Range)(Asdf obj, string[] keys)
+{
+    auto node =  AsdfNode("{}".parseJson);
+    foreach (string key; keys)
+    {
+        node[key] = AsdfNode(obj[key]);
+    }
+    return cast(Asdf)node;
+}
+

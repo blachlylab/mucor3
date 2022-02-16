@@ -11,6 +11,7 @@
         "./atomization/atomize_vcf/",
         "./depthGauge/",
         "./filtering/varquery/",
-        "./manipulation/wrangler/"
+        "./manipulation/wrangler/",
+        "./diff/"
     ]
 }

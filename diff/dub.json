@@ -5,7 +5,7 @@
 	"copyright": "Copyright © 2021, Charles Gregory",
 	"description": "Convert VCF to line-delimited JSON objects.",
 	"license": "MIT",
-	"name": "atomize_vcf",
+	"name": "diff",
 	"dependencies": {
 		"asdf": "~>0.7.8",
 		"dhtslib": {
@@ -13,10 +13,10 @@
 			"version": "b3fcf27aefff939e111ccb0f18d453c15a51451c"
 		},
 		"jsonlops": {
-			"path": "../../jsonlops"
+			"path": "../jsonlops"
 		}
 	},
-	"targetPath": "../../bin",
+	"targetPath": "../bin",
 	"configurations": [
 		{
 			"name": "standard",

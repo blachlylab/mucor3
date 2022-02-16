@@ -2,6 +2,7 @@ module jsonlops.basic;
 
 import std.algorithm: map, sort, uniq, joiner, sum, fold, count;
 import std.array : array;
+import std.digest.md : MD5Digest, toHexString;
 
 import asdf;
 
@@ -335,4 +336,12 @@ unittest
     auto res = merge(textJson, textJson);
     auto exp = `{"foo":["bar","bar"],"inner":{"c":["32323","32","32323","32"],"a":[true,true,true,true],"e":{},"b":[false,true,false,true],"d":[null,false,null,false]}}`.parseJson;
     assert(res == exp);
+}
+
+Asdf md5sumObject(Asdf obj) {
+    // create md5 object
+    auto md5 = new MD5Digest();
+    auto root = AsdfNode(obj);
+    root["md5"] = AsdfNode(serializeToAsdf(md5.digest(obj.data).toHexString));
+    return cast(Asdf)root;
 }
