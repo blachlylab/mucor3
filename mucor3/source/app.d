@@ -45,10 +45,10 @@ void main(string[] args)
             atomize(args[1..$]);
             return;
         case "query":
-            query(args[2..$]);
+            query_main(args[2..$]);
             return;
         case "index":
-            index(args[2..$]);
+            index_main(args[2..$]);
             return;
         case "merge":
             merge_main(args[2..$]);
