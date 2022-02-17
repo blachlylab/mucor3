@@ -6,12 +6,10 @@ import std.algorithm: map;
 import std.range;
 import std.conv:to;
 
-import asdf : deserializeAsdf = deserialize, parseJsonByLine;
-import libmucor.varquery.invertedindex;
-import libmucor.varquery.query;
-import libmucor.wideint : uint128;
+import asdf : deserializeAsdf = deserialize, parseJsonByLine, Asdf;
+import libmucor.varquery;
 
-void query(string[] args){
+void query_main(string[] args){
     StopWatch sw;
     sw.start;
  
@@ -31,43 +29,7 @@ void query(string[] args){
     // parseQuery("key1:val1 AND key2:(val2 OR val3) AND key4:val4 AND key5:(val5 OR val6)",idx);
 }
 
-auto query(Range)(Range range, JSONInvertedIndex idx, string queryStr){
-    StopWatch sw;
-    sw.start;
-
-    auto idxs = evalQuery(queryStr, &idx);
-    stderr.writeln("Time to parse query: ",sw.peek.total!"seconds"," seconds");
-    stderr.writeln(idxs.length," records matched your query");
-    sw.stop;
-
-    bool[uint128] hashmap;
-    foreach(key;idx.convertIds(idx.allIds)){
-        hashmap[key] = false;
-    }
-
-    foreach (key; idxs)
-    {
-        hashmap[key] = true;
-    }
-
-    return range.enumerate.map!((x) {
-        auto i = x.index;
-        auto line = x.value;
-        uint128 a;
-        a.fromHexString(deserializeAsdf!string(line["md5"]));
-        assert(idx.recordMd5s[i] ==  a);
-        auto val = hashmap.get(a, false);
-        if(a in hashmap){
-            if(hashmap[a])
-                return line;
-            throw new Exception("Something odd happened");
-        }else{
-            throw new Exception("record not present in index");
-        }
-    });
-}
-
-void index(string[] args){
+void index_main(string[] args){
 
     StopWatch sw;
     
@@ -79,20 +41,3 @@ void index(string[] args){
     stderr.writefln("Wrote index in %d secs",sw.peek.total!"seconds");
 }
 
-JSONInvertedIndex index(Range)(Range range){
-    JSONInvertedIndex idx;
-
-    StopWatch sw;
-    sw.start;
-    auto count = 0;
-    foreach (line; range)
-    {
-        idx.addJsonObject(line);
-        count++;
-    }
-    assert(count == idx.recordMd5s.length,"number of md5s doesn't match number of records");
-    sw.stop;
-    stderr.writefln("Indexed %d records in %d secs",count,sw.peek.total!"seconds");
-    stderr.writefln("Avg time to index record: %f usecs",float(sw.peek.total!"usecs") / float(count));
-    return idx;
-}
