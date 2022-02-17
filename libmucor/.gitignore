@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/libmucor
+libmucor.so
+libmucor.dylib
+libmucor.dll
+libmucor.a
+libmucor.lib
+libmucor-test-*
+*.exe
+*.o
+*.obj
+*.lst

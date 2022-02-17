@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/mucor3
+mucor3.so
+mucor3.dylib
+mucor3.dll
+mucor3.a
+mucor3.lib
+mucor3-test-*
+*.exe
+*.o
+*.obj
+*.lst

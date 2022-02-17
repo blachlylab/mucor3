@@ -1,0 +1,43 @@
+{
+	"name": "mucor3",
+	"authors": [
+		"Thomas Gregory"
+	],
+	"description": "Mucor3: From VCF to spreadsheet.",
+	"license": "MIT",
+	"dependencies": {
+		"asdf": "~>0.7.8",
+		"dhtslib": {
+			"repository": "git+https://github.com/blachlylab/dhtslib.git",
+			"version": "b3fcf27aefff939e111ccb0f18d453c15a51451c"
+		},
+		"libmucor":{
+			"path": "../libmucor"
+		}
+	},
+	"targetPath": "../bin",
+	"configurations": [
+		{
+			"name": "standard",
+			"targetType": "executable"
+		},
+		{
+			"name":"static-alpine",
+			"targetType": "executable",
+			"dflags-ldc": [
+				"-link-defaultlib-shared=false",
+				"-static",
+				"--linker=gold",
+				"-L-lz",
+				"-L-lbz2",
+				"-L-ldeflate",
+				"-L-llzma",
+				"-L-lcurl", 
+				"-L-lssl", 
+				"-L-lssh2", 
+				"-L-lcrypto"
+			],
+			"sourceFiles": ["/usr/local/lib/mimalloc-2.0/mimalloc.o"]
+		},
+	]
+}
