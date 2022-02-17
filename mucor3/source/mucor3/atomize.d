@@ -1,3 +1,4 @@
+module mucor3.atomize;
 import std.stdio;
 import std.getopt;
 import std.parallelism;
@@ -24,7 +25,7 @@ one-to-one VCF record representation, use the -s and -m flags.
 
 ";
 
-void main(string[] args)
+void atomize(string[] args)
 {
 	auto res = getopt(args, config.bundling, 
 		"threads|t","extra threads for parsing the VCF file", &threads,

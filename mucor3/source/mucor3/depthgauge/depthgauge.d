@@ -1,3 +1,4 @@
+module mucor3.depthgauge.depthgauge;
 import std.stdio;
 import std.algorithm.searching:until;
 import std.algorithm.sorting:sort;
@@ -13,8 +14,8 @@ import dhtslib.coordinates;
 
 int threads=0;
 
-import csv;
-void main(string[] args)
+import mucor3.depthgauge.csv;
+void depthgauge(string[] args)
 {
 	auto res=getopt(args,config.bundling,
 	"threads|t","threads for running depth gauge",&threads);

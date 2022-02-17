@@ -1,13 +1,13 @@
-module wrangler.normalize;
+module mucor3.wrangler.normalize;
 
 import std.algorithm: map, each;
 import std.stdio;
 import std.getopt;
 
 import asdf;
-import jsonlops.basic;
+import libmucor.jsonlops.basic;
 
-void run(string[] args)
+void norm_main(string[] args)
 {
     auto res = getopt(args);
     if(res.helpWanted){

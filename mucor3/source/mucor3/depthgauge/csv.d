@@ -1,4 +1,4 @@
-module csv;
+module mucor3.depthgauge.csv;
 
 import std.stdio;
 import std.range;

@@ -1,17 +1,17 @@
-module wrangler.pivot;
+module mucor3.wrangler.pivot;
 
 import std.stdio;
 import core.stdc.stdlib:exit;
 import asdf;
 
-import jsonlops.range;
+import libmucor.jsonlops.range;
 import std.getopt;
 import std.array: split;
 import std.algorithm: map, each;
 import std.array:array;
 
 
-void run(string[] args){
+void piv_main(string[] args){
     string[] indexes;
     string[] extras;
     string on;

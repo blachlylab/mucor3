@@ -1,12 +1,12 @@
-module wrangler.merge;
+module mucor3.wrangler.merge;
 import std.stdio;
 
 import asdf;
-import jsonlops.range: groupby, aggregate;
-import jsonlops.basic: merge;
+import libmucor.jsonlops.range: groupby, aggregate;
+import libmucor.jsonlops.basic: merge;
 import std.algorithm : each;
 
-void run(string[] args){
+void merge_main(string[] args){
     if(args.length==0){
         writeln(
             "Merge rows together based on given index. Overlapping"~

@@ -1,3 +1,4 @@
+module mucor3.varquery;
 import std.stdio;
 import std.datetime.stopwatch : StopWatch;
 import std.exception : enforce;
@@ -8,21 +9,7 @@ import libmucor.varquery.invertedindex;
 import libmucor.varquery.query;
 import libmucor.wideint : uint128;
 
-void main(string[] args)
-{
-    switch(args[1]){
-        case "index":
-            index(args[2..$]);
-            return;
-        case "query":
-            filter(args[2..$]);
-            return;
-        default:
-            break;
-    }
-}
-
-void filter(string[] args){
+void query(string[] args){
     import asdf:parseJsonByLine;
     import std.range:enumerate;
     import std.conv:to;

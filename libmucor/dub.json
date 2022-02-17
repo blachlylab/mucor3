@@ -1,0 +1,16 @@
+{
+	"authors": [
+		"Thomas"
+	],
+	"copyright": "Copyright © 2022, Thomas",
+	"description": "A minimal D application.",
+	"license": "MIT",
+	"name": "libmucor",
+	"dependencies": {
+		"asdf": "~>0.7.8",
+		"dhtslib": {
+			"repository": "git+https://github.com/blachlylab/dhtslib.git",
+			"version": "b3fcf27aefff939e111ccb0f18d453c15a51451c"
+		}
+	}
+}

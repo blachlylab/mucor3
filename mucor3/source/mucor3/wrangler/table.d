@@ -1,4 +1,4 @@
-module wrangler.table;
+module mucor3.wrangler.table;
 
 import std.stdio;
 import asdf;
@@ -10,7 +10,7 @@ import std.traits:ReturnType;
 import std.algorithm: sort, each;
 import std.range.interfaces:ForwardRange;
 
-void run(string[] args){
+void table_main(string[] args){
     string delimiter="\t";
     string fill=".";
     string[] indexes;

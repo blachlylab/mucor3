@@ -1,14 +1,14 @@
-module wrangler.unique;
+module mucor3.wrangler.unique;
 
 import std.stdio;
 import std.getopt;
 import std.algorithm : sort, uniq, sum, map, joiner;
 import std.array : array;
 
-import jsonlops.basic;
+import libmucor.jsonlops.basic;
 import asdf;
 
-void run(string[] args)
+void unique_main(string[] args)
 {
     auto res = getopt(args);
     if(res.helpWanted){

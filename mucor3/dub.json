@@ -1,12 +1,19 @@
 {
-	"name": "depthgauge",
+	"name": "mucor3",
 	"authors": [
 		"Thomas Gregory"
 	],
-	"description": "A supplement to mucor3. Replicates a mucor3 pivot table but reports depths in BAM files.",
+	"description": "Mucor3: From VCF to spreadsheet.",
 	"license": "MIT",
 	"dependencies": {
-		"dhtslib": "~>0.13.3+htslib-1.13"
+		"asdf": "~>0.7.8",
+		"dhtslib": {
+			"repository": "git+https://github.com/blachlylab/dhtslib.git",
+			"version": "b3fcf27aefff939e111ccb0f18d453c15a51451c"
+		},
+		"libmucor":{
+			"path": "../libmucor"
+		}
 	},
 	"targetPath": "../bin",
 	"configurations": [
