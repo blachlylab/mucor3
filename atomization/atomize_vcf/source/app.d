@@ -2,7 +2,7 @@ import std.stdio;
 import std.getopt;
 import std.parallelism;
 
-import vcf : parseVCF;
+import libmucor.vcfops.vcf : parseVCF;
 import htslib.hts_log;
 
 bool multiSample;

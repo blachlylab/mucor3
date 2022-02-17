@@ -4,9 +4,9 @@ import std.exception : enforce;
 import std.range : enumerate;
 
 import asdf : deserializeAsdf = deserialize;
-import varquery.invertedindex;
-import varquery.query;
-import varquery.wideint : uint128;
+import libmucor.varquery.invertedindex;
+import libmucor.varquery.query;
+import libmucor.wideint : uint128;
 
 void main(string[] args)
 {

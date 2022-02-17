@@ -4,7 +4,10 @@
 	],
 	"copyright": "Copyright © 2020, Charles Gregory",
 	"dependencies": {
-		"asdf": "~>0.7.8"
+		"asdf": "~>0.7.8",
+		"libmucor":{
+			"path": "../../libmucor"
+		}
 	},
 	"description": "Query variants",
 	"license": "MIT",
