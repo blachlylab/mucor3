@@ -416,6 +416,14 @@ void dropNullGenotypes(JsonValue * obj)
     } 
 }
 
+ulong getNumAlts(JsonValue * obj)
+{
+    return (*(*obj)["ALT"].value).tryMatch!(
+                (string x) => 1,
+                (JsonArray x) => x.length
+            );
+}
+
 void applyOperations(JsonValue * obj, bool anno, bool allele, bool sam, bool gen, bool norm, shared int * input_count, shared int * output_count)
 {
     import std.stdio;
@@ -425,10 +433,7 @@ void applyOperations(JsonValue * obj, bool anno, bool allele, bool sam, bool gen
         dropNullGenotypes(obj);
     }
     if(sam && allele && anno){
-        auto numAlts = (*(*obj)["ALT"].value).tryMatch!(
-            (string x) => 1,
-            (JsonArray x) => x.length
-        );
+        auto numAlts = getNumAlts(obj);
         auto range = expandBySample(obj)
             .map!(x => expandMultiAllelicSites!true(x, numAlts)).joiner
             .map!(x => expandByAnno(x, "ANN")).joiner;
@@ -445,10 +450,7 @@ void applyOperations(JsonValue * obj, bool anno, bool allele, bool sam, bool gen
                 });
         }
     }else if(sam && allele){
-        auto numAlts = (*(*obj)["ALT"].value).tryMatch!(
-            (string x) => 1,
-            (JsonArray x) => x.length
-        );
+        auto numAlts = getNumAlts(obj);
         auto range = expandBySample(obj)
             .map!(x => expandMultiAllelicSites!true(x, numAlts)).joiner;
         if(norm){
@@ -478,10 +480,7 @@ void applyOperations(JsonValue * obj, bool anno, bool allele, bool sam, bool gen
                 });
         }
     } else if(allele) {
-        auto numAlts = (*(*obj)["ALT"].value).tryMatch!(
-            (string x) => 1,
-            (JsonArray x) => x.length
-        );
+        auto numAlts = getNumAlts(obj);
         auto range = expandMultiAllelicSites!false(obj, numAlts);
         if(norm){
             range.map!(x => normalize(x))
@@ -496,10 +495,7 @@ void applyOperations(JsonValue * obj, bool anno, bool allele, bool sam, bool gen
                 });
         }
     } else if(anno){
-        auto numAlts = (*(*obj)["ALT"].value).tryMatch!(
-            (string x) => 1,
-            (JsonArray x) => x.length
-        );
+        auto numAlts = getNumAlts(obj);
         auto range = expandMultiAllelicSites!true(obj, numAlts)
             .map!(x => expandByAnno(x, "ANN"))
             .joiner;
