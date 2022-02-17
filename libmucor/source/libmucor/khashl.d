@@ -23,10 +23,11 @@ module libmucor.khashl;
    SOFTWARE.
 */
 
-import std.traits : isNumeric, isSomeString, isSigned, hasMember;
+import std.traits : isNumeric, isSomeString, isSigned, hasMember, isArray;
 import core.stdc.stdint;    // uint32_t, etc.
 import core.memory;         // GC
 
+import asdf;
 import libmucor.varquery.singleindex: JSONValue, TYPES;
 
 /*!
@@ -74,14 +75,6 @@ pragma(inline, true)
     }
 }
 
-// alias kcalloc = calloc;
-
-// alias kmalloc = malloc;
-
-// alias krealloc = realloc;
-
-// alias kfree = free;
-
 /*  Straight port of khashl's generic C approach
     Khashl is hash table that performs deletions without tombstones 
     The main benefit over khash is that it uses less memory however it is 
@@ -98,14 +91,17 @@ pragma(inline, true)
     the hash member. We also change the logic to make equality statements check hash equality before 
     checking the key equalitys and the put and get methods to make sure they don't recompute the hashes.
 **/
-// import std.typecons;
-// import std.sumtype: This;
-// alias a = khashl!(string, This);
-// alias b = ReplaceType!(This, uint, a);
-// static assert(is(b == khashl!(string, uint)));
+
+template khashlSet(KT, bool cached = false)
+{
+    alias khashlSet = khashl!(KT, ubyte, false, cached);
+}
+
 struct khashl(KT, VT, bool kh_is_map = true, bool cached = false)
 if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
 {
+    static assert(kh_is_map || is(VT == ubyte));
+
     alias __hash_func = kh_hash!KT.kh_hash_func;
     alias __hash_equal= kh_equal!(Bucket,cached).kh_hash_equal;
 
@@ -122,50 +118,24 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
     Bucket[] keys; 
 
     pragma(inline, true):
-    // ~this()
-    // {
-    //     //kh_destroy(&this); // the free(this) at the end of kh_destroy will SIGSEGV
-    //     static if (useGC) {
-    //         GC.removeRange(this.keys);
-    //     }
-    //     kfree(cast(void*) this.keys);
-    //     kfree(cast(void*) this.used);
-    // }
-    
-    /// Lookup by key
-    ref VT opIndex(KT key)
-    {
-        Bucket ins;
-        ins.key = key;
-        static if(cached) ins.hash = __hash_func(ins.key); //cache the hash
-        auto x = this.kh_get(ins);
-        return this.keys[x].val;
-    }
 
     /// Lookup by key
-    VT * opBinaryRight(string op: "in")(KT key)
+    auto opBinaryRight(string op: "in")(KT key)
     {
         Bucket ins;
         ins.key = key;
         static if(cached)  ins.hash = __hash_func(ins.key); //cache the hash
         auto x = this.kh_get( ins);
-        if(x == this.kh_end())
-        {
-            return null;
+        static if(kh_is_map){
+            if(x == this.kh_end())
+                return null;
+            return &this.keys[x].val;
+        } else {
+            if(x == this.kh_end())
+                return false;
+            return true;
         }
-        return &this.keys[x].val;
-    }
-
-    /// Assign by key
-    void opIndexAssign(VT val, KT key)
-    {
-        int absent;
-        Bucket ins;
-        ins.key = key;
-        static if(cached) ins.hash = __hash_func(ins.key); //cache the hash
-        auto x = this.kh_put(ins, &absent);
-        this.keys[x].val = val;
-        static if(cached) this.keys[x].hash = ins.hash; //cache the hash
+        
     }
 
     /// remove key/value pair
@@ -178,23 +148,143 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
         this.kh_del(x);
     }
 
-    /// Get or create if does not exist; mirror built-in hashmap
-    /// https://dlang.org/spec/hash-map.html#inserting_if_not_present
-    VT * require(KT key, lazy VT initval)
-    {
-        static assert (kh_is_map == true, "require() not sensible in a hash set");
-        Bucket ins;
-        ins.key = key;
-        static if(cached) ins.hash = __hash_func(ins.key); //cache the hash
-        auto x = this.kh_get(ins);
-        if (x == this.kh_end()) {
-            // not present
-            int absent;
-            x = this.kh_put(ins, &absent);
-            this.keys[x].val = initval;
-            static if(cached) this.keys[x].hash = ins.hash; //cache the hash
+    static if(kh_is_map){
+        
+        /// Lookup by key
+        ref VT opIndex(KT key)
+        {
+            Bucket ins;
+            ins.key = key;
+            static if(cached) ins.hash = __hash_func(ins.key); //cache the hash
+            auto x = this.kh_get(ins);
+            return this.keys[x].val;
         }
-        return &this.keys[x].val;
+
+        /// Assign by key
+        void opIndexAssign(VT val, KT key)
+        {
+            int absent;
+            Bucket ins;
+            ins.key = key;
+            static if(cached) ins.hash = __hash_func(ins.key); //cache the hash
+            auto x = this.kh_put(ins, &absent);
+            this.keys[x].val = val;
+        }
+        
+        /// Get or create if does not exist; mirror built-in hashmap
+        /// https://dlang.org/spec/hash-map.html#inserting_if_not_present
+        VT * require(KT key, lazy VT initval)
+        {
+            static assert (kh_is_map == true, "require() not sensible in a hash set");
+            Bucket ins;
+            ins.key = key;
+            static if(cached) ins.hash = __hash_func(ins.key); //cache the hash
+            auto x = this.kh_get(ins);
+            if (x == this.kh_end()) {
+                // not present
+                int absent;
+                x = this.kh_put(ins, &absent);
+                this.keys[x].val = initval;
+                static if(cached) this.keys[x].hash = ins.hash; //cache the hash
+            }
+            return &this.keys[x].val;
+        }
+
+        auto byKeyValue()
+        {
+            /** Manipulating the hash table during iteration results in undefined behavior */
+            struct KeyValueRange
+            {
+                import std.typecons: Tuple;
+                alias KV = Tuple!(KT, "key", VT, "value");
+                kh_t* kh;
+                khint_t itr;
+                bool empty()    // non-const as may call popFront
+                {
+                    //return (this.itr == kh_end(this.kh));
+                    if (this.itr == kh.kh_end()) return true;
+                    // Handle the case of deleted keys
+                    else if (__kh_used(this.kh.used, this.itr) == 0) {
+                        while(__kh_used(this.kh.used, this.itr) == 0) {
+                            this.popFront();
+                            if (this.itr == kh.kh_end()) return true;
+                        }
+                        return false;
+                    }
+                    return false;
+                }
+                KV * front()
+                {
+                    auto ret = new KV;
+                    ret.key = kh.keys[this.itr].key;
+                    ret.value = kh.keys[this.itr].val;
+                    return ret;
+                }
+                void popFront()
+                {
+                    if(this.itr < kh.kh_end()) {
+                        this.itr++;
+                    }
+                }
+            }
+            return KeyValueRange(&this);
+        }
+
+    } else {
+
+        void insert(KT key)
+        {
+            int absent;
+            Bucket ins;
+            ins.key = key;
+            static if(cached) ins.hash = __hash_func(ins.key); //cache the hash
+            auto x = this.kh_put(ins, &absent);
+        }
+
+        kh_t intersection(kh_t other)
+        {
+            kh_t ret;
+            foreach (k; this.byKey)
+            {
+                if(k in other)
+                    ret.insert(k);
+            }
+            return ret;
+        }
+
+        kh_t difference(kh_t other)
+        {
+            kh_t ret;
+            foreach (k; this.byKey)
+            {
+                if(!(k in other))
+                    ret.insert(k);
+            }
+            return ret;
+        }
+
+        kh_t set_union(kh_t other)
+        {
+            kh_t ret;
+            foreach (k; this.byKey)
+                ret.insert(k);
+            foreach (k; other.byKey)
+                ret.insert(k);
+            return ret;
+        }
+
+        auto opBinaryRight(string op)(kh_t other)
+        {
+            static if(op == "&"){
+                return this.intersection(other);
+            } else static if(op == "-") {
+                return this.difference(other);
+            } else static if(op == "|") {
+                return this.set_union(other);
+            } else {
+                static assert(0, "op not implemented");
+            }
+        }
     }
 
     /// Return an InputRange over the keys.
@@ -234,46 +324,7 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
         }
         return KeyRange(&this);
     }
-
-    auto byKeyValue()
-    {
-        /** Manipulating the hash table during iteration results in undefined behavior */
-        struct KeyValueRange
-        {
-            import std.typecons: Tuple;
-            alias KV = Tuple!(KT, "key", VT, "value");
-            kh_t* kh;
-            khint_t itr;
-            bool empty()    // non-const as may call popFront
-            {
-                //return (this.itr == kh_end(this.kh));
-                if (this.itr == kh.kh_end()) return true;
-                // Handle the case of deleted keys
-                else if (__kh_used(this.kh.used, this.itr) == 0) {
-                    while(__kh_used(this.kh.used, this.itr) == 0) {
-                        this.popFront();
-                        if (this.itr == kh.kh_end()) return true;
-                    }
-                    return false;
-                }
-                return false;
-            }
-            KV * front()
-            {
-                auto ret = new KV;
-                ret.key = kh.keys[this.itr].key;
-                ret.value = kh.keys[this.itr].val;
-                return ret;
-            }
-            void popFront()
-            {
-                if(this.itr < kh.kh_end()) {
-                    this.itr++;
-                }
-            }
-        }
-        return KeyValueRange(&this);
-    }
+    
 
     void kh_clear()
     {
@@ -416,9 +467,11 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
         return this.keys[x].key;
     }
 
-    auto kh_val(khint_t x)
-    {
-        return this.keys[x].val;
+    static if(kh_is_map) {
+        auto kh_val(khint_t x)
+        {
+            return this.keys[x].val;
+        }
     }
 
     auto kh_end()
@@ -482,7 +535,7 @@ pragma(inline, true)
     }
 
     auto kh_hash_func(T)(T key)
-    if(isSomeString!T)
+    if(isSomeString!T || isArray!T)
     {
         // rewrite __ac_X31_hash_string for D string/smart array
         if (key.length == 0) return 0;
@@ -491,7 +544,11 @@ pragma(inline, true)
             h = (h << 5) - h + cast(khint_t) key[i];
         return h;
     }
-    
+
+    auto kh_hash_func(T: Asdf)(T key){
+        return kh_hash_func(key.data);
+    }
+
     auto kh_hash_func(T: JSONValue)(T key)
     {
         final switch(key.type){
@@ -551,6 +608,12 @@ pragma(inline,true)
         /// before checking the equality of keys themselves 
         static if(cached) return (a.hash == b.hash) && (a.key == b.key);
         else return (a.key == b.key);
+    }
+
+    auto kh_hash_equal(T)(T a, T b)
+    if(is(typeof(__traits(getMember,T,"key")) == Asdf))
+    {
+        return a.key.data == b.key.data;
     }
 
     bool kh_hash_equal(T)(const T a, T b)
