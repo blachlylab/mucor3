@@ -22,6 +22,10 @@
 			"targetType": "executable"
 		},
 		{
+			"name": "unittest",
+			"excludedSourceFiles": ["source/app.d"]
+		},
+		{
 			"name":"static-alpine",
 			"targetType": "executable",
 			"dflags-ldc": [
@@ -38,6 +42,6 @@
 				"-L-lcrypto"
 			],
 			"sourceFiles": ["/usr/local/lib/mimalloc-2.0/mimalloc.o"]
-		},
+		}
 	]
 }
