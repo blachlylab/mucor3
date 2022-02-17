@@ -1,4 +1,4 @@
-module varquery.singleindex;
+module libmucor.varquery.singleindex;
 
 import std.algorithm.setops;
 import std.regex;
@@ -10,8 +10,8 @@ import std.traits;
 import std.meta;
 
 import asdf: deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
-import varquery.wideint : uint128;
-import varquery.khashl;
+import libmucor.wideint : uint128;
+import libmucor.khashl;
 
 pragma(inline,true)
 bool isNumericStringInteger(string val)

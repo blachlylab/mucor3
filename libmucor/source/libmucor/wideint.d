@@ -1,4 +1,4 @@
-module varquery.wideint;
+module libmucor.wideint;
 
 /**
   Copied from https://github.com/d-gamedev-team/gfm

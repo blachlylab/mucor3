@@ -1,19 +1,19 @@
-module vcfvalue;
+module libmucor.vcfops.vcfvalue;
 import std.algorithm: map, each, joiner, filter;
 import std.sumtype: SumType, This, match, tryMatch;
 import std.range: enumerate, iota, inputRangeObject;
 import std.array: array;
 import asdf;
 import asdf.serialization: serializeToAsdf;
-import jsonlops.basic;
+import libmucor.jsonlops.basic;
 import std.traits: isIntegral, isSomeString, isArray;
 import std.digest.md : MD5Digest, toHexString;
 import std.string: fromStringz;
 
 import dhtslib.vcf;
 import htslib.hts_log;
-import vcf;
-import jsonvalue;
+import libmucor.vcfops.vcf;
+import libmucor.jsonlops.jsonvalue;
 
 JsonValue * parseInfos(VCFRecord * rec, HeaderConfig cfg, ulong numAlts)
 {

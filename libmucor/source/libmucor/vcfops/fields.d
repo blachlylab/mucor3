@@ -1,4 +1,4 @@
-module fields;
+module libmucor.vcfops.fields;
 
 import std.stdio;
 import std.algorithm : splitter, map;
@@ -10,9 +10,8 @@ import std.range : enumerate, chunks;
 import asdf;
 import dhtslib.vcf;
 import htslib.hts_log;
-import vcf;
-import jsonvalue;
-import jsonlops.basic : makeAsdfArray;
+import libmucor.vcfops;
+import libmucor.jsonlops;
 
 /// JSON types
 enum TYPES{

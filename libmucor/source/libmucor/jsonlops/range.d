@@ -1,4 +1,4 @@
-module jsonlops.range;
+module libmucor.jsonlops.range;
 
 import std.range;
 import std.algorithm : map, fold, joiner, find, uniq;
@@ -8,7 +8,7 @@ import std.conv : to;
 import std.functional : unaryFun, binaryFun;
 
 import asdf;
-import jsonlops.basic;
+import libmucor.jsonlops.basic;
 
 struct GroupByObject{
     Asdf[] index;

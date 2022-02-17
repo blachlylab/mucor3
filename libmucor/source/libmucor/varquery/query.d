@@ -1,4 +1,4 @@
-module varquery.query;
+module libmucor.varquery.query;
 
 import std.stdio;
 import std.algorithm.setops;
@@ -10,8 +10,8 @@ import std.conv : to;
 import std.format : format;
 import std.typecons : Tuple;
 
-import varquery.singleindex;
-import varquery.invertedindex;
+import libmucor.varquery.singleindex;
+import libmucor.varquery.invertedindex;
 
 
 /**

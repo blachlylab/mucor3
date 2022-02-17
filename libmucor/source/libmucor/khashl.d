@@ -1,4 +1,4 @@
-module khashl;
+module libmucor.khashl;
 
 /* The MIT License
    Copyright (c) 2019 by Attractive Chaos <attractor@live.co.uk>
@@ -26,6 +26,8 @@ module khashl;
 import std.traits : isNumeric, isSomeString, isSigned, hasMember;
 import core.stdc.stdint;    // uint32_t, etc.
 import core.memory;         // GC
+
+import libmucor.varquery.singleindex: JSONValue, TYPES;
 
 /*!
   @header
@@ -490,7 +492,21 @@ pragma(inline, true)
         return h;
     }
     
-    
+    auto kh_hash_func(T: JSONValue)(T key)
+    {
+        final switch(key.type){
+            case TYPES.NULL:
+                return 0;
+            case TYPES.FLOAT:
+                return kh_hash_func(cast(ulong)key.val.i);
+            case TYPES.INT:
+                return kh_hash_func(cast(ulong)key.val.i);
+            case TYPES.STRING:
+                return kh_hash_func(key.val.s);
+            case TYPES.BOOL:
+                return kh_hash_func(cast(uint)key.val.b);
+        }
+    }
 
 } // end pragma(inline, true)
 } // end template kh_hash
@@ -536,6 +552,31 @@ pragma(inline,true)
         static if(cached) return (a.hash == b.hash) && (a.key == b.key);
         else return (a.key == b.key);
     }
+
+    bool kh_hash_equal(T)(const T a, T b)
+    if(is(typeof(__traits(getMember,T,"key")) == JSONValue))
+    {
+        if(a.key.type != b.key.type){
+            return false;
+        }
+        final switch(a.key.type){
+            case TYPES.NULL:
+                return true;
+            case TYPES.FLOAT:
+                static if(cached) return (a.hash == b.hash) && (a.key.val.f == b.key.val.f);
+                else return a.key.val.f == b.key.val.f;
+            case TYPES.INT:
+                static if(cached) return (a.hash == b.hash) && (a.key.val.i == b.key.val.i);
+                else return a.key.val.i == b.key.val.i;
+            case TYPES.STRING:
+                static if(cached) return (a.hash == b.hash) && (a.key.val.s == b.key.val.s);
+                else return a.key.val.s == b.key.val.s;
+            case TYPES.BOOL:
+                static if(cached) return (a.hash == b.hash) && (a.key.val.b == b.key.val.b);
+                else return a.key.val.b == b.key.val.b;
+
+        }
+    }    
 } // end pragma(inline, true)
 } // end template kh_equal
 /* --- END OF HASH FUNCTIONS --- */

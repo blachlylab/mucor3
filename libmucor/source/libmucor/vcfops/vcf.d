@@ -1,4 +1,4 @@
-module vcf;
+module libmucor.vcfops.vcf;
 
 import std.stdio;
 import std.string : toStringz, fromStringz;
@@ -11,16 +11,11 @@ import core.sync.mutex: Mutex;
 
 import dhtslib.vcf;
 import dhtslib.coordinates;
-import htslib.vcf;
-import htslib.hts;
-import htslib.hts_log;
+import htslib;
 import asdf;
-import fields;
-import jsonvalue;
-import vcfvalue;
-import khashl: khashl;
-import jsonlops.range;
-import jsonlops.basic;
+import libmucor.vcfops;
+import libmucor.khashl: khashl;
+import libmucor.jsonlops;
 import std.parallelism: parallel;
 
 auto norm(R)(R range, bool active)

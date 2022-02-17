@@ -1,4 +1,4 @@
-module varquery.invertedindex;
+module libmucor.varquery.invertedindex;
 import std.algorithm.setops;
 import std.regex;
 import std.algorithm : sort, uniq, map, std_filter = filter, joiner, each;
@@ -12,8 +12,8 @@ import std.stdio;
 import std.exception : enforce;
 
 import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
-import varquery.wideint : uint128;
-import varquery.singleindex;
+import libmucor.wideint : uint128;
+import libmucor.varquery.singleindex;
 
 char sep = '/';
 
@@ -49,11 +49,11 @@ struct JSONInvertedIndex{
             auto p = path~sep~key in fields;
             if(p){
                 auto val = (*p).hashmap.require(valkey,[]);
-                (*val) ~= this.recordMd5s.length - 1;
+                val ~= this.recordMd5s.length - 1;
             }else{
                 fields[path~sep~key] = InvertedIndex();
                 auto val = fields[path~sep~key].hashmap.require(valkey,[]);
-                (*val) ~= this.recordMd5s.length - 1;
+                val ~= this.recordMd5s.length - 1;
             }
         }
         
@@ -77,11 +77,11 @@ struct JSONInvertedIndex{
             auto p = path in fields;
             if(p){
                 auto val = (*p).hashmap.require(valkey,[]);
-                (*val) ~= this.recordMd5s.length - 1; 
+                val ~= this.recordMd5s.length - 1; 
             }else{
                 fields[path] = InvertedIndex();
                 auto val = fields[path].hashmap.require(valkey,[]);
-                (*val) ~= this.recordMd5s.length - 1;
+                val ~= this.recordMd5s.length - 1;
             }
         }
         
@@ -294,7 +294,7 @@ struct JSONInvertedIndex{
 
 // unittest{
 //     import asdf:Asdf,AsdfNode,parseJson;
-//     import varquery.fields;
+//     import libmucor.varquery.fields;
 //     string ann = "\"A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"~
 //                 "protein_coding||1/6|ENST00000381657.2:c.-21-26C>A|||||,A|intron_variant|MODIFIER"~
 //                 "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding||1/7|ENST00000381663.3:c.-21-26C>A||"~

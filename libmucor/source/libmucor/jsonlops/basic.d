@@ -1,4 +1,4 @@
-module jsonlops.basic;
+module libmucor.jsonlops.basic;
 
 import std.algorithm: map, sort, uniq, joiner, sum, fold, count;
 import std.array : array;

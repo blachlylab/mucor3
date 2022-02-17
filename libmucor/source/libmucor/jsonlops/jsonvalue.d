@@ -1,4 +1,4 @@
-module jsonvalue;
+module libmucor.jsonlops.jsonvalue;
 
 import std.algorithm: map;
 import std.sumtype: SumType, This, match, tryMatch;
@@ -6,9 +6,9 @@ import std.range: enumerate;
 import std.array: array;
 import asdf;
 import asdf.serialization: serializeToAsdf;
-import jsonlops.basic;
+import libmucor.jsonlops.basic;
 import std.traits: isIntegral, isSomeString, isArray, isFloatingPoint;
-import khashl: khashl;
+import libmucor.khashl: khashl;
 
 alias JsonTypes = SumType!(string, float, long, This*[], khashl!(string, This*, true, true));
 alias JsonObject = JsonTypes.Types[4];
