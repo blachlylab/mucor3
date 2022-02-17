@@ -1,4 +1,4 @@
-module wrangler.mask;
+module mucor3.wrangler.mask;
 
 import std.stdio;
 import std.array:split;

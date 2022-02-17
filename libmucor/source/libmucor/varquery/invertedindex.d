@@ -14,12 +14,13 @@ import std.exception : enforce;
 import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
 import libmucor.varquery.singleindex;
+import libmucor.khashl: khashl;
 
 char sep = '/';
 
 struct JSONInvertedIndex{
     uint128[] recordMd5s;
-    InvertedIndex[char[]] fields;
+    khashl!(const(char)[], InvertedIndex) fields;
     this(string f){
         fromFile(f);
     }
@@ -48,12 +49,14 @@ struct JSONInvertedIndex{
             }
             auto p = path~sep~key in fields;
             if(p){
-                auto val = (*p).hashmap.require(valkey,[]);
-                val ~= this.recordMd5s.length - 1;
+                ulong[] arr = new ulong[0];
+                auto val = (*p).hashmap.require(valkey,arr);
+                (*val) ~= this.recordMd5s.length - 1;
             }else{
+                ulong[] arr = new ulong[0];
                 fields[path~sep~key] = InvertedIndex();
-                auto val = fields[path~sep~key].hashmap.require(valkey,[]);
-                val ~= this.recordMd5s.length - 1;
+                auto val = fields[path~sep~key].hashmap.require(valkey,arr);
+                (*val) ~= this.recordMd5s.length - 1;
             }
         }
         
@@ -76,12 +79,14 @@ struct JSONInvertedIndex{
             }
             auto p = path in fields;
             if(p){
-                auto val = (*p).hashmap.require(valkey,[]);
-                val ~= this.recordMd5s.length - 1; 
+                ulong[] arr = new ulong[0];
+                auto val = (*p).hashmap.require(valkey,arr);
+                (*val) ~= this.recordMd5s.length - 1; 
             }else{
+                ulong[] arr = new ulong[0];
                 fields[path] = InvertedIndex();
-                auto val = fields[path].hashmap.require(valkey,[]);
-                val ~= this.recordMd5s.length - 1;
+                auto val = fields[path].hashmap.require(valkey,arr);
+                (*val) ~= this.recordMd5s.length - 1;
             }
         }
         
@@ -191,9 +196,11 @@ struct JSONInvertedIndex{
         // write md5 array
         f.rawWrite(this.recordMd5s.map!(x=> x.hi.nativeToLittleEndian ~ x.lo.nativeToLittleEndian).joiner.array);
         // write num fields
-        f.rawWrite(fields.length.nativeToLittleEndian);
-        foreach (field,idx; fields)
+        f.rawWrite(fields.byKey.array.length.nativeToLittleEndian);
+        foreach (kv; fields.byKeyValue)
         {
+            auto field = kv.key;
+            auto idx = kv.value;
             // write field length
             f.rawWrite(field.length.nativeToLittleEndian);
             // write field string

@@ -180,7 +180,7 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
 
     /// Get or create if does not exist; mirror built-in hashmap
     /// https://dlang.org/spec/hash-map.html#inserting_if_not_present
-    ref VT require(KT key, lazy VT initval)
+    VT * require(KT key, lazy VT initval)
     {
         static assert (kh_is_map == true, "require() not sensible in a hash set");
         Bucket ins;
@@ -194,7 +194,7 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
             this.keys[x].val = initval;
             static if(cached) this.keys[x].hash = ins.hash; //cache the hash
         }
-        return this.keys[x].val;
+        return &this.keys[x].val;
     }
 
     /// Return an InputRange over the keys.
