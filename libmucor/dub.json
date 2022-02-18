@@ -10,7 +10,7 @@
 		"asdf": "~>0.7.8",
 		"dhtslib": {
 			"repository": "git+https://github.com/blachlylab/dhtslib.git",
-			"version": "b3fcf27aefff939e111ccb0f18d453c15a51451c"
+			"version": "e175d4b4069557f75675b5b2346e470415f67f10"
 		}
 	}
 }
