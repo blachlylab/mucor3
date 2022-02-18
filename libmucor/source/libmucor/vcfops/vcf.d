@@ -49,7 +49,6 @@ void parseVCF(string fn, int threads, ubyte con){
             cast(bool)(con & 2), 
             cast(bool)(con & 4), 
             cast(bool)(con & 8), 
-            cast(bool)(con & 16), 
             &vcf_row_count, 
             &output_count);
     }
@@ -101,7 +100,7 @@ JsonValue * parseRecord(VCFRecord record, HeaderConfig cfg){
     (*root)["CHROM"] = record.chrom;
     (*root)["POS"] = record.pos.to!OB.pos;
     (*root)["ID"] = record.id;
-    if(!isNaN(record.qual)) // ignore if nan
+    if(!isNaN(record.line.qual)) // ignore if nan
         (*root)["QUAL"] = record.qual;
     
     // parse ref and alt alleles

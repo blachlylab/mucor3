@@ -38,10 +38,8 @@ auto parseVCF(VCFReaderImpl!(CoordSystem.zbc, false) vcf, int threads){
     auto cfg = getHeaderConfig(vcf.vcfhdr);
 
     return vcf.map!(x => parseRecord(x, cfg))
-        .map!((x) {
-            dropNullGenotypes(x);
-            return expandBySample(x);
-        }).joiner
+        .map!((x) => expandBySample(x))
+        .joiner
         .map!((obj) {
             auto numAlts = getNumAlts(obj);
             return expandMultiAllelicSites!true(obj, numAlts);

@@ -82,7 +82,7 @@ JsonValue * parseInfo(T)(ref InfoField item, FieldInfo hdrInfo) {
     }
 }
 
-JsonValue * parseOnePerAllele(T, V)(ref V item) {
+JsonValue * parseOnePerAllele(T, V)(ref V item, ulong[] sampleIdxs = []) {
     
     static if (is(V == InfoField))
     {
@@ -100,11 +100,12 @@ JsonValue * parseOnePerAllele(T, V)(ref V item) {
         assert(byAllele[0].value);
         return byAllele;
     }else{
-        auto bySample = makeJsonArray(item.nSamples);
+        auto bySample = makeJsonArray(sampleIdxs.length);
         auto vals = item.to!T;
 
-        foreach (i,val; vals.enumerate)
+        foreach (i,si; sampleIdxs)
         {
+            auto val = vals[si];
             auto byAllele = makeJsonArray(item.n - 1);
             assert(item.n == val.length);
 
@@ -119,7 +120,7 @@ JsonValue * parseOnePerAllele(T, V)(ref V item) {
     
 }
 
-JsonValue * parseOnePerAltAllele(T, V)(ref V item) {
+JsonValue * parseOnePerAltAllele(T, V)(ref V item, ulong[] sampleIdxs = []) {
     static if (is(V == InfoField))
     {
         auto byAllele = makeJsonArray(item.len);
@@ -135,11 +136,12 @@ JsonValue * parseOnePerAltAllele(T, V)(ref V item) {
         assert(byAllele[0].value);
         return byAllele;
     } else {
-        auto bySample = makeJsonArray(item.nSamples);
+        auto bySample = makeJsonArray(sampleIdxs.length);
         auto vals = item.to!T;
 
-        foreach (i,val; vals.enumerate)
+        foreach (i,si; sampleIdxs)
         {
+            auto val = vals[si];
             auto byAllele = makeJsonArray(item.n);
             
             for(auto j=0; j < item.n; j++){
@@ -154,7 +156,25 @@ JsonValue * parseOnePerAltAllele(T, V)(ref V item) {
 JsonValue * parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, string[] samples)
 {
     auto bySample = makeJsonObject;
+    ulong[] samplesIdxs;
+    ulong gtIdx = 0;
+    foreach(i, f; rec.line.d.fmt[0..rec.line.n_fmt]){
+        if("GT" == cast(string)fromStringz(rec.vcfheader.hdr.id[HeaderDictTypes.Id][f.id].key)){
+            gtIdx = i;
+            break;
+        }
+    }
+
+    auto gtFMT = FormatField("GT", &rec.line.d.fmt[gtIdx], rec.line);
+
     for(auto i = 0; i < samples.length; i++){
+        auto gt = Genotype(gtFMT, i);
+        if(!gt.isNull)
+            samplesIdxs ~= i;
+    }
+
+    foreach(i;samplesIdxs){
+        assert(i < samples.length);
         auto byAllele = makeJsonArray(numAlts);
 
         (*bySample)[samples[i]] = *makeJsonObject;
@@ -164,6 +184,9 @@ JsonValue * parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, strin
         }
         
         (*bySample)[samples[i]]["byAllele"] = *byAllele;
+
+        auto gt = Genotype(gtFMT, i);
+        (*bySample)[samples[i]]["GT"] = gt.toString;
     }
 
     foreach(v; rec.line.d.fmt[0..rec.line.n_fmt]){
@@ -176,56 +199,51 @@ JsonValue * parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, strin
         }
         auto hdrInfo = cfg.fmts[key];
 
-        if(key == "GT"){
-            for(auto i = 0; i < samples.length; i++){
-                auto gt = Genotype(fmt, i);
-                (*bySample)[samples[i]]["GT"] = gt.toString;
-            }
+        if(key == "GT")
             continue;
-        }
         
         JsonValue * data;
         final switch(fmt.type){
             // char/string
             case BcfRecordType.Char:
                 auto vals = fmt.to!string;
-                foreach (i,sample; cfg.samples) {
-                    (*bySample)[sample][key]= vals[i][0].idup;
+                foreach (i,si; samplesIdxs) {
+                    (*bySample)[samples[si]][key]= vals[i][0].idup;
                 }
                 continue;
             // float or float array
             case BcfRecordType.Float:
-                data = parseFormat!float(fmt, hdrInfo);
+                data = parseFormat!float(fmt, hdrInfo, samplesIdxs);
                 break;
             // int type or array
             case BcfRecordType.Int8:
             case BcfRecordType.Int16:
             case BcfRecordType.Int32:
             case BcfRecordType.Int64:
-                data = parseFormat!long(fmt, hdrInfo);
+                data = parseFormat!long(fmt, hdrInfo, samplesIdxs);
                 break;
             case BcfRecordType.Null:
                 break;
         }
 
         if(hdrInfo.n == HeaderLengths.OnePerAllele){
-            for(auto i=0; i < data.length; i++)
+            foreach(i,si;samplesIdxs)
             {
                 for(auto j=0; j < numAlts; j++)
                 {   
-                    (*bySample)[samples[i]]["byAllele"][j][key] = (*data)[i][j];
+                    (*bySample)[samples[si]]["byAllele"][j][key] = (*data)[i][j];
                 }
             }
         } else {
             if(fmt.n == 1){
-                for(auto i=0; i < data.length; i++)
+                foreach(i,si;samplesIdxs)
                 {
-                    (*bySample)[samples[i]][key] = (*data)[i][0];
+                    (*bySample)[samples[si]][key] = (*data)[i][0];
                 }
             } else {
-                for(auto i=0; i < data.length; i++)
+                foreach(i,si;samplesIdxs)
                 {
-                    (*bySample)[samples[i]][key] = (*data)[i];
+                    (*bySample)[samples[si]][key] = (*data)[i];
                 }
             }
             
@@ -235,15 +253,15 @@ JsonValue * parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, strin
 }
 
 
-JsonValue * parseFormat(T)(ref FormatField item, FieldInfo hdrInfo) {
+JsonValue * parseFormat(T)(ref FormatField item, FieldInfo hdrInfo, ulong[] sampleIdxs) {
 
     switch(hdrInfo.n){
         case HeaderLengths.OnePerAllele:
-            return parseOnePerAllele!T(item);
+            return parseOnePerAllele!T(item, sampleIdxs);
         case HeaderLengths.OnePerAltAllele:
-            return parseOnePerAltAllele!T(item);
+            return parseOnePerAltAllele!T(item, sampleIdxs);
         default:
-            return parseOnePerAltAllele!T(item);
+            return parseOnePerAltAllele!T(item, sampleIdxs);
     }
 }
 
@@ -407,31 +425,19 @@ auto expandMultiAllelicSites(bool sampleExpanded)(JsonValue * obj, ulong numAlts
     }
 }
 
-void dropNullGenotypes(JsonValue * obj)
-{   
-    auto fmt = (*(*obj)["FORMAT"].asObject);
-    foreach(sample;fmt.byKey) {
-        if (JsonValue(fmt[sample])["GT"].asValue!string[0] =='.')
-            fmt.remove(sample);
-    } 
-}
-
 ulong getNumAlts(JsonValue * obj)
 {
     return (*(*obj)["ALT"].value).tryMatch!(
-                (string x) => 1,
-                (JsonArray x) => x.length
-            );
+        (string x) => 1,
+        (JsonArray x) => x.length
+    );
 }
 
-void applyOperations(JsonValue * obj, bool anno, bool allele, bool sam, bool gen, bool norm, shared int * input_count, shared int * output_count)
+void applyOperations(JsonValue * obj, bool anno, bool allele, bool sam, bool norm, shared int * input_count, shared int * output_count)
 {
     import std.stdio;
     import core.atomic: atomicOp;
     atomicOp!"+="(*input_count, 1);
-    if(gen){
-        dropNullGenotypes(obj);
-    }
     if(sam && allele && anno){
         auto numAlts = getNumAlts(obj);
         auto range = expandBySample(obj)
