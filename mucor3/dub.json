@@ -8,8 +8,9 @@
 	"dependencies": {
 		"asdf": "~>0.7.8",
 		"dhtslib": {
-			"repository": "git+https://github.com/blachlylab/dhtslib.git",
-			"version": "b3fcf27aefff939e111ccb0f18d453c15a51451c"
+			"_repository": "git+https://github.com/blachlylab/dhtslib.git",
+			"_version": "9793888eba41b71aa8520f45983acf55f41179f2",
+			"path": "../../dhtslib"
 		},
 		"libmucor":{
 			"path": "../libmucor"
@@ -20,6 +21,10 @@
 		{
 			"name": "standard",
 			"targetType": "executable"
+		},
+		{
+			"name": "unittest",
+			"excludedSourceFiles": ["source/app.d"]
 		},
 		{
 			"name":"static-alpine",
@@ -38,6 +43,6 @@
 				"-L-lcrypto"
 			],
 			"sourceFiles": ["/usr/local/lib/mimalloc-2.0/mimalloc.o"]
-		},
+		}
 	]
 }

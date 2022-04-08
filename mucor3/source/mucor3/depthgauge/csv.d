@@ -91,13 +91,13 @@ struct Record {
     }
 }
 
-unittest{
-    string[] test=["chr7".dup,"23483".dup,"A".dup,"T".dup,"V".dup,"odd".dup];
-    auto r=Record(test);
-    assert(r.chr=="chr7");
-    assert(r.pos==23483);
-    assert(r.extra==["A","T","V","odd"]);
-}
+// unittest{
+//     string[] test=["chr7".dup,"23483".dup,"A".dup,"T".dup,"V".dup,"odd".dup];
+//     auto r=Record(test);
+//     assert(r.chr=="chr7");
+//     assert(r.pos==23483);
+//     assert(r.extra==["A","T","V","odd"]);
+// }
 
 //void main(string[] args){
 //

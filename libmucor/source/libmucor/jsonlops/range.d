@@ -308,9 +308,35 @@ Asdf subset(Asdf obj, string[] keys)
 {
     auto node =  AsdfNode("{}".parseJson);
     foreach (string key; keys)
-    {
         node[key] = AsdfNode(obj[key]);
-    }
     return cast(Asdf)node;
+}
+
+auto to_table(R)(R json_stream, string[] fields, string delimiter="\t",string fill="."){
+    struct Result{
+        R json_stream;
+
+        @property bool empty(){
+            return json_stream.empty;
+        }
+
+        string front(){
+            string[] to_write;
+            auto val = json_stream.front;
+            foreach(key; fields){
+                if(val[key] != Asdf.init)
+                    to_write ~= to!(string)(val[key]);
+                else
+                    to_write ~= fill;
+            }
+            return to_write.join(delimiter);
+        }
+
+        void popFront(){
+            json_stream.popFront;
+        }
+    }
+    //auto json_stream=stdin.byChunk(4096).parseJsonByLine;
+    return Result(json_stream);
 }
 

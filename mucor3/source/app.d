@@ -45,10 +45,10 @@ void main(string[] args)
             atomize(args[1..$]);
             return;
         case "query":
-            query(args[2..$]);
+            query_main(args[2..$]);
             return;
         case "index":
-            index(args[2..$]);
+            index_main(args[2..$]);
             return;
         case "merge":
             merge_main(args[2..$]);
@@ -64,6 +64,9 @@ void main(string[] args)
             return;
         case "uniq":
             unique_main(args[1..$]);
+            return;
+        case "diff":
+            diff_main(args[1..$]);
             return;
         default:
             break;
