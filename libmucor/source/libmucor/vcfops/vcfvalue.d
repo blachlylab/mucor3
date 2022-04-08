@@ -82,7 +82,7 @@ JsonValue * parseInfo(T)(ref InfoField item, FieldInfo hdrInfo) {
     }
 }
 
-JsonValue * parseOnePerAllele(T, V)(ref V item, ulong[] sampleIdxs = []) {
+JsonValue * parseOnePerAllele(T, V)(ref V item, ulong[] sampleIdxs = [], int[][] genotypes = []) {
     
     static if (is(V == InfoField))
     {
@@ -106,11 +106,21 @@ JsonValue * parseOnePerAllele(T, V)(ref V item, ulong[] sampleIdxs = []) {
         foreach (i,si; sampleIdxs)
         {
             auto val = vals[si];
-            auto byAllele = makeJsonArray(item.n - 1);
+            auto byAllele = makeJsonArray(genotypes[i].length-1);
             assert(item.n == val.length);
-
-            for(auto j=0; j < item.n - 1; j++){
-                (*byAllele)[j] =  [val[0], val[j + 1]];
+            auto first = val[0];
+            foreach(gi; genotypes[i]){
+                if(gi == 0) {
+                    first = val[gi];
+                    break;
+                }
+            }
+            auto j = 0;
+            foreach(gi; genotypes[i]){
+                if(gi != 0) {
+                    (*byAllele)[j] = [first, val[gi]];
+                    j++;
+                }
             }
             (*bySample)[i] = *byAllele;
         }
@@ -120,7 +130,7 @@ JsonValue * parseOnePerAllele(T, V)(ref V item, ulong[] sampleIdxs = []) {
     
 }
 
-JsonValue * parseOnePerAltAllele(T, V)(ref V item, ulong[] sampleIdxs = []) {
+JsonValue * parseOnePerAltAllele(T, V)(ref V item, ulong[] sampleIdxs = [], int[][] genotypes = []) {
     static if (is(V == InfoField))
     {
         auto byAllele = makeJsonArray(item.len);
@@ -142,10 +152,13 @@ JsonValue * parseOnePerAltAllele(T, V)(ref V item, ulong[] sampleIdxs = []) {
         foreach (i,si; sampleIdxs)
         {
             auto val = vals[si];
-            auto byAllele = makeJsonArray(item.n);
-            
-            for(auto j=0; j < item.n; j++){
-                (*byAllele)[j] =  val[j];
+            auto byAllele = makeJsonArray(genotypes[i].length-1);
+            auto j = 0;
+            foreach(gi; genotypes[i]){
+                if(gi != 0) {
+                    (*byAllele)[j] =  val[gi-1];
+                    j++;
+                }
             }
             (*bySample)[i] = *byAllele;
         }
@@ -157,6 +170,7 @@ JsonValue * parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, strin
 {
     auto bySample = makeJsonObject;
     ulong[] samplesIdxs;
+    int[][] sampleGTIdxs;
     ulong gtIdx = 0;
     foreach(i, f; rec.line.d.fmt[0..rec.line.n_fmt]){
         if("GT" == cast(string)fromStringz(rec.vcfheader.hdr.id[HeaderDictTypes.Id][f.id].key)){
@@ -175,18 +189,21 @@ JsonValue * parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, strin
 
     foreach(i;samplesIdxs){
         assert(i < samples.length);
-        auto byAllele = makeJsonArray(numAlts);
 
         (*bySample)[samples[i]] = *makeJsonObject;
 
-        for(auto j = 0; j < numAlts; j++){
+        auto gt = Genotype(gtFMT, i);
+        (*bySample)[samples[i]]["GT"] = gt.toString;
+
+        sampleGTIdxs ~= gt.alleles;
+
+        auto byAllele = makeJsonArray(gt.alleles.length - 1);
+        for(auto j = 0; j < gt.alleles.length - 1; j++){
             (*byAllele)[j] = *makeJsonObject;
         }
         
         (*bySample)[samples[i]]["byAllele"] = *byAllele;
-
-        auto gt = Genotype(gtFMT, i);
-        (*bySample)[samples[i]]["GT"] = gt.toString;
+        
     }
 
     foreach(v; rec.line.d.fmt[0..rec.line.n_fmt]){
@@ -213,14 +230,14 @@ JsonValue * parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, strin
                 continue;
             // float or float array
             case BcfRecordType.Float:
-                data = parseFormat!float(fmt, hdrInfo, samplesIdxs);
+                data = parseFormat!float(fmt, hdrInfo, samplesIdxs, sampleGTIdxs);
                 break;
             // int type or array
             case BcfRecordType.Int8:
             case BcfRecordType.Int16:
             case BcfRecordType.Int32:
             case BcfRecordType.Int64:
-                data = parseFormat!long(fmt, hdrInfo, samplesIdxs);
+                data = parseFormat!long(fmt, hdrInfo, samplesIdxs, sampleGTIdxs);
                 break;
             case BcfRecordType.Null:
                 break;
@@ -229,10 +246,19 @@ JsonValue * parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, strin
         if(hdrInfo.n == HeaderLengths.OnePerAllele){
             foreach(i,si;samplesIdxs)
             {
-                for(auto j=0; j < numAlts; j++)
+                for(auto j=0; j < sampleGTIdxs[i][1..$].length; j++)
                 {   
                     (*bySample)[samples[si]]["byAllele"][j][key] = (*data)[i][j];
                 }
+            }
+        }else if(hdrInfo.n == HeaderLengths.OnePerAltAllele){
+            
+            foreach(i,si;samplesIdxs)
+            {
+                if(sampleGTIdxs[i][1..$].length)
+                    (*bySample)[samples[si]][key] = (*data)[i][0];
+                else
+                    (*bySample)[samples[si]][key] = (*data)[i];
             }
         } else {
             if(fmt.n == 1){
@@ -253,15 +279,28 @@ JsonValue * parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, strin
 }
 
 
-JsonValue * parseFormat(T)(ref FormatField item, FieldInfo hdrInfo, ulong[] sampleIdxs) {
+JsonValue * parseFormat(T)(ref FormatField item, FieldInfo hdrInfo, ulong[] sampleIdxs, int[][] genotypes) {
 
     switch(hdrInfo.n){
         case HeaderLengths.OnePerAllele:
-            return parseOnePerAllele!T(item, sampleIdxs);
+            return parseOnePerAllele!T(item, sampleIdxs, genotypes);
         case HeaderLengths.OnePerAltAllele:
-            return parseOnePerAltAllele!T(item, sampleIdxs);
+            return parseOnePerAltAllele!T(item, sampleIdxs, genotypes);
         default:
-            return parseOnePerAltAllele!T(item, sampleIdxs);
+            auto bySample = makeJsonArray(sampleIdxs.length);
+            auto vals = item.to!T;
+
+            foreach (i,si; sampleIdxs)
+            {
+                auto val = vals[si];
+                auto byAllele = makeJsonArray(item.n);
+                
+                for(auto j=0; j < item.n; j++){
+                    (*byAllele)[j] =  val[j];
+                }
+                (*bySample)[i] = *byAllele;
+            }
+            return bySample;
     }
 }
 

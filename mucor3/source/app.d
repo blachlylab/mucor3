@@ -65,6 +65,9 @@ void main(string[] args)
         case "uniq":
             unique_main(args[1..$]);
             return;
+        case "diff":
+            diff_main(args[1..$]);
+            return;
         default:
             break;
     }

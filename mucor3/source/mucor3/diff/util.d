@@ -10,11 +10,12 @@ Asdf getAFValue(Asdf obj, float precision){
     auto ret = AsdfNode(subset(obj, samVarKeys));
     Asdf af, info_af, fmt_af;
     if(obj["INFO"] != Asdf.init){
-        info_af = obj["INFO", "AF"];
+        info_af = obj["INFO"]["AF"];
         if(info_af != Asdf.init)
             af = info_af;
-    } else if(obj["FORMAT"] != Asdf.init){
-        fmt_af = obj["FORMAT", "AF"];
+    }
+    if(obj["FORMAT"] != Asdf.init){
+        fmt_af = obj["FORMAT"]["AF"];
         if(fmt_af != Asdf.init)
             af = fmt_af;
     } else {

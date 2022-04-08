@@ -8,8 +8,9 @@
 	"dependencies": {
 		"asdf": "~>0.7.8",
 		"dhtslib": {
-			"repository": "git+https://github.com/blachlylab/dhtslib.git",
-			"version": "e175d4b4069557f75675b5b2346e470415f67f10"
+			"_repository": "git+https://github.com/blachlylab/dhtslib.git",
+			"_version": "9793888eba41b71aa8520f45983acf55f41179f2",
+			"path": "../../dhtslib"
 		},
 		"libmucor":{
 			"path": "../libmucor"
