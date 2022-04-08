@@ -38,10 +38,11 @@ void parseVCF(string fn, int threads, ubyte con){
 
     StopWatch sw;
     sw.start;
-    shared int vcf_row_count = 0;
-    shared int output_count = 0;
+    int vcf_row_count = 0;
+    int output_count = 0;
     // loop over records and parse
     foreach(x; vcf){
+        
         auto obj = parseRecord(x, cfg);
         applyOperations(
             obj, 
@@ -51,7 +52,7 @@ void parseVCF(string fn, int threads, ubyte con){
             cast(bool)(con & 8), 
             cast(bool)(con & 16), 
             &vcf_row_count, 
-            &output_count);
+            &output_count); 
     }
     if(vcf_row_count > 0) {
         stderr.writefln("Parsed %,3d records in %d seconds",vcf_row_count, sw.peek.total!"seconds");
@@ -91,27 +92,27 @@ HeaderConfig getHeaderConfig(VCFHeader header)
 }
 
 /// Parse individual records to JSON
-JsonValue * parseRecord(VCFRecord record, HeaderConfig cfg){
+JsonValue parseRecord(VCFRecord record, HeaderConfig cfg){
     record.unpack(UnpackLevel.All);
 
     // create root json object
     auto root = makeJsonObject;
 
     // parse standard fields
-    (*root)["CHROM"] = record.chrom;
-    (*root)["POS"] = record.pos.to!OB.pos;
-    (*root)["ID"] = record.id;
+    root["CHROM"] = record.chrom;
+    root["POS"] = record.pos.to!OB.pos;
+    root["ID"] = record.id;
     if(!isNaN(record.qual)) // ignore if nan
-        (*root)["QUAL"] = record.qual;
+        root["QUAL"] = record.qual;
     
     // parse ref and alt alleles
     auto alleles = record.allelesAsArray;
 
-    (*root)["REF"] = alleles[0];
+    root["REF"] = alleles[0];
     if (alleles.length > 2) {
-        (*root)["ALT"] = alleles[1..$];
+        root["ALT"] = alleles[1..$];
     }else if (alleles.length > 1) {
-        (*root)["ALT"] = alleles[1];
+        root["ALT"] = alleles[1];
     }
 
     // parse filters if any
@@ -120,7 +121,7 @@ JsonValue * parseRecord(VCFRecord record, HeaderConfig cfg){
         filters ~= fromStringz(record.vcfheader.hdr.id[BCF_DT_ID][ record.line.d.flt[i]].key).idup;
     }
     if(filters != [])
-        (*root)["FILTER"] = filters;
+        root["FILTER"] = filters;
 
     auto infos = record.getInfos;
     // prepare info root object
@@ -134,10 +135,10 @@ JsonValue * parseRecord(VCFRecord record, HeaderConfig cfg){
     // add info fields to root and 
     // parse any annotation fields
 
-    parseAnnotationField(info_root,"ANN",ANN_FIELDS[]);
-    parseAnnotationField(info_root,"NMD",LOF_FIELDS[],LOF_TYPES[]);
-    parseAnnotationField(info_root,"LOF",LOF_FIELDS[],LOF_TYPES[]);
-    (*root)["INFO"] = *info_root;
+    parseAnnotationField(&info_root,"ANN",ANN_FIELDS[]);
+    parseAnnotationField(&info_root,"NMD",LOF_FIELDS[],LOF_TYPES[]);
+    parseAnnotationField(&info_root,"LOF",LOF_FIELDS[],LOF_TYPES[]);
+    root["INFO"] = info_root;
 
     // if no samples/format info, write
     if(cfg.samples.length==0){
@@ -152,7 +153,7 @@ JsonValue * parseRecord(VCFRecord record, HeaderConfig cfg){
     auto fmts = record.getFormats;
     auto fmt_root = parseFormats(&record, cfg, alleles.length - 1, cfg.samples);
     // add root to format and write
-    (*root)["FORMAT"] = *fmt_root;
-    (*root)["type"] = "vcf_record";
+    root["FORMAT"] = fmt_root;
+    root["type"] = "vcf_record";
    return root;
 }

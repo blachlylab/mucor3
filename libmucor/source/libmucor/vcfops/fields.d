@@ -46,7 +46,7 @@ TYPES[4] LOF_TYPES =[TYPES.STRING,TYPES.STRING,TYPES.INT,TYPES.FLOAT];
 void parseAnnotationField(JsonValue * info_root, string key, string[] field_identifiers, TYPES[] types = [], bool condense = true)
 {
     // if not in INFO, return
-    if(!(key in (*(*info_root).asObject))) return;
+    if(!(key in (*(*info_root).asObjectRef))) return;
 
     // if types empty, all types are encoded as strings
     if(types == []) {
@@ -75,31 +75,31 @@ void parseAnnotationField(JsonValue * info_root, string key, string[] field_iden
             final switch(types[j]){
                 case TYPES.STRING:
                     if(values.length==1 && condense == true)         
-                        (*ann_root)[id]=values[0];
+                        ann_root[id]=values[0];
                     else
-                        (*ann_root)[id]=values;
+                        ann_root[id]=values;
                     break;
                 case TYPES.FLOAT:
                     //writeln(field_identifiers[i]," ",values);
                     if(values.length==1 && condense == true)         
-                        (*ann_root)[id]=values[0].to!float;
+                        ann_root[id]=values[0].to!float;
                     else
-                        (*ann_root)[id]=values.map!(to!float).array;
+                        ann_root[id]=values.map!(to!float).array;
                     break;
                 case TYPES.INT:
                     if(values.length==1 && condense == true)         
-                        (*ann_root)[id]=values[0].to!int;
+                        ann_root[id]=values[0].to!int;
                     else
-                        (*ann_root)[id]=values.map!(to!int).array;
+                        ann_root[id]=values.map!(to!int).array;
                     break;
                 case TYPES.BOOL:
                 case TYPES.NULL:
                     break;
             }
         }
-		(*ann_array)[i] = *ann_root;
+		ann_array[i] = ann_root;
 	}
-    (*info_root)[key] = *ann_array;
+    (*info_root)[key] = ann_array;
     // writeln(cast(Asdf)root);
 }
 

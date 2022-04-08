@@ -55,7 +55,8 @@ struct JSONInvertedIndex{
             }else{
                 ulong[] arr = new ulong[0];
                 fields[path~sep~key] = InvertedIndex();
-                auto val = fields[path~sep~key].hashmap.require(valkey,arr);
+                InvertedIndex * hm= (path~sep~key) in fields;
+                auto val = hm.hashmap.require(valkey,arr);
                 (*val) ~= this.recordMd5s.length - 1;
             }
         }
@@ -85,7 +86,8 @@ struct JSONInvertedIndex{
             }else{
                 ulong[] arr = new ulong[0];
                 fields[path] = InvertedIndex();
-                auto val = fields[path].hashmap.require(valkey,arr);
+                InvertedIndex * hm= path in fields;
+                auto val = hm.hashmap.require(valkey,arr);
                 (*val) ~= this.recordMd5s.length - 1;
             }
         }
@@ -228,11 +230,11 @@ struct JSONInvertedIndex{
         // return this.recordMd5s;
     }
 
-    InvertedIndex*[] getFields(string key)
+    const(InvertedIndex)*[] getFields(string key)
     {
         auto keycopy = key.idup;
         if(key[0] != '/') throw new Exception("key is missing leading /");
-        InvertedIndex*[] ret;
+        const(InvertedIndex)*[] ret;
         auto wildcard = key.indexOf('*');
         if(wildcard == -1){
             auto p = key in fields;
@@ -244,7 +246,7 @@ struct JSONInvertedIndex{
         }else{
             key = key.replace("*",".*");
             auto reg = regex("^" ~ key ~"$");
-            ret = fields.byKey.std_filter!(x => !(x.matchFirst(reg).empty)).map!(x=> &(fields[x])).array;
+            ret = fields.byKey.std_filter!(x => !(x.matchFirst(reg).empty)).map!(x=> &fields[x]).array;
             if(ret.length == 0){
                 stderr.writeln("Warning: Key wildcards sequence "~ keycopy ~" matched no keys in index!");
             }

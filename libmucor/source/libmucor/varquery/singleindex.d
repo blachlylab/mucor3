@@ -208,14 +208,16 @@ struct InvertedIndex
     // ulong[][JSONValue] hashmap;
     khashl!(JSONValue, ulong[]) hashmap;
 
-    ulong[] filter(T)(T[] items){
+    ulong[] filter(T)(T[] items) const
+    {
         return items.map!(x => JSONValue(x))
                     .std_filter!(x=> x in hashmap)
-                    .map!(x => hashmap[x])
+                    .map!(x => hashmap[x].dup)
                     .joiner.array; 
     }
 
-    ulong[] filterRange(T)(T[] range){
+    ulong[] filterRange(T)(T[] range) const
+    {
         assert(range.length==2);
         assert(range[0]<=range[1]);
         JSONValue[2] r = [JSONValue(range[0]), JSONValue(range[1])];
@@ -223,15 +225,16 @@ struct InvertedIndex
                     .std_filter!(x => x.type == staticIndexOf!(T,DTYPES))
                     .std_filter!(x=>x >= r[0])
                     .std_filter!(x=>x < r[1])
-                    .map!(x => hashmap[x]).joiner.array;
+                    .map!(x => hashmap[x].dup).joiner.array;
     }
 
-    ulong[] filterOp(string op, T)(T val){
+    ulong[] filterOp(string op, T)(T val) const
+    {
         mixin("auto func = (JSONValue x) => x " ~ op ~" JSONValue(val);");
         return hashmap.byKey
                         .std_filter!(x => x.type == staticIndexOf!(T,DTYPES))
                         .std_filter!func
-                        .map!(x => hashmap[x]).joiner.array
+                        .map!(x => hashmap[x].dup).joiner.array
                         .sort.uniq.array;
     }
 }
