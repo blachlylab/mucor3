@@ -7,11 +7,7 @@
 	"license": "MIT",
 	"dependencies": {
 		"asdf": "~>0.7.8",
-		"dhtslib": {
-			"_repository": "git+https://github.com/blachlylab/dhtslib.git",
-			"_version": "9793888eba41b71aa8520f45983acf55f41179f2",
-			"path": "../../dhtslib"
-		},
+		"dhtslib": "~>0.14.0+htslib-1.13",
 		"libmucor":{
 			"path": "../libmucor"
 		}
