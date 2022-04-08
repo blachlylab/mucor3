@@ -70,12 +70,14 @@ JsonValue parseInfos(VCFRecord * rec, HeaderConfig cfg, ulong numAlts)
 }
 
 JsonValue parseInfo(T)(ref InfoField item, FieldInfo hdrInfo) {
-    switch(hdrInfo.n){
+    final switch(hdrInfo.n){
         case HeaderLengths.OnePerAllele:
             return parseOnePerAllele!T(item);
         case HeaderLengths.OnePerAltAllele:
-            return parseOnePerAltAllele!T(item);
-        default:
+        case HeaderLengths.OnePerGenotype:
+        case HeaderLengths.Fixed:
+        case HeaderLengths.None:
+        case HeaderLengths.Variable:
             return parseOnePerAltAllele!T(item);
     }
 }
@@ -233,12 +235,14 @@ JsonValue parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, string[
 
 JsonValue parseFormat(T)(ref FormatField item, FieldInfo hdrInfo) {
 
-    switch(hdrInfo.n){
+    final switch(hdrInfo.n){
         case HeaderLengths.OnePerAllele:
             return parseOnePerAllele!T(item);
         case HeaderLengths.OnePerAltAllele:
-            return parseOnePerAltAllele!T(item);
-        default:
+        case HeaderLengths.OnePerGenotype:
+        case HeaderLengths.Fixed:
+        case HeaderLengths.None:
+        case HeaderLengths.Variable:
             return parseOnePerAltAllele!T(item);
     }
 }

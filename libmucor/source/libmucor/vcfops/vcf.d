@@ -123,7 +123,6 @@ JsonValue parseRecord(VCFRecord record, HeaderConfig cfg){
     if(filters != [])
         root["FILTER"] = filters;
 
-    auto infos = record.getInfos;
     // prepare info root object
     auto info_root = parseInfos(&record, cfg, alleles.length - 1);
 
@@ -150,7 +149,6 @@ JsonValue parseRecord(VCFRecord record, HeaderConfig cfg){
     // fromat field and convert to native type
     // and then convert to asdf
     // and write one record per sample
-    auto fmts = record.getFormats;
     auto fmt_root = parseFormats(&record, cfg, alleles.length - 1, cfg.samples);
     // add root to format and write
     root["FORMAT"] = fmt_root;
