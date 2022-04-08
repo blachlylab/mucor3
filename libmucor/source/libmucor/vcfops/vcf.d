@@ -117,7 +117,7 @@ JsonValue parseRecord(VCFRecord record, HeaderConfig cfg){
     // parse filters if any
     string[] filters;
     for(int i = 0;i < record.line.d.n_flt;i++){
-        filters ~= fromStringz(record.vcfheader.hdr.id[BCF_DT_ID][ record.line.d.flt[i]].key).idup;
+        filters ~= cast(string)fromStringz(record.vcfheader.hdr.id[BCF_DT_ID][ record.line.d.flt[i]].key);
     }
     if(filters != [])
         root["FILTER"] = filters;

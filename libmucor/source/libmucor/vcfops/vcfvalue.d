@@ -223,7 +223,7 @@ JsonValue parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, string[
             case BcfRecordType.Char:
                 auto vals = fmt.to!string;
                 foreach (i,si; samplesIdxs) {
-                    (*bySample[samples[si]])[key] = vals[i][0].idup;
+                    (*bySample[samples[si]])[key] = vals[i][0];
                 }
                 continue;
             // float or float array
