@@ -26,7 +26,7 @@ def alter_table(master: pd.DataFrame, conf: dict) -> pd.DataFrame:
     return master
 
 def string_agg(x):
-    return np.unique(x)
+    return np.unique(x)[0]
 
 # pivot dataframe based on parameters provided at runtime
 def pivot(master: pd.DataFrame, pivot_index: list,
