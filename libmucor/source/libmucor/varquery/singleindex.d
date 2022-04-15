@@ -237,6 +237,23 @@ struct InvertedIndex
                         .map!(x => hashmap[x].dup).joiner.array
                         .sort.uniq.array;
     }
+
+    auto opBinaryRight(string op)(InvertedIndex lhs)
+    {
+        static if(op == "+") {
+            InvertedIndex ret = InvertedIndex(this.hashmap.dup);
+            foreach(kv; lhs.byKeyValue){
+                auto v = kv.key in ret.hashmap;
+                if(v) {
+                    *v = *v ~ kv.value;
+                } else {
+                    ret.fields[kv.key] = kv.value;
+                }
+            }
+            return ret;
+        } else
+            static assert(false, "Op not implemented");
+    }
 }
 
 // unittest{

@@ -10,7 +10,8 @@
 		"dhtslib": "~>0.14.0+htslib-1.13",
 		"libmucor":{
 			"path": "../libmucor"
-		}
+		},
+		"progress": "~>5.0.1"
 	},
 	"targetPath": "../bin",
 	"configurations": [

@@ -29,7 +29,7 @@ auto norm(R)(R range, bool active)
 }
 
 /// Parse VCF to JSONL
-void parseVCF(string fn, int threads, ubyte con){
+void parseVCF(string fn, int threads, ubyte con, ref File output){
     //open vcf
     auto vcf = VCFReader(fn,threads, UnpackLevel.All);
 
@@ -51,7 +51,7 @@ void parseVCF(string fn, int threads, ubyte con){
             cast(bool)(con & 4), 
             cast(bool)(con & 8), 
             &vcf_row_count, 
-            &output_count); 
+            &output_count, output); 
     }
     if(vcf_row_count > 0) {
         stderr.writefln("Parsed %,3d records in %d seconds",vcf_row_count, sw.peek.total!"seconds");

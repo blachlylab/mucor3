@@ -49,5 +49,5 @@ void atomize(string[] args)
 		(cast(ubyte)(!multiSample) << 2) | 
 		(cast(ubyte)(!multiAllelic) << 1) | 
 		cast(ubyte)(splitAnnotations);
-	parseVCF(args[1], threads, con);
+	parseVCF(args[1], threads, con, stdout);
 }

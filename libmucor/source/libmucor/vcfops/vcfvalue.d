@@ -9,6 +9,7 @@ import libmucor.jsonlops.basic;
 import std.traits: isIntegral, isSomeString, isArray;
 import std.digest.md : MD5Digest, toHexString;
 import std.string: fromStringz;
+import std.stdio;
 
 import dhtslib.vcf;
 import htslib.hts_log;
@@ -473,9 +474,8 @@ ulong getNumAlts(JsonValue obj)
     );
 }
 
-void applyOperations(JsonValue obj, bool anno, bool allele, bool sam, bool norm, int * input_count, int * output_count)
+void applyOperations(JsonValue obj, bool anno, bool allele, bool sam, bool norm, int * input_count, int * output_count, ref File output)
 {
-    import std.stdio;
     import core.atomic: atomicOp;
     *input_count+=1;
     if(sam && allele && anno){
@@ -486,12 +486,12 @@ void applyOperations(JsonValue obj, bool anno, bool allele, bool sam, bool norm,
         if(norm){
             range.map!(x => normalize(x))
                 .each!((x) {
-                    writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.md5sumObject);
                     *output_count += 1;
                 });
         }else{
             range.each!((x) {
-                    writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.md5sumObject);
                     *output_count += 1;
                 });
         }
@@ -502,12 +502,12 @@ void applyOperations(JsonValue obj, bool anno, bool allele, bool sam, bool norm,
         if(norm){
             range.map!(x => normalize(x))
                 .each!((x) {
-                    writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.md5sumObject);
                     *output_count += 1;
                 });
         }else{
             range.each!((x) {
-                    writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.md5sumObject);
                     *output_count += 1;
                 });
         }
@@ -516,12 +516,12 @@ void applyOperations(JsonValue obj, bool anno, bool allele, bool sam, bool norm,
         if(norm){
             range.map!(x => normalize(x))
                 .each!((x) {
-                    writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.md5sumObject);
                     *output_count += 1;
                 });
         }else{
             range.each!((x) {
-                    writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.md5sumObject);
                     *output_count += 1;
                 });
         }
@@ -531,12 +531,12 @@ void applyOperations(JsonValue obj, bool anno, bool allele, bool sam, bool norm,
         if(norm){
             range.map!(x => normalize(x))
                 .each!((x) {
-                    writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.md5sumObject);
                     *output_count += 1;
                 });
         }else{
             range.each!((x) {
-                    writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.md5sumObject);
                     *output_count += 1;
                 });
         }
@@ -548,22 +548,22 @@ void applyOperations(JsonValue obj, bool anno, bool allele, bool sam, bool norm,
         if(norm){
             range.map!(x => normalize(x))
                 .each!((x) {
-                    writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.md5sumObject);
                     *output_count += 1;
                 });
         }else{
             range.each!((x) {
-                    writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.md5sumObject);
                     *output_count += 1;
                 });
         }
     } else {
         if(norm){
             auto val = normalize(obj);
-            writeln(val.serializeToAsdf.md5sumObject);
+            output.writeln(val.serializeToAsdf.md5sumObject);
             *output_count += 1;
         }else{
-            writeln(obj.serializeToAsdf.md5sumObject);
+            output.writeln(obj.serializeToAsdf.md5sumObject);
             *output_count += 1;
         }
     }

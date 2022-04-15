@@ -299,6 +299,32 @@ struct JSONInvertedIndex{
     {
         return ids.map!(x => this.recordMd5s[x]).array;
     }
+
+    auto opBinaryRight(string op)(JSONInvertedIndex lhs)
+    {
+        static if(op == "+") {
+            JSONInvertedIndex ret;
+            ret.recordMd5s = this.recordMd5s.dup;
+            ret.fields = this.fields.dup;
+            foreach(kv; lhs.fields.byKeyValue()) {
+                auto v = kv.key in ret.fields;
+                if(v) {
+                    foreach(kv2; kv.value.hashmap.byKeyValue){
+                        auto v2 = kv2.key in v.hashmap;
+                        if(v2) {
+                            *v2 = *v2 ~ kv2.value;
+                        } else {
+                            v.hashmap[kv2.key] = kv2.value;
+                        }
+                    }
+                } else {
+                    ret.fields[kv.key] = kv.value;
+                }
+            }
+            return ret;
+        } else
+            static assert(false, "Op not implemented");
+    }
 }
 
 // unittest{
