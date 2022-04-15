@@ -9,6 +9,7 @@ import std.array : array, appender, join;
 import std.traits : ReturnType;
 
 import dhtslib.sam : SAMFile;
+import dhtslib.coordinates;
 
 struct Table {
     string[] header;
@@ -20,22 +21,25 @@ struct Table {
     File f;
     string delim;
     ReturnType!createMatrix matrix;
-    this(string filename,int startSamples){
+    this(string filename, OB startSamples){
         this(filename,startSamples,"\t");
     }
-    this(string filename,int startSamples, string delim){
+
+    this(string filename, OB startSamples, string delim){
         f=File(filename);
         this.delim=delim;
         parseSamples(startSamples);
     }
-    void parseSamples(int startSamples){
+
+    void parseSamples(OB startSamples){
         auto lines=f.byLineCopy();
         //set header
         header=lines.front.splitter(delim).array;
         //create samples
-        samples=header[startSamples..$];
+        samples=header[startSamples.to!(Basis.zero).pos..$];
     }
-    void parseRecords(SAMFile * sam,int startSamples){
+
+    void parseRecords(SAMFile * sam, OB startSamples){
         auto lines=f.byLineCopy();
         this.sam=sam;
         //debug writeln(header);
@@ -53,7 +57,8 @@ struct Table {
     void write(File f){
         f.writeln(join(header,delim));
         foreach(i,rec;enumerate(records.sort)){
-            f.writeln(join([sam.header.targetName(rec.chr).idup,(rec.pos+1).to!(string)]~rec.extra~matrix[i][].map!(x=>x.to!(string)).array,delim));
+            f.writeln(
+                join([sam.header.targetName(rec.chr).idup,(rec.pos.pos).to!(string)]~rec.extra~matrix[i][].map!(x=>x.to!(string)).array,delim));
         }
     }
     auto createMatrix(){
@@ -71,14 +76,14 @@ struct Sample{
 
 struct Record {
     int chr;
-    //0-based
-    uint pos;
+    //one-based
+    OB pos;
     string[] extra;
     this(string[] line,SAMFile * sam){
-        chr=sam.target_id(line.front);
+        chr=sam.header.targetId(line.front);
         line.popFront;
         //convert from 1-based to 0-based
-        pos=line.front.to!uint;
+        pos=OB(line.front.to!long);
         line.popFront;
         extra=line.array;
     }

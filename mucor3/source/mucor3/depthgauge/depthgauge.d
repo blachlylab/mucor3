@@ -24,16 +24,25 @@ void depthgauge(string[] args)
 		stderr.writeln();
 		return;
 	}
-	if(args.length!=5){
+	if(args.length != 5){
 		writeln("usage: ./depthgauge [input tsv] [number of first sample column] [bam folder] [output tsv]");
 		return;
 	}else{
-		if(threads!=0){
+		if(threads != 0){
 			defaultPoolThreads(threads);
 		}
-		auto t =Table(args[1],args[2].to!int-1);
+		// startsamples is OB then converted to ZB
+		OB sampleStart = OB(args[2].to!long);
+
+		// initialize AF table
+		auto t =Table(args[1],sampleStart);
+		// open first sam file to get header
 		SAMFile s=SAMFile(buildPath(args[3],t.samples[0]~".bam"),0);
-		t.parseRecords(&s,args[2].to!int-1);
+
+		// parse table records
+		t.parseRecords(&s,sampleStart);
+
+		// get depths from sam/bam files in parallel
 		getDepths(t,args[3]);
 		File f = File(args[4],"w");
 		t.write(f);
@@ -42,17 +51,14 @@ void depthgauge(string[] args)
 
 }
 
-auto depth_at_pos(ref SAMFile bam,int chr,uint pos){
-	return bam[chr, OB(pos)].count;
-}
-
 void getDepths(ref Table t,string prefix){
+	
 	foreach(j,sample;parallel(t.samples)){
 		auto bam = SAMFile(buildPath(prefix,sample~".bam"),0);
-		foreach(i,rec;t.records){
-			t.matrix[i][j]=depth_at_pos(bam,rec.chr,rec.pos);
+		foreach(i, tableRec; t.records){
+			t.matrix[i][j] = bam[tableRec.chr, tableRec.pos].count;
 		}
-		writeln(sample);
+		stderr.writeln(sample);
 	}
 }
 
