@@ -8,6 +8,7 @@ import std.file: exists, isDir, mkdirRecurse;
 import std.path: isValidPath, buildPath, baseName;
 import htslib.hts_log;
 import core.stdc.stdlib: exit;
+import std.parallelism;
 
 import mucor3.mucor.vcf;
 import mucor3.mucor.query;
@@ -19,7 +20,10 @@ string prefix = "";
 string config_file = "";
 string query = "";
 
+string help_str = "mucor3 <options> [input vcfs]";
+
 void mucor_main(string[] args) {
+    hts_set_log_level(htsLogLevel.HTS_LOG_INFO);
     auto res=getopt(args,config.bundling,
 	    "threads|t","threads for running mucor",&threads,
         "bam-dir|b","folder of bam files",&bam_dir,
@@ -28,6 +32,22 @@ void mucor_main(string[] args) {
         "config|c", "specify json config file", &config_file,
         "query|q", "filter vcf data using varquery syntax", &query
     );
+
+    if(res.helpWanted){
+        defaultGetoptPrinter(help_str,res.options);
+        exit(0);
+    }
+    if(args.length == 1) {
+        hts_log_error(__FUNCTION__, "Please specify input vcfs");
+        defaultGetoptPrinter(help_str,res.options);
+        exit(1);
+    }
+
+    if(threads == 0) {
+        defaultPoolThreads(totalCPUs);
+    } else {
+        defaultPoolThreads(threads);
+    }
 
     /// create prefix folder
     if(prefix.exists) {
@@ -45,7 +65,7 @@ void mucor_main(string[] args) {
 
     string[] vcfFiles;
 
-    foreach(f; args) {
+    foreach(f; args[1..$]) {
         if(!f.exists) {
             hts_log_error(__FUNCTION__, format("VCF file: %s does not exist", f));
             exit(1);
@@ -63,17 +83,20 @@ void mucor_main(string[] args) {
         exit(1);
     }
 
-    auto vcfJsonFiles = vcfFiles.map!(x => buildPath(vcf_json_dir, x)).array;
+    auto vcfJsonFiles = vcfFiles.map!(x => buildPath(vcf_json_dir, baseName(x))).array;
 
-    atomizeVcfs(vcfFiles, vcf_json_dir);
-
+    atomizeVcfs(args[0], vcfFiles, vcf_json_dir);
+    
+    auto index_dir = buildPath(prefix, "indexes");
+    mkdirRecurse(index_dir);
+    
     string combined_json_file;
     
     if(query != "") {
-        auto indexFile = buildPath(prefix, "varquery.index");
+        auto indexFile = buildPath(prefix, "all.index");
 
         hts_log_info(__FUNCTION__, "Indexing vcf data ...");
-        auto idx = indexJsonFilesAndMerge(vcfJsonFiles, indexFile);
+        auto idx = indexJsonFilesAndMerge(args[0], vcfJsonFiles, index_dir, indexFile);
 
         hts_log_info(__FUNCTION__, "Filtering vcf data...");
         combined_json_file = buildPath(prefix, "filtered.json");

@@ -10,9 +10,11 @@ import dhtslib.vcf;
 import libmucor.vcfops;
 import std.format: format;
 import std.path: buildPath, baseName;
+import std.process;
 
+string devNull = "/dev/null";
 
-void defaultAtomize(string fn, string outfile)
+static void defaultAtomize(string fn, string outfile)
 {
     auto output = File(outfile, "w");
 	//open vcf
@@ -29,8 +31,8 @@ void defaultAtomize(string fn, string outfile)
         applyOperations(
             obj, 
             false, 
-            false, 
-            false, 
+            true, 
+            true, 
             false, 
             &vcf_row_count, 
             &output_count, output); 
@@ -41,15 +43,23 @@ void defaultAtomize(string fn, string outfile)
     }
 }
 
-void atomizeVcfs(string[] vcf_files, string vcf_json_dir) {
+static void defaultAtomize2(string binary,string fn, string outfile) {
+    auto output = File(outfile, "w");
+    auto nf = File(devNull, "w");
+    auto pid = spawnProcess([binary, "atomize", fn], std.stdio.stdin, output, nf);
+    wait(pid);
+}
+
+void atomizeVcfs(string bin, string[] vcf_files, string vcf_json_dir) {
     Bar b = new Bar();
     b.message = {return "Atomizing vcfs";};
     b.max = vcf_files.length;
     b.fill = "#";
     auto m = new Mutex();
-    foreach (string f; parallel(vcf_files))
+    foreach (f; parallel(vcf_files, 1))
     {
-        defaultAtomize(f, buildPath(vcf_json_dir, baseName(f)));
+        defaultAtomize2(bin, f, buildPath(vcf_json_dir, baseName(f)));
+        //stderr.writeln(f);
         m.lock;
         b.next;
         m.unlock;

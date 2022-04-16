@@ -69,6 +69,6 @@ void main(string[] args)
             diff_main(args[1..$]);
             return;
         default:
-            break;
+            mucor_main(args);
     }
 }
