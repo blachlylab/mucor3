@@ -1,13 +1,13 @@
 BINDIR=bin
 BINARIES = $(addprefix $(BINDIR)/, mucor3)
-LIBRARY_PATH := /usr/local/lib
-LD_LIBRARY_PATH := LIBRARY_PATH:${LD_LIBRARY_PATH}
+LIBRARY_PATH := ${LD_LIBRARY_PATH}
+LD_LIBRARY_PATH := ${LD_LIBRARY_PATH}
 LINKERVARS := LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) LIBRARY_PATH=$(LIBRARY_PATH) 
 D := $(LINKERVARS) dub build --build release 
 
 all: $(BINARIES)
 
-$(BINARIES):
+$(BINARIES): $(shell find . -type f -name "*.d")
 ifdef STATIC
 	cd $(notdir $@); $(D) -c static-alpine $(notdir $@)
 else 

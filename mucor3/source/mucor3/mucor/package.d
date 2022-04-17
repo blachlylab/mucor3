@@ -12,6 +12,7 @@ import std.parallelism;
 
 import mucor3.mucor.vcf;
 import mucor3.mucor.query;
+import mucor3.mucor.table;
 
 int threads = 0;
 string bam_dir = "";
@@ -19,6 +20,8 @@ string[] extra_fields;
 string prefix = "";
 string config_file = "";
 string query = "";
+
+string[] requiredCols = ["sample", "CHROM", "POS", "REF", "ALT"];
 
 string help_str = "mucor3 <options> [input vcfs]";
 
@@ -96,12 +99,12 @@ void mucor_main(string[] args) {
         auto indexFile = buildPath(prefix, "all.index");
 
         hts_log_info(__FUNCTION__, "Indexing vcf data ...");
-        auto idx = indexJsonFilesAndMerge(args[0], vcfJsonFiles, index_dir, indexFile);
+        indexJsonFiles(args[0], vcfJsonFiles, index_dir, indexFile);
 
         hts_log_info(__FUNCTION__, "Filtering vcf data...");
         combined_json_file = buildPath(prefix, "filtered.json");
 
-        queryJsonFiles(vcfJsonFiles, idx, query, combined_json_file);
+        queryJsonFiles(args[0], vcfJsonFiles, indexFile, query, combined_json_file);
     } else {
         combined_json_file = buildPath(prefix, "all.json");
         File output = File(combined_json_file, "w");
@@ -114,18 +117,17 @@ void mucor_main(string[] args) {
     }
 
     
+    auto pivReqCols = requiredCols ~= ["AF"];
+
+    auto colData = validateDataAndCollectColumns(combined_json_file, pivReqCols, extra_fields);
+    auto master = buildPath(prefix, "master.tsv");
+
+    flattenAndMakeMaster(combined_json_file, requiredCols, extra_fields, master);
+
+    auto piv = buildPath(prefix, "AF.tsv");
+    pivotAndMakeTable(piv, requiredCols, "sample", "AF", extra_fields, colData.samples, piv);
+
     
-    // master=pd.read_json(os.path.join(args.prefix,"__master.jsonl"),orient="records",lines=True)
-
-    // required_fields=["sample", "CHROM", "POS", "REF", "ALT"]
-    // missing_fields = set(required_fields) - set(master.columns)
-    // if(len(missing_fields)!=0):
-    //     print("Error: missing column ",missing_fields)
-    //     sys.exit(0)
-
-    // if(args.value not in master):
-    //     print("Error: missing column ",args.value)
-    //     sys.exit(0)
 
     // #create EFFECT column
     // if("ANN_hgvs_p" in master):
@@ -215,3 +217,4 @@ void mucor_main(string[] args) {
     //                    os.path.join(args.prefix,"AF.tsv")
     // )
 }
+

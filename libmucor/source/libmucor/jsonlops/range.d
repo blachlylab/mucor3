@@ -94,18 +94,18 @@ unittest
 }
 
 /// apply function to any asdf range
-template apply(fun)
+template apply(fun...)
 {
     auto apply(Range)(Range range)
-    if(isInputRange!Range && is(ElementType!Range == Asdf))
+    if(is(ElementType!Range == Asdf))
     {
-        auto f = unaryFun(fun);
+        alias f = unaryFun!fun;
         return range.map!f;
     }
     auto apply(Range)(Range range)
-    if(isInputRange!Range && is(ElementType!Range == GroupByObject))
+    if(is(ElementType!Range == GroupByObject))
     {
-        auto f = unaryFun(fun);
+        alias f = unaryFun!fun;
         return range.map!(x=>x["objs"].map!f).joiner;
     }
 }

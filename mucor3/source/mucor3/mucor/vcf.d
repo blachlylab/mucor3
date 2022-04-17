@@ -12,42 +12,13 @@ import std.format: format;
 import std.path: buildPath, baseName;
 import std.process;
 
-string devNull = "/dev/null";
-
-static void defaultAtomize(string fn, string outfile)
-{
+static void defaultAtomize(string binary,string fn, string outfile) {
     auto output = File(outfile, "w");
-	//open vcf
-    auto vcf = VCFReader(fn,-1, UnpackLevel.All);
-
-    //get info needed from header 
-    auto cfg = getHeaderConfig(vcf.vcfhdr);
-    int vcf_row_count = 0;
-    int output_count = 0;
-    // loop over records and parse
-    foreach(x; vcf){
-        
-        auto obj = parseRecord(x, cfg);
-        applyOperations(
-            obj, 
-            false, 
-            true, 
-            true, 
-            false, 
-            &vcf_row_count, 
-            &output_count, output); 
-    }
-    if(vcf_row_count == 0) {
-        hts_log_error(__FUNCTION__, format("VCF File %s had no records", fn));
-        exit(1);
-    }
-}
-
-static void defaultAtomize2(string binary,string fn, string outfile) {
-    auto output = File(outfile, "w");
-    auto nf = File(devNull, "w");
+    auto nf = File("/dev/null", "w");
     auto pid = spawnProcess([binary, "atomize", fn], std.stdio.stdin, output, nf);
-    wait(pid);
+    if(wait(pid) != 0) {
+        throw new Exception("mucor atomize failed");
+    }
 }
 
 void atomizeVcfs(string bin, string[] vcf_files, string vcf_json_dir) {
@@ -58,8 +29,7 @@ void atomizeVcfs(string bin, string[] vcf_files, string vcf_json_dir) {
     auto m = new Mutex();
     foreach (f; parallel(vcf_files, 1))
     {
-        defaultAtomize2(bin, f, buildPath(vcf_json_dir, baseName(f)));
-        //stderr.writeln(f);
+        defaultAtomize(bin, f, buildPath(vcf_json_dir, baseName(f)));
         m.lock;
         b.next;
         m.unlock;

@@ -2,7 +2,7 @@ module mucor3.varquery;
 import std.stdio;
 import std.datetime.stopwatch : StopWatch;
 import std.exception : enforce;
-import std.algorithm: map;
+import std.algorithm: map, joiner;
 import std.range;
 import std.conv:to;
 
@@ -13,7 +13,7 @@ void query_main(string[] args){
     StopWatch sw;
     sw.start;
  
-    JSONInvertedIndex idx = JSONInvertedIndex(args[1]);
+    JSONInvertedIndex idx = JSONInvertedIndex(args[$-2]);
     // auto idxs = idx.fields[args[1]].filter(args[2..$]);
     // float[] range = [args[2].to!float,args[3].to!float];
     stderr.writeln("Time to load index: ",sw.peek.total!"seconds"," seconds");
@@ -21,7 +21,7 @@ void query_main(string[] args){
     sw.stop;
     sw.reset;
     sw.start;
-    foreach(obj;File(args[0]).byChunk(4096).parseJsonByLine.query(idx, args[2])){
+    foreach(obj;args[0..$-1].map!(x => File(x).byChunk(4096).parseJsonByLine).joiner.query(idx, args[$-1])){
         writeln(obj);
     }
     stderr.writeln("Time to query/filter records: ",sw.peek.total!"seconds"," seconds");
@@ -33,10 +33,10 @@ void index_main(string[] args){
 
     StopWatch sw;
     
-    JSONInvertedIndex idx = File(args[0]).byChunk(4096).parseJsonByLine.index;
+    JSONInvertedIndex idx = args[0..$-1].map!(x => File(x).byChunk(4096).parseJsonByLine).joiner.index;
 
     sw.start;
-    idx.writeToFile(File(args[1], "wb"));
+    idx.writeToFile(File(args[$-1], "wb"));
     sw.stop;
     stderr.writefln("Wrote index in %d secs",sw.peek.total!"seconds");
 }
