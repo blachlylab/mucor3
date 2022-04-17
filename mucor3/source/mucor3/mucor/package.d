@@ -104,7 +104,7 @@ void mucor_main(string[] args) {
         hts_log_info(__FUNCTION__, "Filtering vcf data...");
         combined_json_file = buildPath(prefix, "filtered.json");
 
-        queryJsonFiles(args[0], vcfJsonFiles, indexFile, query, combined_json_file);
+        queryJsonFiles(vcfJsonFiles, indexFile, query, combined_json_file);
     } else {
         combined_json_file = buildPath(prefix, "all.json");
         File output = File(combined_json_file, "w");

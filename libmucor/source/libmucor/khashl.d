@@ -28,6 +28,7 @@ import core.stdc.stdint;    // uint32_t, etc.
 import core.memory;         // GC
 
 import asdf;
+import libmucor.wideint;
 import libmucor.varquery.singleindex: JSONValue, TYPES;
 
 /*!
@@ -547,6 +548,20 @@ pragma(inline, true)
         return cast(khint_t) k;
     }
 
+    auto kh_hash_func(T)(const(T) key)
+    if (is(T == uint128))
+    {
+        ulong k = key.toHash;
+        k = ~k + (k << 21);
+        k = k ^ k >> 24;
+        k = (k + (k << 3)) + (k << 8);
+        k = k ^ k >> 14;
+        k = (k + (k << 2)) + (k << 4);
+        k = k ^ k >> 28;
+        k = k + (k << 31);
+        return cast(khint_t) k;
+    }
+
     khint_t kh_hash_str(const(char)* s)
     {
         khint_t h = cast(khint_t)*s;
@@ -609,6 +624,13 @@ pragma(inline,true)
 
     bool kh_hash_equal(T)(const(T) a, const(T) b)
     if (isNumeric!(typeof(__traits(getMember,T,"key"))))
+    {
+        /// There is no benefit to caching hashes for integer keys (I think)
+        static assert (cached == false, "No reason to cache hash for integer keys");
+        return (a.key == b.key);
+    }
+    bool kh_hash_equal(T)(const(T) a, const(T) b)
+    if (is(typeof(__traits(getMember,T,"key")) == uint128))
     {
         /// There is no benefit to caching hashes for integer keys (I think)
         static assert (cached == false, "No reason to cache hash for integer keys");
