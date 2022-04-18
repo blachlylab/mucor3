@@ -15,6 +15,7 @@ import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serialize
 import libmucor.wideint : uint128;
 import libmucor.varquery.singleindex;
 import libmucor.khashl: khashl;
+import htslib.hts_endian;
 
 char sep = '/';
 
@@ -97,132 +98,54 @@ struct JSONInvertedIndex{
     void fromFile(string f){
         import std.file : read;
         auto bytesRange = cast(ubyte[])(f.read());
-        ubyte[] buf;
         // read const sequence
-        enforce((cast(string)bytesRange[0..8]) == "VQ_INDEX","File doesn't contain VQ_INDEX sequence");
-        bytesRange = bytesRange[8..$];
-
-        // read md5 array length
-        this.recordMd5s.length = littleEndianToNative!(ulong, 8)(bytesRange[0..8]);
-        bytesRange = bytesRange[8..$];
-
-        // read md5 array
-        buf = bytesRange[0 .. (ulong.sizeof + ulong.sizeof)*this.recordMd5s.length];
-        bytesRange = bytesRange[(ulong.sizeof + ulong.sizeof)*this.recordMd5s.length..$];
-
-        // convert array
-        foreach(i,ref md5; this.recordMd5s){
-            md5.hi = littleEndianToNative!(ulong, 8)(buf[(i*16)..(i*16)+8][0..8]);
-            md5.lo = littleEndianToNative!(ulong, 8)(buf[(i*16)+8..(i*16)+16][0..8]);
-        }
-
-        // read number of fields
-        auto numfields = littleEndianToNative!(ulong, 8)(bytesRange[0..8]);
-        bytesRange = bytesRange[8..$];
-        foreach (i; iota(numfields))
-        {
+        
+        auto bidx = BinaryJsonInvertedIndex(bytesRange);
+        this.recordMd5s = bidx.sums;
+        foreach(k; bidx.keysMeta) {
+            auto kv = k.deserialize_to_tuple(bidx.fieldKeyMeta, bidx.keyData);
             InvertedIndex idx;
-
-            // read key length
-            auto keyLen = littleEndianToNative!(ulong, 8)(bytesRange[0..8]);
-            bytesRange = bytesRange[8..$];
-
-            // read key
-            buf = bytesRange[0..keyLen];
-            auto field = (cast(string) buf.idup);
-            bytesRange = bytesRange[keyLen..$];
-
-            // read size of the values in bytes
-            auto valuesSize = littleEndianToNative!(ulong, 8)(bytesRange[0..8]);
-            bytesRange = bytesRange[8..$];
-
-            // load values as bytes
-            buf = bytesRange[0 .. valuesSize];
-            while(buf!=[])
-            {
-                JSONValue key;
-
-                key.type = buf[0].to!TYPES;
-                buf = buf[1..$];
-
-                final switch(key.type){
-                    case TYPES.NULL:
-                        debug assert(0); // Shouldn't be writing any nulls
-                        else continue;
-                    case TYPES.FLOAT: // read JSONValue float
-                        key.val.f = littleEndianToNative!(double, 8)(buf[0..8]);
-                        buf = buf[8..$];
-                        break;
-                    case TYPES.STRING: // read JSONValue str
-                        key.val.s.length = littleEndianToNative!(ulong, 8)(buf[0..8]);
-                        buf = buf[8..$];
-                        key.val.s = (cast(string) buf[0..key.val.s.length].idup);
-                        buf = buf[key.val.s.length..$];
-                        break;
-                    case TYPES.INT: // read JSONValue int
-                        key.val.i = littleEndianToNative!(long, 8)(buf[0..8]);
-                        buf = buf[8..$];
-                        break;
-                    case TYPES.BOOL: // read JSONValue bool
-                        key.val.b = buf[0].to!bool;
-                        buf = buf[1..$];
-                        break;
-                }
-                // read id values array length
-                ulong[] values;
-                values.length = littleEndianToNative!(ulong, 8)(buf[0..8]);
-                buf = buf[8..$];
-
-                // read id values array
-                foreach(ref v; values){
-                    v = littleEndianToNative!(ulong, 8)(buf[0..8]);
-                    buf = buf[8..$];
-                }
-
-                // assign key and values in hashmap
-                idx.hashmap[key] = values;
+            foreach(fkv; kv.value) {
+                auto kv2 = fkv.deserialize_to_tuple(bidx.data, bidx.fieldKeyData);
+                idx.hashmap[kv2.key] = kv2.value;
             }
-            // assign InvertedIndex in hashmap
-            fields[field] = idx;
-            bytesRange = bytesRange[valuesSize..$];
+            this.fields[kv.key] = idx;
         }
     }
 
+    /** 
+     * 
+     * Format of data written (size/itemsize):
+     * VQ_INDEX constant: 8
+     * MD5 array length: 8
+     * [md5 array]: 16*n
+     * num of fields: 8
+     * length of data: 8
+     * [data matrix]: 8*n
+     * for each field {
+     *     key_type: 1, 15 padd
+     *     key_offset: 8,
+     *     key_length: 8,
+     *     matrix_offset: 8,
+     *     length: 8,
+     * }
+     * [key data]: n
+     * 
+     * 
+     */
     void writeToFile(File f){
+        
+        auto bidx = BinaryJsonInvertedIndex(this);
+        // write constants
+        f.rawWrite(bidx.serialize_constants);
 
-        // write constant
-        f.rawWrite("VQ_INDEX");
+        f.rawWrite(bidx.serialize_sums);
 
-        // write md5 length
-        f.rawWrite(this.recordMd5s.length.nativeToLittleEndian);
-        // write md5 array
-        f.rawWrite(this.recordMd5s.map!(x=> x.hi.nativeToLittleEndian ~ x.lo.nativeToLittleEndian).joiner.array);
-        // write num fields
-        f.rawWrite(fields.byKey.array.length.nativeToLittleEndian);
-        foreach (kv; fields.byKeyValue)
-        {
-            auto field = kv.key;
-            auto idx = kv.value;
-            // write field length
-            f.rawWrite(field.length.nativeToLittleEndian);
-            // write field string
-            f.rawWrite(field);
+        f.rawWrite(bidx.serialize_keys);
 
-            // generate values bytes
-            import std.stdio;
-            ubyte[] towrite = [];
-            foreach (key; idx.hashmap.byKey)
-            {
-                auto value = idx.hashmap[key];
-                towrite ~= key.toBytes;
-                towrite ~= value.length.nativeToLittleEndian;
-                towrite ~= value.map!(x=> x.nativeToLittleEndian.dup).joiner.array;
-            }
-            // write values byte size
-            f.rawWrite(towrite.length.nativeToLittleEndian);
-            // write values bytes
-            f.rawWrite(towrite);
-        }
+        f.rawWrite(bidx.serialize_data);
+        f.rawWrite(bidx.fieldKeyData);
+        f.rawWrite(bidx.keyData);
     }
 
     ulong[] allIds(){
@@ -327,25 +250,205 @@ struct JSONInvertedIndex{
     }
 }
 
-// unittest{
-//     import asdf:Asdf,AsdfNode,parseJson;
-//     import libmucor.varquery.fields;
-//     string ann = "\"A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"~
-//                 "protein_coding||1/6|ENST00000381657.2:c.-21-26C>A|||||,A|intron_variant|MODIFIER"~
-//                 "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding||1/7|ENST00000381663.3:c.-21-26C>A||"~
-//                 "|||\"";
-//     auto root = AsdfNode(`{"INFO":{}}`.parseJson);
-//     root["INFO","ANN"] = AsdfNode(ann.parseJson);
-//     import std.stdio;
-//     JSONInvertedIndex idx;
-//     idx.addJsonObject(cast(Asdf)parseAnnotationField(root,"ANN",ANN_FIELDS[],ANN_TYPES[]),"1");
-//     ann = "\"A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"~
-//                 "protein_coding||1/6|ENST00000381657.2:c.-21-26C>A|||||,A|missense_variant|MODIFIER"~
-//                 "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding||1/7|ENST00000381663.3:c.-21-26C>A||"~
-//                 "|||\"";
-//     root["INFO","ANN"] = AsdfNode(ann.parseJson);
-//     idx.addJsonObject(cast(Asdf)parseAnnotationField(root,"ANN",ANN_FIELDS[],ANN_TYPES[]),"2");
-//     writeln(idx.fields["/INFO/ANN/effect"]);
-//     writeln(idx.fields["/INFO/ANN/effect"].hashmap.keys.map!(x=>deserialize!string(x)));
-//     writeln(idx.fields["/INFO/ANN/effect"].filter(["missense_variant"]));
-// }
+/** 
+ * VQ_INDEX constant: 8
+ * MD5 array length: 8
+ * num of fields: 8
+ * length of key metadata: 8
+ * length of data: 8
+ * length of key data: 8
+ */
+struct BinaryJsonInvertedIndex {
+    align:
+    ulong constant = 0x5845444e495f5156; // VQ_INDEX
+    ulong md5ArrLen;                 // # of md5 sums
+    ulong keysLen;                   // # of vcf data fields
+    ulong fieldKeysLen;              // # of json data fields
+    ulong dataLen;                   // # of data ids
+    ulong fieldDataLen;              // len of json keys data 
+    uint128[] sums;                  // md5 sums
+    KeyMetaData[] keysMeta;          // first set of keys metadata 
+    FieldKeyMetaData[] fieldKeyMeta; // second set of keys metadata
+    ulong[] data;                    // ulong ids
+    ubyte[] fieldKeyData;            // second set of keys: JsonValue
+    ubyte[] keyData;                 // first set of keys: String
+
+    this(JSONInvertedIndex idx) {
+        this.md5ArrLen = idx.recordMd5s.length;
+        this.sums = idx.recordMd5s;
+        foreach(kv; idx.fields.byKeyValue) {
+            KeyMetaData k;
+            // add key
+            k.keyOffset = this.keyData.length;
+            this.keyData ~= cast(ubyte[]) kv.key;
+            k.keyLength = this.keyData.length - k.keyOffset;
+            // add fields
+            k.fieldOffset = this.fieldKeyMeta.length;
+            foreach (kv2; kv.value.hashmap.byKeyValue)
+            {
+                FieldKeyMetaData fk;
+                fk.type = kv2.key.getType;
+                // add field key
+                fk.keyOffset = this.fieldKeyData.length;
+                fieldKeyData ~= kv2.key.toBytes;
+                fk.keyLength = this.fieldKeyData.length - fk.keyOffset;
+                // add data
+                fk.dataOffset = this.data.length;
+                data ~= kv2.value;
+                fk.dataLength = this.data.length - fk.dataOffset;
+                // add field key meta
+                this.fieldKeyMeta ~= fk;
+            }
+            k.fieldLength = this.fieldKeyMeta.length - k.fieldOffset;
+            this.keysMeta ~= k;
+        }
+        this.keysLen = this.keysMeta.length; // # of vcf data fieldshis.keys.length;
+        this.fieldKeysLen = this.fieldKeyMeta.length; // # of json data fields
+        this.dataLen = this.data.length; // # of data ids
+        this.fieldDataLen = this.fieldKeyData.length; 
+    }
+
+    this(ubyte[] data) {
+        auto p = data.ptr;
+        // load constants
+        this.constant = le_to_u64(p);
+        p += 8;
+        this.md5ArrLen = le_to_u64(p);
+        p += 8;
+        this.keysLen = le_to_u64(p);
+        p += 8;
+        this.fieldKeysLen = le_to_u64(p);
+        p += 8;
+        this.dataLen = le_to_u64(p);
+        p += 8;
+        this.fieldDataLen = le_to_u64(p);
+        p += 8;
+
+        // load md5 sums
+        this.sums = new uint128[this.md5ArrLen];
+        foreach(i; 0..this.md5ArrLen) {
+            this.sums[i].hi = le_to_u64(p);
+            p += 8;
+            this.sums[i].lo = le_to_u64(p);
+            p += 8;
+        }
+
+        // load key metadata
+        this.keysMeta = new KeyMetaData[this.keysLen];
+        foreach(i; 0..this.keysLen) {
+            this.keysMeta[i] = KeyMetaData(p[0..32]);
+            p += 32;
+        }
+
+        // load key metadata
+        this.fieldKeyMeta = new FieldKeyMetaData[this.fieldKeysLen];
+        foreach(i; 0..this.fieldKeysLen) {
+            this.fieldKeyMeta[i] = FieldKeyMetaData(p[0..48]);
+            p += 48;
+        }
+
+        this.data = new ulong[this.dataLen];
+        // load data
+        foreach(i; 0..this.dataLen) {
+            this.data[i] = le_to_u64(p);
+            p += 8;
+        }
+
+        this.fieldKeyData = p[0..fieldDataLen];
+        p += fieldDataLen;
+        // load key data
+        this.keyData = p[0..&data[$-1] - p];
+
+        writeln(cast(string)data);
+        writeln(data);
+        enforce((cast(char*)&this.constant)[0..8] == "VQ_INDEX", "File doesn't contain VQ_INDEX sequence");
+    }
+
+    ubyte[48] serialize_constants() {
+        ubyte[48] ret;
+        u64_to_le(this.constant, ret.ptr);
+        u64_to_le(this.md5ArrLen, ret.ptr + 8);
+        u64_to_le(this.keysLen, ret.ptr + 16);
+        u64_to_le(this.fieldKeysLen, ret.ptr + 24);
+        u64_to_le(this.dataLen, ret.ptr + 32);
+        u64_to_le(this.fieldDataLen, ret.ptr + 40);
+        return ret;
+    }
+
+    ubyte[] serialize_sums() {
+        ubyte[] ret = new ubyte[this.md5ArrLen * 16];
+        foreach(i; 0..this.md5ArrLen){
+            u64_to_le(this.sums[i].hi, ret.ptr + (16*i));
+            u64_to_le(this.sums[i].lo, ret.ptr + (16*i) + 8);
+        }
+        return ret;
+    }
+
+    ubyte[] serialize_keys() {
+        ubyte[] ret = new ubyte[this.keysLen * 32];
+        foreach(i; 0..this.keysLen){
+            (ret.ptr + (32*i))[0..32] = this.keysMeta[i].serialize();
+        }
+        return ret;
+    }
+
+    ubyte[] serialize_field_keys() {
+        ubyte[] ret = new ubyte[this.fieldKeysLen*48];
+        foreach(i; 0..this.fieldKeysLen){
+            (ret.ptr + (48*i))[0..48] = this.fieldKeyMeta[i].serialize();
+        }
+        return ret;
+    }
+
+    ubyte[] serialize_data() {
+        ubyte[] ret = new ubyte[this.dataLen * 8];
+        foreach(i; 0..this.dataLen){
+            u64_to_le(this.data[i], ret.ptr + (i*8));
+        }
+        return ret;
+    }
+    
+}
+
+unittest{
+    import asdf;
+    import libmucor.jsonlops.basic: md5sumObject;
+    import std.array: array;
+    JSONInvertedIndex idx;
+    idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.md5sumObject);
+    idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.md5sumObject);
+    idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.md5sumObject);
+
+    assert(idx.recordMd5s.length == 3);
+    assert(idx.fields.byKey.array == ["/test", "/test4", "/test3", "/test2"]);
+
+    assert(idx.fields["/test2"].filter(["foo"]) == [0]);
+    assert(idx.fields["/test3"].filterRange([1, 3]) == [1, 0]);
+
+    auto bidx = BinaryJsonInvertedIndex(idx);
+    writeln(bidx);
+    auto f = File("/tmp/test.idx", "w");
+    idx.writeToFile(f);
+    f.close;
+
+    import std.file: read;
+    bidx = BinaryJsonInvertedIndex(cast(ubyte[])read("/tmp/test.idx"));
+    writeln(bidx);
+    assert(bidx.md5ArrLen == 3);
+    assert(bidx.keysLen == 4);
+    assert(bidx.fieldKeysLen == 8);
+    assert(bidx.dataLen == 9);
+    idx = JSONInvertedIndex("/tmp/test.idx");
+
+    assert(idx.recordMd5s.length == 3);
+    assert(idx.fields.byKey.array == ["/test", "/test4", "/test3", "/test2"]);
+
+    assert(idx.fields["/test2"].filter(["foo"]) == [0]);
+    assert(idx.fields["/test3"].filterRange([1, 3]) == [1, 0]);
+
+    // root["INFO","ANN"] = AsdfNode(ann.parseJson);
+    // idx.addJsonObject(cast(Asdf)parseAnnotationField(root,"ANN",ANN_FIELDS[],ANN_TYPES[]),"2");
+    // writeln(idx.fields["/INFO/ANN/effect"]);
+    // writeln(idx.fields["/INFO/ANN/effect"].hashmap.keys.map!(x=>deserialize!string(x)));
+    // writeln(idx.fields["/INFO/ANN/effect"].filter(["missense_variant"]));
+}

@@ -1,7 +1,6 @@
 module libmucor.varquery.singleindex;
 
 import std.algorithm.setops;
-import std.regex;
 import std.algorithm : sort, uniq, map, std_filter = filter, canFind, joiner;
 import std.math : isClose;
 import std.array : array;
@@ -12,6 +11,10 @@ import std.meta;
 import asdf: deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
 import libmucor.khashl;
+import std.sumtype;
+import htslib.hts_endian;
+import std.typecons: Tuple, tuple;
+import std.exception: enforce;
 
 pragma(inline,true)
 bool isNumericStringInteger(string val)
@@ -23,31 +26,13 @@ bool isNumericStringInteger(string val)
     return true;
 }
 
-/// JSON types
-enum TYPES{
-    NULL = 0,
-    FLOAT,
-    INT,
-    STRING,
-    BOOL
-}
-alias DTYPES = AliasSeq!(null, double, long, string, bool);
-
-/// Union that can store all json types
-union JSONData
-{
-    double f;
-    long i;
-    string s;
-    bool b;
-}
+alias JsonTypes = SumType!(string, double, long, bool);
 
 /// Struct that represents JSON data
 /// and can be used with a hashmap
 struct JSONValue
 {
-    TYPES type;
-    JSONData val;
+    JsonTypes val;
 
     this(Asdf json)
     {
@@ -58,26 +43,21 @@ struct JSONValue
             case Asdf.Kind.number:
                 auto numStr = json.to!string;
                 if(isNumericStringInteger(numStr)){
-                    val.i = deserialize!long(json);
-                    type = TYPES.INT;
+                    val = deserialize!long(json);
                 }else{
-                    val.f = deserialize!double(json);
-                    type = TYPES.FLOAT;
+                    val = deserialize!double(json);
                 }
                 break;
             case Asdf.Kind.string:
-                val.s = deserialize!string(json);
-                type = TYPES.STRING;
+                val = deserialize!string(json);
                 break;
             case Asdf.Kind.null_:
                 throw new Exception("No nulls should reach this point");
             case Asdf.Kind.false_:
-                type = TYPES.BOOL;
-                val.b = false;
+                val = false;
                 break;
             case Asdf.Kind.true_:
-                type = TYPES.BOOL;
-                val.b = true;
+                val = true;
                 break;
         }
     }
@@ -86,17 +66,13 @@ struct JSONValue
     {
         static if(isIntegral!T)
         {
-            val.i = item.to!long;
-            type = TYPES.INT;
+            val = item.to!long;
         }else static if(isFloatingPoint!T){
-            val.f = item.to!double;
-            type = TYPES.FLOAT;
+            val = item.to!double;
         }else static if(isSomeString!T){
-            val.s = item.to!string;
-            type = TYPES.STRING;
+            val = item.to!string;
         }else static if(isBoolean!T){
-            val.b = item.to!bool;
-            type = TYPES.BOOL;
+            val = item.to!bool;
         }else{
             static assert(0, "not a compatible type for JSONValue");
         }
@@ -104,98 +80,141 @@ struct JSONValue
 
     size_t toHash() const pure nothrow
     {
-        final switch(type){
-            case TYPES.NULL:
-                return hashOf(null);
-            case TYPES.FLOAT:
-                return hashOf(val.f);
-            case TYPES.INT:
-                return hashOf(val.i);
-            case TYPES.STRING:
-                return hashOf(val.s);
-            case TYPES.BOOL:
-                return hashOf(val.b);
-        }
+        return (this.val).match!(
+            (bool x) => hashOf(x),
+            (long x) => hashOf(x),
+            (double x) => hashOf(x),
+            (string x) => hashOf(x)
+        );
     }
 
     int opCmp(JSONValue other) const pure nothrow
     {
-        if(type != other.type){
-            return -1;
-        }
-        final switch(type){
-            case TYPES.NULL:
-                return 0;
-            case TYPES.FLOAT:
-                return val.f < other.val.f;
-            case TYPES.INT:
-                return val.i < other.val.i;
-            case TYPES.STRING:
-                return val.s < other.val.s;
-            case TYPES.BOOL:
-                return val.b < other.val.b;
-        }
+        if(this == other) return 0;
+        auto ret = match!(
+            (bool a, bool b) => a < b ? -1 : 1,
+            (long a, long b) => a < b ? -1 : 1,
+            (double a, double b) => a < b ? -1 : 1,
+            (string a, string b) => a < b ? -1 : 1,
+            (_a, _b) => -1
+        )(this.val, other.val);
+        return ret;
+    }
+
+    bool isSameType(T)() const pure nothrow
+    {
+        return this.val.match!(
+            (bool _x) {
+                static if(isBoolean!T)
+                    return true;
+                else
+                    return false;
+            },
+            (long _x) {
+                static if(isIntegral!T)
+                    return true;
+                else
+                    return false;
+            },
+            (double _x) {
+                static if(isFloatingPoint!T)
+                    return true;
+                else
+                    return false;
+            },
+            (string _x) {
+                static if(isSomeString!T)
+                    return true;
+                else
+                    return false;
+            }
+        );
     }
 
     bool opEquals(JSONValue other) const pure nothrow
     {
-        if(type != other.type){
-            return false;
-        }
-        final switch(type){
-            case TYPES.NULL:
-                return true;
-            case TYPES.FLOAT:
-                return val.f == other.val.f;
-            case TYPES.INT:
-                return val.i == other.val.i;
-            case TYPES.STRING:
-                return val.s == other.val.s;
-            case TYPES.BOOL:
-                return val.b == other.val.b;
-
-        }
+        return match!(
+            (bool a, bool b) => a == b,
+            (long a, long b) => a == b,
+            (double a, double b) => a == b,
+            (string a, string b) => a == b,
+            (_a, _b) => false
+        )(this.val, other.val);
     }
 
     string toString() const
     {
-        final switch(type){
-            case TYPES.NULL:
-                return null.to!string;
-            case TYPES.FLOAT:
-                return val.f.to!string;
-            case TYPES.INT:
-                return val.i.to!string;
-            case TYPES.STRING:
-                return val.s;
-            case TYPES.BOOL:
-                return val.b.to!string;
-        }
+        return (this.val).match!(
+            (bool x) => x.to!string,
+            (long x) => x.to!string,
+            (double x) => x.to!string,
+            (string x) => x,
+        );
+    }
+    
+    ulong getType() const {
+        return (this.val).match!(
+            (bool x) => 0,
+            (long x) => 1,
+            (double x) => 2,
+            (string x) => 3
+        );
     }
 
     ubyte[] toBytes() const
     {
-        import std.bitmanip: nativeToLittleEndian;
-        assert(type != TYPES.NULL);
-        ubyte[] ret = [cast(ubyte)type];
-        final switch(type){
-            case TYPES.NULL:
-            case TYPES.FLOAT:
-                ret ~= val.f.nativeToLittleEndian;
-                break;
-            case TYPES.STRING:
-                ret ~= val.s.length.nativeToLittleEndian;
-                ret ~= cast(ubyte[])val.s;
-                break;
-            case TYPES.INT:
-                ret ~= val.i.nativeToLittleEndian;
-                break;
-            case TYPES.BOOL:
-                ret ~= val.b.nativeToLittleEndian;
-                break;
-        }
-        return ret;
+        return (this.val).match!(
+            (bool x) {
+                ubyte[] ret = new ubyte[1];
+                ret[0] = x ? 1 : 0;
+                return ret;
+            },
+            (long x) {
+                ubyte[] ret = new ubyte[8];
+                i64_to_le(x, ret.ptr);
+                return ret;
+            },
+            (double x) {
+                ubyte[] ret = new ubyte[4];
+                double_to_le(x, ret.ptr);
+                return ret;
+            },
+            (string x) {
+                ubyte[] ret = new ubyte[8 + x.length];
+                u64_to_le(x.length, ret.ptr);
+                ret[8 .. $] = cast(ubyte[])x;
+                return ret;
+            }
+        );
     }
+}
+
+unittest
+{
+    auto a = JSONValue(`1`.parseJson);
+    auto b = JSONValue(`1`.parseJson);
+    auto c = JSONValue(`2`.parseJson);
+    auto d = JSONValue(`2.0`.parseJson);
+    auto e = JSONValue(`3.0`.parseJson);
+    auto f = JSONValue(`true`.parseJson);
+    auto g = JSONValue(`false`.parseJson);
+    auto h = JSONValue(`"a"`.parseJson);
+    auto i = JSONValue(`"b"`.parseJson);
+
+    assert(a == b);
+    assert(a != c);
+    assert(d != e);
+    assert(f != g);
+    assert(h != i);
+
+    assert(a <= b);
+    import std.stdio;
+    writeln(b.getType);
+    assert(b < c);
+    assert(d < e);
+    assert(f > g);
+    assert(h < i);
+    
 }
 
 /**
@@ -211,7 +230,7 @@ struct InvertedIndex
     ulong[] filter(T)(T[] items) const
     {
         return items.map!(x => JSONValue(x))
-                    .std_filter!(x=> x in hashmap)
+                    .std_filter!(x => x in hashmap)
                     .map!(x => hashmap[x].dup)
                     .joiner.array; 
     }
@@ -222,7 +241,7 @@ struct InvertedIndex
         assert(range[0]<=range[1]);
         JSONValue[2] r = [JSONValue(range[0]), JSONValue(range[1])];
         return hashmap.byKey
-                    .std_filter!(x => x.type == staticIndexOf!(T,DTYPES))
+                    .std_filter!(x => x.isSameType!T)
                     .std_filter!(x=>x >= r[0])
                     .std_filter!(x=>x < r[1])
                     .map!(x => hashmap[x].dup).joiner.array;
@@ -232,7 +251,7 @@ struct InvertedIndex
     {
         mixin("auto func = (JSONValue x) => x " ~ op ~" JSONValue(val);");
         return hashmap.byKey
-                        .std_filter!(x => x.type == staticIndexOf!(T,DTYPES))
+                        .std_filter!(x => x.isSameType!T)
                         .std_filter!func
                         .map!(x => hashmap[x].dup).joiner.array
                         .sort.uniq.array;
@@ -242,7 +261,7 @@ struct InvertedIndex
     {
         static if(op == "+") {
             InvertedIndex ret = InvertedIndex(this.hashmap.dup);
-            foreach(kv; lhs.byKeyValue){
+            foreach(kv; lhs.byKeyValue) {
                 auto v = kv.key in ret.hashmap;
                 if(v) {
                     *v = *v ~ kv.value;
@@ -256,21 +275,129 @@ struct InvertedIndex
     }
 }
 
-// unittest{
-//     import std.stdio;
-//     InvertedIndex idx = InvertedIndex();
-//     string[] v = ["hi","I","am","t"];
-//     idx.hashmap[serialize(&v[0])]=[1,2];
-//     idx.hashmap[serialize(&v[1])]=[1,3];
-//     idx.hashmap[serialize(&v[2])]=[4];
-//     idx.hashmap[serialize(&v[3])]=[5];
-//     writeln(idx.filter(["hi","I","am"]));
+/** 
+ *  key_type: 1, 15 padd
+ *  key_offset: 8,
+ *  key_length: 8,
+ *
+ * Total size: 48 bytes
+ */
+struct KeyMetaData {
+    align:
+    ulong keyOffset;
+    ulong keyLength;
+    ulong fieldOffset;
+    ulong fieldLength;
 
-//     InvertedIndex idx2 = InvertedIndex(TYPES.FLOAT);
-//     auto v2 = [0.1,0.4,0.6,0.9];
-//     idx2.hashmap[serialize(&v2[0])]=[1,2];
-//     idx2.hashmap[serialize(&v2[1])]=[1,3];
-//     idx2.hashmap[serialize(&v2[2])]=[4];
-//     idx2.hashmap[serialize(&v2[3])]=[5];
-//     writeln(idx2.filterRange([0.1,0.8]));
-// }
+    this(ubyte[] data) {
+        auto p = data.ptr;
+        this.keyOffset = le_to_u64(p);
+        p += 8;
+        this.keyLength = le_to_u64(p);
+        p += 8;
+        this.fieldOffset = le_to_u64(p);
+        p += 8;
+        this.fieldLength = le_to_u64(p);
+    }
+
+    ubyte[32] serialize() {
+        ubyte[32] ret;
+        u64_to_le(this.keyOffset, ret.ptr + 0);
+        u64_to_le(this.keyLength, ret.ptr + 8);
+        u64_to_le(this.fieldOffset, ret.ptr + 16);
+        u64_to_le(this.fieldLength, ret.ptr + 24);
+        return ret;
+    }
+
+    auto deserialize_to_tuple(FieldKeyMetaData[] data, ubyte[] keyData) {
+        auto kData = keyData[keyOffset..keyOffset+keyLength];
+        auto dataForKey = data[fieldOffset..fieldOffset+fieldLength];
+        alias RT = Tuple!(string, "key", FieldKeyMetaData[], "value");
+        return RT(cast(string)kData, dataForKey);
+    }
+}
+
+/** 
+ *  key_type: 1, 15 padd
+ *  key_offset: 8,
+ *  key_length: 8,
+ *
+ * Total size: 48 bytes
+ */
+struct FieldKeyMetaData {
+    align:
+    ulong type;
+    ulong padding;
+    ulong keyOffset;
+    ulong keyLength;
+    ulong dataOffset;
+    ulong dataLength;
+
+    this(ubyte[] data) {
+        auto p = data.ptr;
+        this.type = le_to_u64(p);
+        p += 8;
+        this.padding = le_to_u64(p);
+        p += 8;
+        this.keyOffset = le_to_u64(p);
+        p += 8;
+        this.keyLength = le_to_u64(p);
+        p += 8;
+        this.dataOffset = le_to_u64(p);
+        p += 8;
+        this.dataLength = le_to_u64(p);
+    }
+
+    ubyte[48] serialize() {
+        static if(HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED){
+            return (cast(ubyte*)&this)[0..48];
+        } else {
+            ubyte[48] ret;
+            u64_to_le(this.type, ret.ptr);
+            u64_to_le(0, ret.ptr + 8);
+            u64_to_le(this.keyOffset, ret.ptr + 16);
+            u64_to_le(this.keyLength, ret.ptr + 24);
+            u64_to_le(this.dataOffset, ret.ptr + 32);
+            u64_to_le(this.dataLength, ret.ptr + 40);
+            return ret;
+        }
+    }
+
+    auto deserialize_to_tuple(ulong[] data, ubyte[] keyData) {
+        auto kData = keyData[keyOffset..keyOffset+keyLength];
+        auto dataForKey = data[dataOffset..dataOffset+dataLength];
+        alias RT = Tuple!(JSONValue, "key", ulong[], "value");
+        switch(type) {
+            case 0:
+                return RT(JSONValue(le_to_i64(kData.ptr)), dataForKey);
+            case 1:
+                return RT(JSONValue(le_to_double(kData.ptr)), dataForKey);
+            case 2:
+                return RT(JSONValue((cast(string)kData).idup), dataForKey);
+            case 3:
+                return RT(JSONValue(le_to_i64(kData.ptr)), dataForKey);
+            default: 
+                throw new Exception("Error deserializing key");
+        }
+    }
+}
+
+unittest{
+    // import std.stdio;
+    // InvertedIndex idx = InvertedIndex();
+    // string[] v = ["hi","I","am","t"];
+    // idx.hashmap[serialize(&v[0])]=[1,2];
+    // idx.hashmap[serialize(&v[1])]=[1,3];
+    // idx.hashmap[serialize(&v[2])]=[4];
+    // idx.hashmap[serialize(&v[3])]=[5];
+    // writeln(idx.filter(["hi","I","am"]));
+
+
+    // InvertedIndex idx2 = InvertedIndex(TYPES.FLOAT);
+    // auto v2 = [0.1,0.4,0.6,0.9];
+    // idx2.hashmap[serialize(&v2[0])]=[1,2];
+    // idx2.hashmap[serialize(&v2[1])]=[1,3];
+    // idx2.hashmap[serialize(&v2[2])]=[4];
+    // idx2.hashmap[serialize(&v2[3])]=[5];
+    // writeln(idx2.filterRange([0.1,0.8]));
+}
