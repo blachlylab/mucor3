@@ -29,7 +29,7 @@ import core.memory;         // GC
 
 import asdf;
 import libmucor.wideint;
-import libmucor.varquery.singleindex: JSONValue;
+import libmucor.varquery.invertedindex.jsonvalue: JSONValue;
 import std.sumtype: match;
 
 /*!

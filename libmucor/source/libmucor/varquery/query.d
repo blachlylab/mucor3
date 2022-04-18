@@ -10,8 +10,8 @@ import std.conv : to;
 import std.format : format;
 import std.typecons : Tuple;
 
-import libmucor.varquery.singleindex;
-import libmucor.varquery.invertedindex;
+import libmucor.varquery.invertedindex.singleindex;
+import libmucor.varquery.invertedindex.invertedindex;
 
 
 /**
