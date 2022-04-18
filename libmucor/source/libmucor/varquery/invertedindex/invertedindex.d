@@ -13,7 +13,7 @@ import std.exception : enforce;
 
 import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
-import libmucor.varquery.invertedindex.singleindex;
+import libmucor.varquery.invertedindex.fieldindex;
 import libmucor.varquery.invertedindex.jsonvalue;
 import libmucor.varquery.invertedindex.binaryindex;
 import libmucor.khashl: khashl;
@@ -22,19 +22,19 @@ import std.digest.md : MD5Digest, toHexString;
 
 char sep = '/';
 
-struct JSONInvertedIndex
+struct InvertedIndex
 {
-    BinaryJsonInvertedIndex * bidx;
+    BinaryIndex * bidx;
     uint128[] recordMd5s;
-    khashl!(const(char)[], InvertedIndex) fields;
+    khashl!(const(char)[], FieldIndex) fields;
     this(string f){
         // read const sequence
         
-        this.bidx = new BinaryJsonInvertedIndex(f);
+        this.bidx = new BinaryIndex(f);
         this.recordMd5s = bidx.sums;
         foreach(k; bidx.keyMetaData) {
             auto kv = k.deserialize_to_tuple(bidx.jsonKeyMetaData, bidx.keyData);
-            InvertedIndex idx;
+            FieldIndex idx;
             foreach(fkv; kv.value) {
                 auto kv2 = fkv.deserialize_to_tuple(bidx.data, bidx.fieldKeyData);
                 idx.hashmap[kv2.key] = kv2.value;
@@ -72,8 +72,8 @@ struct JSONInvertedIndex
                 (*val) ~= this.recordMd5s.length - 1;
             }else{
                 ulong[] arr = new ulong[0];
-                fields[path~sep~key] = InvertedIndex();
-                InvertedIndex * hm= (path~sep~key) in fields;
+                fields[path~sep~key] = FieldIndex();
+                FieldIndex * hm= (path~sep~key) in fields;
                 auto val = hm.hashmap.require(valkey,arr);
                 (*val) ~= this.recordMd5s.length - 1;
             }
@@ -103,8 +103,8 @@ struct JSONInvertedIndex
                 (*val) ~= this.recordMd5s.length - 1; 
             }else{
                 ulong[] arr = new ulong[0];
-                fields[path] = InvertedIndex();
-                InvertedIndex * hm= path in fields;
+                fields[path] = FieldIndex();
+                FieldIndex * hm= path in fields;
                 auto val = hm.hashmap.require(valkey,arr);
                 (*val) ~= this.recordMd5s.length - 1;
             }
@@ -114,7 +114,7 @@ struct JSONInvertedIndex
 
     void writeToFile(File f){
         
-        auto bidx = BinaryJsonInvertedIndex(this);
+        auto bidx = BinaryIndex(this);
         bidx.writeToFile(f);
     }
 
@@ -123,11 +123,11 @@ struct JSONInvertedIndex
         // return this.recordMd5s;
     }
 
-    const(InvertedIndex)*[] getFields(string key)
+    const(FieldIndex)*[] getFields(string key)
     {
         auto keycopy = key.idup;
         if(key[0] != '/') throw new Exception("key is missing leading /");
-        const(InvertedIndex)*[] ret;
+        const(FieldIndex)*[] ret;
         auto wildcard = key.indexOf('*');
         if(wildcard == -1){
             auto p = key in fields;
@@ -193,10 +193,10 @@ struct JSONInvertedIndex
         return ids.map!(x => this.recordMd5s[x]).array;
     }
 
-    auto opBinaryRight(string op)(JSONInvertedIndex lhs)
+    auto opBinaryRight(string op)(InvertedIndex lhs)
     {
         static if(op == "+") {
-            JSONInvertedIndex ret;
+            InvertedIndex ret;
             ret.recordMd5s = this.recordMd5s.dup;
             ret.fields = this.fields.dup;
             foreach(kv; lhs.fields.byKeyValue()) {
@@ -226,7 +226,7 @@ unittest{
     import asdf;
     import libmucor.jsonlops.basic: md5sumObject;
     import std.array: array;
-    JSONInvertedIndex idx;
+    InvertedIndex idx;
     idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.md5sumObject);
     idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.md5sumObject);
     idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.md5sumObject);
@@ -237,20 +237,20 @@ unittest{
     assert(idx.fields["/test2"].filter(["foo"]) == [0]);
     assert(idx.fields["/test3"].filterRange([1, 3]) == [1, 0]);
 
-    auto bidx = BinaryJsonInvertedIndex(idx);
+    auto bidx = BinaryIndex(idx);
     writeln(bidx);
     auto f = File("/tmp/test.idx", "w");
     idx.writeToFile(f);
     f.close;
 
     import std.file: read;
-    bidx = BinaryJsonInvertedIndex(cast(ubyte[])read("/tmp/test.idx"));
+    bidx = BinaryIndex(cast(ubyte[])read("/tmp/test.idx"));
     writeln(bidx);
     assert(bidx.md5ArrLen == 3);
     assert(bidx.keyMetaDataLen == 4);
     assert(bidx.jsonKeyMetaDataLen == 8);
     assert(bidx.idDataLen == 9);
-    idx = JSONInvertedIndex("/tmp/test.idx");
+    idx = InvertedIndex("/tmp/test.idx");
 
     assert(idx.recordMd5s.length == 3);
     writeln(idx.fields.byKey.array);

@@ -10,7 +10,7 @@ import std.conv : to;
 import std.format : format;
 import std.typecons : Tuple;
 
-import libmucor.varquery.invertedindex.singleindex;
+import libmucor.varquery.invertedindex.fieldindex;
 import libmucor.varquery.invertedindex.invertedindex;
 
 
@@ -276,7 +276,7 @@ unittest
 /// the inverted index
 /// returns the ids/md5sums of records that 
 /// fufill the criteria of the query (based on current index) 
-auto evalQuery(string q, JSONInvertedIndex * idx)
+auto evalQuery(string q, InvertedIndex * idx)
 {
     /// Parse queries into basic steps
     auto primaryQueries = parseSimpleQueries(q);

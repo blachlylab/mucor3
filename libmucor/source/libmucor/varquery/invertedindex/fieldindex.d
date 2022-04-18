@@ -1,4 +1,4 @@
-module libmucor.varquery.invertedindex.singleindex;
+module libmucor.varquery.invertedindex.fieldindex;
 
 import std.algorithm.setops;
 import std.algorithm : sort, uniq, map, std_filter = filter, canFind, joiner;
@@ -22,7 +22,7 @@ import std.exception: enforce;
 * Holds a single field's values as keys and record 
 * number as value.
 */
-struct InvertedIndex
+struct FieldIndex
 {
     // ulong[][JSONValue] hashmap;
     khashl!(JSONValue, ulong[]) hashmap;
@@ -57,10 +57,10 @@ struct InvertedIndex
                         .sort.uniq.array;
     }
 
-    auto opBinaryRight(string op)(InvertedIndex lhs)
+    auto opBinaryRight(string op)(FieldIndex lhs)
     {
         static if(op == "+") {
-            InvertedIndex ret = InvertedIndex(this.hashmap.dup);
+            FieldIndex ret = FieldIndex(this.hashmap.dup);
             foreach(kv; lhs.byKeyValue) {
                 auto v = kv.key in ret.hashmap;
                 if(v) {

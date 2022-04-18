@@ -14,7 +14,7 @@ import std.exception : enforce;
 import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
 import libmucor.varquery.invertedindex.invertedindex;
-import libmucor.varquery.invertedindex.singleindex;
+import libmucor.varquery.invertedindex.fieldindex;
 import libmucor.varquery.invertedindex.metadata;
 import libmucor.khashl: khashl;
 import htslib.hts_endian;
@@ -42,7 +42,7 @@ import std.digest.md : MD5Digest, toHexString;
  * 
  * NOTE: string key data array's first 8 bytes are length of that data
  */
-struct BinaryJsonInvertedIndex {
+struct BinaryIndex {
     align:
     ulong constant = 0x5845444e495f5156; // VQ_INDEX
     ulong md5ArrLen;                 // # of md5 sums
@@ -54,13 +54,13 @@ struct BinaryJsonInvertedIndex {
 
     uint128[] sums;                  // md5 sums
     KeyMetaData[] keyMetaData;          // first set of keys metadata 
-    FieldKeyMetaData[] jsonKeyMetaData; // second set of keys metadata
+    JsonKeyMetaData[] jsonKeyMetaData; // second set of keys metadata
     ulong[] data;                    // ulong ids
     ubyte[] fieldKeyData;            // second set of keys: JsonValue
     ubyte[] keyData;                 // first set of keys: String
     File file;
 
-    this(JSONInvertedIndex idx) {
+    this(InvertedIndex idx) {
         // add md5sums
         this.md5ArrLen = idx.recordMd5s.length;
         this.sums = idx.recordMd5s;
@@ -74,7 +74,7 @@ struct BinaryJsonInvertedIndex {
             k.fieldOffset = this.jsonKeyMetaData.length;
             foreach (kv2; kv.value.hashmap.byKeyValue)
             {
-                FieldKeyMetaData fk;
+                JsonKeyMetaData fk;
                 fk.type = kv2.key.getType;
                 // add field key
                 fk.keyOffset = this.fieldKeyData.length;
@@ -176,9 +176,9 @@ struct BinaryJsonInvertedIndex {
 
     void load_json_key_meta(ref ubyte * p) {
         // load key metadata
-        this.jsonKeyMetaData = new FieldKeyMetaData[this.jsonKeyMetaDataLen];
+        this.jsonKeyMetaData = new JsonKeyMetaData[this.jsonKeyMetaDataLen];
         foreach(i; 0..this.jsonKeyMetaDataLen) {
-            this.jsonKeyMetaData[i] = FieldKeyMetaData(p[0..48]);
+            this.jsonKeyMetaData[i] = JsonKeyMetaData(p[0..48]);
             p += 48;
         }
     }
@@ -309,7 +309,7 @@ unittest{
     import libmucor.jsonlops.basic: md5sumObject;
     import std.array: array;
     import libmucor.varquery.invertedindex.jsonvalue;
-    JSONInvertedIndex idx;
+    InvertedIndex idx;
     idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.md5sumObject);
     idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.md5sumObject);
     idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.md5sumObject);
@@ -323,13 +323,13 @@ unittest{
     ulong[] exp_constants = [6360565151759814998, 3, 4, 8, 9, 43, 1132386765224132344, 13579944864346696974];
     auto exp_sums = ["4BC5E16362F7052C4C90249CDE512C9D", "60E2DB9459D8C80620A8C2156FCAB161", "51D72970FC05BF560F7A0545A9A36687"];
     auto exp_keys = [KeyMetaData(0, 5, 0, 2), KeyMetaData(5, 6, 2, 1), KeyMetaData(11, 6, 3, 3), KeyMetaData(17, 6, 6, 2)];
-    auto exp_fields = [FieldKeyMetaData(3, 0, 0, 5, 0, 2), FieldKeyMetaData(3, 0, 5, 5, 2, 1), FieldKeyMetaData(3, 0, 10, 3, 3, 1), FieldKeyMetaData(1, 0, 13, 8, 4, 1), FieldKeyMetaData(1, 0, 21, 8, 5, 1), FieldKeyMetaData(1, 0, 29, 8, 6, 1), FieldKeyMetaData(3, 0, 37, 3, 7, 1), FieldKeyMetaData(3, 0, 40, 3, 8, 1)];
+    auto exp_fields = [JsonKeyMetaData(3, 0, 0, 5, 0, 2), JsonKeyMetaData(3, 0, 5, 5, 2, 1), JsonKeyMetaData(3, 0, 10, 3, 3, 1), JsonKeyMetaData(1, 0, 13, 8, 4, 1), JsonKeyMetaData(1, 0, 21, 8, 5, 1), JsonKeyMetaData(1, 0, 29, 8, 6, 1), JsonKeyMetaData(3, 0, 37, 3, 7, 1), JsonKeyMetaData(3, 0, 40, 3, 8, 1)];
     {
-        auto bidx = BinaryJsonInvertedIndex(idx);
+        auto bidx = BinaryIndex(idx);
         assert(cast(ulong[])bidx.serialize_constants == exp_constants);
         assert((cast(uint128[])bidx.serialize_sums).map!(x => format("%x",x)).array == exp_sums);
         assert(cast(KeyMetaData[])bidx.serialize_keys == exp_keys);
-        assert(cast(FieldKeyMetaData[])bidx.serialize_field_keys == exp_fields);
+        assert(cast(JsonKeyMetaData[])bidx.serialize_field_keys == exp_fields);
 
         auto kv = bidx.keyMetaData[0].deserialize_to_tuple(bidx.jsonKeyMetaData, bidx.keyData);
         assert(kv.key == "/test");
@@ -349,7 +349,7 @@ unittest{
 
     {
         
-        BinaryJsonInvertedIndex bidx;
+        BinaryIndex bidx;
 
         auto p = data.ptr;
         bidx.load_constants(p);
@@ -361,7 +361,7 @@ unittest{
         bidx.load_key_meta(p);
         assert(cast(KeyMetaData[])bidx.serialize_keys == exp_keys);
         bidx.load_json_key_meta(p);
-        assert(cast(FieldKeyMetaData[])bidx.serialize_field_keys == exp_fields);
+        assert(cast(JsonKeyMetaData[])bidx.serialize_field_keys == exp_fields);
         bidx.load_id_data(p);
         bidx.load_field_key_data(p);
         bidx.load_key_data(p);
@@ -379,12 +379,12 @@ unittest{
         assert(kv2.value == [1,2]);
     }
     {
-        auto bidx = BinaryJsonInvertedIndex(data);
+        auto bidx = BinaryIndex(data);
 
         assert(cast(ulong[])bidx.serialize_constants == exp_constants);
         assert((cast(uint128[])bidx.serialize_sums).map!(x => format("%x",x)).array == exp_sums);
         assert(cast(KeyMetaData[])bidx.serialize_keys == exp_keys);
-        assert(cast(FieldKeyMetaData[])bidx.serialize_field_keys == exp_fields);
+        assert(cast(JsonKeyMetaData[])bidx.serialize_field_keys == exp_fields);
         
         auto kv = bidx.keyMetaData[0].deserialize_to_tuple(bidx.jsonKeyMetaData, bidx.keyData);
         assert(kv.key == "/test");

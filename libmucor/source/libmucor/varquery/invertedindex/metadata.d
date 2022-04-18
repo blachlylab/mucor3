@@ -60,10 +60,10 @@ struct KeyMetaData {
         return ret;
     }
 
-    auto deserialize_to_tuple(FieldKeyMetaData[] data, ubyte[] keyData) {
+    auto deserialize_to_tuple(JsonKeyMetaData[] data, ubyte[] keyData) {
         auto kData = keyData[keyOffset..keyOffset+keyLength];
         auto dataForKey = data[fieldOffset..fieldOffset+fieldLength];
-        alias RT = Tuple!(string, "key", FieldKeyMetaData[], "value");
+        alias RT = Tuple!(string, "key", JsonKeyMetaData[], "value");
         return RT(cast(string)kData, dataForKey);
     }
 }
@@ -75,7 +75,7 @@ struct KeyMetaData {
  *
  * Total size: 48 bytes
  */
-struct FieldKeyMetaData {
+struct JsonKeyMetaData {
     align:
     ulong type;
     ulong padding;
@@ -141,10 +141,10 @@ struct FieldKeyMetaData {
 }
 
 unittest{
-    auto field = FieldKeyMetaData(2, 0, 2, 1, 3, 5);
+    auto field = JsonKeyMetaData(2, 0, 2, 1, 3, 5);
     auto data = field.serialize;
     assert(cast(ulong[])data == [2, 0, 2, 1, 3, 5]);
-    assert(FieldKeyMetaData(data) == field);
+    assert(JsonKeyMetaData(data) == field);
 }
 
 unittest{
