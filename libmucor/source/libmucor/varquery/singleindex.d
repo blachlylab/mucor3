@@ -17,7 +17,7 @@ import std.typecons: Tuple, tuple;
 import std.exception: enforce;
 
 pragma(inline,true)
-bool isNumericStringInteger(string val)
+bool isNumericStringInteger(const(char)[] val)
 {
     foreach (c; val)
     {
@@ -26,7 +26,7 @@ bool isNumericStringInteger(string val)
     return true;
 }
 
-alias JsonTypes = SumType!(string, double, long, bool);
+alias JsonTypes = SumType!(const(char)[], double, long, bool);
 
 /// Struct that represents JSON data
 /// and can be used with a hashmap
@@ -84,7 +84,7 @@ struct JSONValue
             (bool x) => hashOf(x),
             (long x) => hashOf(x),
             (double x) => hashOf(x),
-            (string x) => hashOf(x)
+            (const(char)[] x) => hashOf(x)
         );
     }
 
@@ -95,7 +95,7 @@ struct JSONValue
             (bool a, bool b) => a < b ? -1 : 1,
             (long a, long b) => a < b ? -1 : 1,
             (double a, double b) => a < b ? -1 : 1,
-            (string a, string b) => a < b ? -1 : 1,
+            (const(char)[] a, const(char)[] b) => a < b ? -1 : 1,
             (_a, _b) => -1
         )(this.val, other.val);
         return ret;
@@ -122,7 +122,7 @@ struct JSONValue
                 else
                     return false;
             },
-            (string _x) {
+            (const(char)[] _x) {
                 static if(isSomeString!T)
                     return true;
                 else
@@ -137,7 +137,7 @@ struct JSONValue
             (bool a, bool b) => a == b,
             (long a, long b) => a == b,
             (double a, double b) => a == b,
-            (string a, string b) => a == b,
+            (const(char)[] a, const(char)[] b) => a == b,
             (_a, _b) => false
         )(this.val, other.val);
     }
@@ -148,7 +148,7 @@ struct JSONValue
             (bool x) => x.to!string,
             (long x) => x.to!string,
             (double x) => x.to!string,
-            (string x) => x,
+            (const(char)[] x) => x.idup,
         );
     }
     
@@ -157,7 +157,7 @@ struct JSONValue
             (bool x) => 0,
             (long x) => 1,
             (double x) => 2,
-            (string x) => 3
+            (const(char)[] x) => 3
         );
     }
 
@@ -179,10 +179,9 @@ struct JSONValue
                 double_to_le(x, ret.ptr);
                 return ret;
             },
-            (string x) {
-                ubyte[] ret = new ubyte[8 + x.length];
-                u64_to_le(x.length, ret.ptr);
-                ret[8 .. $] = cast(ubyte[])x;
+            (const(char)[] x) {
+                ubyte[] ret = new ubyte[x.length];
+                ret[] = cast(ubyte[])x;
                 return ret;
             }
         );
@@ -289,6 +288,16 @@ struct KeyMetaData {
     ulong fieldOffset;
     ulong fieldLength;
 
+    this(ulong keyOffset, ulong keyLength, ulong fieldOffset, ulong fieldLength) {
+        this.keyOffset = keyOffset;
+        this.keyLength = keyLength;
+        this.fieldOffset = fieldOffset;
+        this.fieldLength = fieldLength;
+
+        assert(keyLength > 0);
+        assert(fieldLength > 0);
+    }
+
     this(ubyte[] data) {
         auto p = data.ptr;
         this.keyOffset = le_to_u64(p);
@@ -333,6 +342,17 @@ struct FieldKeyMetaData {
     ulong dataOffset;
     ulong dataLength;
 
+    this(ulong type, ulong padding, ulong keyOffset, ulong keyLength, ulong dataOffset, ulong dataLength){
+        this.type = type;
+        this.padding = padding;
+        this.keyOffset = keyOffset;
+        this.keyLength = keyLength;
+        this.dataOffset = dataOffset;
+        this.dataLength = dataLength;
+        assert(this.keyLength > 0);
+        assert(this.dataLength > 0);
+    }
+
     this(ubyte[] data) {
         auto p = data.ptr;
         this.type = le_to_u64(p);
@@ -349,18 +369,14 @@ struct FieldKeyMetaData {
     }
 
     ubyte[48] serialize() {
-        static if(HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED){
-            return (cast(ubyte*)&this)[0..48];
-        } else {
-            ubyte[48] ret;
-            u64_to_le(this.type, ret.ptr);
-            u64_to_le(0, ret.ptr + 8);
-            u64_to_le(this.keyOffset, ret.ptr + 16);
-            u64_to_le(this.keyLength, ret.ptr + 24);
-            u64_to_le(this.dataOffset, ret.ptr + 32);
-            u64_to_le(this.dataLength, ret.ptr + 40);
-            return ret;
-        }
+        ubyte[48] ret;
+        u64_to_le(this.type, ret.ptr);
+        u64_to_le(0, ret.ptr + 8);
+        u64_to_le(this.keyOffset, ret.ptr + 16);
+        u64_to_le(this.keyLength, ret.ptr + 24);
+        u64_to_le(this.dataOffset, ret.ptr + 32);
+        u64_to_le(this.dataLength, ret.ptr + 40);
+        return ret;
     }
 
     auto deserialize_to_tuple(ulong[] data, ubyte[] keyData) {
@@ -368,14 +384,14 @@ struct FieldKeyMetaData {
         auto dataForKey = data[dataOffset..dataOffset+dataLength];
         alias RT = Tuple!(JSONValue, "key", ulong[], "value");
         switch(type) {
-            case 0:
+            case 0: // bool
                 return RT(JSONValue(le_to_i64(kData.ptr)), dataForKey);
-            case 1:
+            case 1: // long
+                return RT(JSONValue(le_to_i64(kData.ptr)), dataForKey);
+            case 2: // double
                 return RT(JSONValue(le_to_double(kData.ptr)), dataForKey);
-            case 2:
-                return RT(JSONValue((cast(string)kData).idup), dataForKey);
-            case 3:
-                return RT(JSONValue(le_to_i64(kData.ptr)), dataForKey);
+            case 3: // string
+                return RT(JSONValue(cast(const(char)[])kData), dataForKey);
             default: 
                 throw new Exception("Error deserializing key");
         }
@@ -383,21 +399,15 @@ struct FieldKeyMetaData {
 }
 
 unittest{
-    // import std.stdio;
-    // InvertedIndex idx = InvertedIndex();
-    // string[] v = ["hi","I","am","t"];
-    // idx.hashmap[serialize(&v[0])]=[1,2];
-    // idx.hashmap[serialize(&v[1])]=[1,3];
-    // idx.hashmap[serialize(&v[2])]=[4];
-    // idx.hashmap[serialize(&v[3])]=[5];
-    // writeln(idx.filter(["hi","I","am"]));
+    auto field = FieldKeyMetaData(2, 0, 2, 1, 3, 5);
+    auto data = field.serialize;
+    assert(cast(ulong[])data == [2, 0, 2, 1, 3, 5]);
+    assert(FieldKeyMetaData(data) == field);
+}
 
-
-    // InvertedIndex idx2 = InvertedIndex(TYPES.FLOAT);
-    // auto v2 = [0.1,0.4,0.6,0.9];
-    // idx2.hashmap[serialize(&v2[0])]=[1,2];
-    // idx2.hashmap[serialize(&v2[1])]=[1,3];
-    // idx2.hashmap[serialize(&v2[2])]=[4];
-    // idx2.hashmap[serialize(&v2[3])]=[5];
-    // writeln(idx2.filterRange([0.1,0.8]));
+unittest{
+    auto field = KeyMetaData(2, 1, 3, 5);
+    auto data = field.serialize;
+    assert(cast(ulong[])data == [2, 1, 3, 5]);
+    assert(KeyMetaData(data) == field);
 }

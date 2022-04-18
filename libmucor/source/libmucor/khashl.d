@@ -597,7 +597,7 @@ pragma(inline, true)
             (bool x) => kh_hash_func!uint(x),
             (long x) => kh_hash_func!ulong(cast(ulong)x),
             (double x) => kh_hash_func!ulong(cast(ulong)x),
-            (string x) => kh_hash_func!string(x)
+            (const(char)[] x) => kh_hash_func!(const(char)[])(x)
         );
     }
 
