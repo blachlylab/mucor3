@@ -10,15 +10,33 @@ import std.string : indexOf;
 import std.bitmanip: nativeToLittleEndian, littleEndianToNative;
 import std.stdio;
 import std.exception : enforce;
+import htslib.hfile: off_t;
 
 import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
 import libmucor.varquery.invertedindex.invertedindex;
 import libmucor.varquery.invertedindex.fieldindex;
 import libmucor.varquery.invertedindex.metadata;
-import libmucor.khashl: khashl;
+import libmucor.varquery.invertedindex.jsonvalue;
+import libmucor.khashl;
 import htslib.hts_endian;
 import std.digest.md : MD5Digest, toHexString;
+import dhtslib.file;
+import htslib.hts;
+
+void htsFileRead(HtslibFile * f, ubyte[] buf) {
+    import htslib.bgzf: bgzf_read;
+    import htslib.hfile: hread;
+    import htslib.hts_log;
+
+    long bytes;
+    if(f.fp.is_bgzf) bytes = bgzf_read(f.fp.fp.bgzf, buf.ptr, buf.length);
+    else bytes = hread(f.fp.fp.hfile, buf.ptr, buf.length);
+    if(bytes < 0) hts_log_error(__FUNCTION__, "Error reading index");
+    else if(bytes != buf.length) {
+        hts_log_error(__FUNCTION__, "Index read did not return the correct number of bytes");
+    }
+}
 
 /** 
  * Represent inverted index as it exists on disk:
@@ -55,10 +73,21 @@ struct BinaryIndex {
     uint128[] sums;                  // md5 sums
     KeyMetaData[] keyMetaData;          // first set of keys metadata 
     JsonKeyMetaData[] jsonKeyMetaData; // second set of keys metadata
-    ulong[] data;                    // ulong ids
+    ulong[] idData;                    // ulong ids
     ubyte[] fieldKeyData;            // second set of keys: JsonValue
     ubyte[] keyData;                 // first set of keys: String
-    File file;
+    
+    // Extra fields not serialized
+
+    HtslibFile * file;
+    off_t sumsOffset;
+    off_t keysMetaDataOffset;
+    off_t JsonKeysMetaDataOffset;
+    off_t dataOffset;
+    off_t fieldKeyDataOffset;
+    off_t keyDataOffset;
+    khashlSet!(JSONValue) loadedJsonValuesKeys;
+    khashlSet!(const(char)[]) loadedStringKeys;
 
     this(InvertedIndex idx) {
         // add md5sums
@@ -82,7 +111,7 @@ struct BinaryIndex {
                 fk.keyLength = this.fieldKeyData.length - fk.keyOffset;
                 // add data
                 fk.dataOffset = this.data.length;
-                data ~= kv2.value;
+                idData ~= kv2.value;
                 fk.dataLength = this.data.length - fk.dataOffset;
                 // add field key meta
                 this.jsonKeyMetaData ~= fk;
@@ -92,21 +121,13 @@ struct BinaryIndex {
         }
         this.keyMetaDataLen = this.keyMetaData.length; // # of vcf data fieldshis.keys.length;
         this.jsonKeyMetaDataLen = this.jsonKeyMetaData.length; // # of json data fields
-        this.idDataLen = this.data.length; // # of data ids
+        this.idDataLen = this.idData.length; // # of data ids
         this.jsonKeyDataLen = this.fieldKeyData.length;
         this.calculateChecksum; 
     }
 
     this(string fn){
-        this.file = File(fn, "rb");
-        import std.file : read;
-        ubyte[] bytes;
-        auto buf = this.file.rawRead(new ubyte[4096]);
-        do {
-            bytes ~= buf;
-            buf = this.file.rawRead(new ubyte[4096]);
-        } while(buf.length == 4096);
-        this(bytes);
+        this.file = new HtslibFile(fn, "rb");
     }
     /** 
     * load from file in this order:
@@ -120,20 +141,23 @@ struct BinaryIndex {
     * 
     * NOTE: string key data array's first 8 bytes are length of that data
     */
-    this(ubyte[] data) {
-        auto p = data.ptr;
-        load_constants(p);
-        enforce((cast(char*)&this.constant)[0..8] == "VQ_INDEX", "File doesn't contain VQ_INDEX sequence");
-        // this.validateChecksum()
-        load_sums(p);
-        load_key_meta(p);
-        load_json_key_meta(p);
-        load_id_data(p);
-        load_field_key_data(p);
-        load_key_data(p);
-    }
+    // this(ubyte[] data) {
+    //     auto p = data.ptr;
+    //     load_constants(p);
+    //     enforce((cast(char*)&this.constant)[0..8] == "VQ_INDEX", "File doesn't contain VQ_INDEX sequence");
+    //     // this.validateChecksum()
+    //     load_sums(p);
+    //     load_key_meta(p);
+    //     load_json_key_meta(p);
+    //     load_id_data(p);
+    //     load_field_key_data(p);
+    //     load_key_data(p);
+    // }
 
-    void load_constants(ref ubyte * p){
+    void load_constants(){
+        ubyte[64] data;
+        htsFileRead(this.file, data[]);
+        auto p = data.ptr; 
         // load constants
         this.constant = le_to_u64(p);
         p += 8;
@@ -153,8 +177,10 @@ struct BinaryIndex {
         p += 8;
     }
 
-    void load_sums(ref ubyte * p) {
-        
+    void load_sums() {
+        ubyte[] data = new ubyte[this.md5ArrLen * 16];
+        htsFileRead(this.file, data);
+        auto p = data.ptr;
         // load md5 sums
         this.sums = new uint128[this.md5ArrLen];
         foreach(i; 0..this.md5ArrLen) {
@@ -165,7 +191,10 @@ struct BinaryIndex {
         }
     }
 
-    void load_key_meta(ref ubyte * p){
+    void load_key_meta(){
+        ubyte[] data = new ubyte[this.keyMetaDataLen * 32];
+        htsFileRead(this.file, data);
+        auto p = data.ptr;
         // load key metadata
         this.keyMetaData = new KeyMetaData[this.keyMetaDataLen];
         foreach(i; 0..this.keyMetaDataLen) {
@@ -174,13 +203,20 @@ struct BinaryIndex {
         }
     }
 
-    void load_json_key_meta(ref ubyte * p) {
+    void load_json_key_meta() {
+        ubyte[] data = new ubyte[this.jsonKeyMetaDataLen * 48];
+        htsFileRead(this.file, data);
+        auto p = data.ptr;
         // load key metadata
         this.jsonKeyMetaData = new JsonKeyMetaData[this.jsonKeyMetaDataLen];
         foreach(i; 0..this.jsonKeyMetaDataLen) {
             this.jsonKeyMetaData[i] = JsonKeyMetaData(p[0..48]);
             p += 48;
         }
+    }
+
+    void loadKeys() {
+        
     }
 
     void load_id_data(ref ubyte * p) {
