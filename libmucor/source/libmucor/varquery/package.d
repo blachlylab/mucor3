@@ -7,7 +7,6 @@ import std.range;
 
 public import libmucor.varquery.invertedindex;
 public import libmucor.varquery.query;
-public import libmucor.varquery.invertedindex.fieldindex;
 
 import asdf : deserializeAsdf = deserialize, parseJsonByLine, Asdf;
 import libmucor.wideint : uint128;

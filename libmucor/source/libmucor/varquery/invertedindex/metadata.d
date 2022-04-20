@@ -25,48 +25,36 @@ import std.exception: enforce;
  * Total size: 48 bytes
  */
 struct KeyMetaData {
-    BinaryIndex * idx;
-    
+    align:
+    uint128 keyHash;
     ulong keyOffset;
     ulong keyLength;
-    ulong fieldOffset;
-    ulong fieldLength;
 
-    this(ulong keyOffset, ulong keyLength, ulong fieldOffset, ulong fieldLength) {
+    this(uint128 keyHash, ulong keyOffset, ulong keyLength) {
+        this.keyHash = keyHash;
         this.keyOffset = keyOffset;
         this.keyLength = keyLength;
-        this.fieldOffset = fieldOffset;
-        this.fieldLength = fieldLength;
-
         assert(keyLength > 0);
-        assert(fieldLength > 0);
     }
 
     this(ubyte[] data) {
         auto p = data.ptr;
+        this.keyHash.hi = le_to_u64(p);
+        p += 8;
+        this.keyHash.lo = le_to_u64(p);
+        p += 8;
         this.keyOffset = le_to_u64(p);
         p += 8;
         this.keyLength = le_to_u64(p);
-        p += 8;
-        this.fieldOffset = le_to_u64(p);
-        p += 8;
-        this.fieldLength = le_to_u64(p);
     }
 
     ubyte[32] serialize() {
         ubyte[32] ret;
-        u64_to_le(this.keyOffset, ret.ptr + 0);
-        u64_to_le(this.keyLength, ret.ptr + 8);
-        u64_to_le(this.fieldOffset, ret.ptr + 16);
-        u64_to_le(this.fieldLength, ret.ptr + 24);
+        u64_to_le(this.keyHash.hi, ret.ptr + 0);
+        u64_to_le(this.keyHash.lo, ret.ptr + 8);
+        u64_to_le(this.keyOffset, ret.ptr + 16);
+        u64_to_le(this.keyLength, ret.ptr + 24);
         return ret;
-    }
-
-    auto deserialize_to_tuple(JsonKeyMetaData[] data, ubyte[] keyData) {
-        auto kData = keyData[keyOffset..keyOffset+keyLength];
-        auto dataForKey = data[fieldOffset..fieldOffset+fieldLength];
-        alias RT = Tuple!(string, "key", JsonKeyMetaData[], "value");
-        return RT(cast(string)kData, dataForKey);
     }
 }
 
@@ -79,26 +67,27 @@ struct KeyMetaData {
  */
 struct JsonKeyMetaData {
     align:
+    uint128 keyHash;
     ulong type;
     ulong padding;
     ulong keyOffset;
     ulong keyLength;
-    ulong dataOffset;
-    ulong dataLength;
 
-    this(ulong type, ulong padding, ulong keyOffset, ulong keyLength, ulong dataOffset, ulong dataLength){
+    this(uint128 keyHash, ulong type, ulong padding, ulong keyOffset, ulong keyLength){
+        this.keyHash = keyHash;
         this.type = type;
         this.padding = padding;
         this.keyOffset = keyOffset;
         this.keyLength = keyLength;
-        this.dataOffset = dataOffset;
-        this.dataLength = dataLength;
         assert(this.keyLength > 0);
-        assert(this.dataLength > 0);
     }
 
     this(ubyte[] data) {
         auto p = data.ptr;
+        this.keyHash.hi = le_to_u64(p);
+        p += 8;
+        this.keyHash.lo = le_to_u64(p);
+        p += 8;
         this.type = le_to_u64(p);
         p += 8;
         this.padding = le_to_u64(p);
@@ -106,52 +95,30 @@ struct JsonKeyMetaData {
         this.keyOffset = le_to_u64(p);
         p += 8;
         this.keyLength = le_to_u64(p);
-        p += 8;
-        this.dataOffset = le_to_u64(p);
-        p += 8;
-        this.dataLength = le_to_u64(p);
     }
 
     ubyte[48] serialize() {
         ubyte[48] ret;
-        u64_to_le(this.type, ret.ptr);
-        u64_to_le(0, ret.ptr + 8);
-        u64_to_le(this.keyOffset, ret.ptr + 16);
-        u64_to_le(this.keyLength, ret.ptr + 24);
-        u64_to_le(this.dataOffset, ret.ptr + 32);
-        u64_to_le(this.dataLength, ret.ptr + 40);
+        u64_to_le(this.keyHash.hi, ret.ptr + 0);
+        u64_to_le(this.keyHash.lo, ret.ptr + 8);
+        u64_to_le(this.type, ret.ptr + 16);
+        u64_to_le(this.padding, ret.ptr + 24);
+        u64_to_le(this.keyOffset, ret.ptr + 32);
+        u64_to_le(this.keyLength, ret.ptr + 40);
         return ret;
-    }
-
-    auto deserialize_to_tuple(ulong[] data, ubyte[] keyData) {
-        auto kData = keyData[keyOffset..keyOffset+keyLength];
-        auto dataForKey = data[dataOffset..dataOffset+dataLength];
-        alias RT = Tuple!(JSONValue, "key", ulong[], "value");
-        switch(type) {
-            case 0: // bool
-                return RT(JSONValue(le_to_i64(kData.ptr)), dataForKey);
-            case 1: // long
-                return RT(JSONValue(le_to_i64(kData.ptr)), dataForKey);
-            case 2: // double
-                return RT(JSONValue(le_to_double(kData.ptr)), dataForKey);
-            case 3: // string
-                return RT(JSONValue(cast(const(char)[])kData), dataForKey);
-            default: 
-                throw new Exception("Error deserializing key");
-        }
     }
 }
 
 unittest{
-    auto field = JsonKeyMetaData(2, 0, 2, 1, 3, 5);
+    auto field = JsonKeyMetaData(uint128(2), 0, 2, 1, 3);
     auto data = field.serialize;
-    assert(cast(ulong[])data == [2, 0, 2, 1, 3, 5]);
+    assert(cast(ulong[])data == [0, 2, 0, 2, 1, 3]);
     assert(JsonKeyMetaData(data) == field);
 }
 
 unittest{
-    auto field = KeyMetaData(2, 1, 3, 5);
+    auto field = KeyMetaData(uint128(2), 1, 3);
     auto data = field.serialize;
-    assert(cast(ulong[])data == [2, 1, 3, 5]);
+    assert(cast(ulong[])data == [0, 2, 1, 3]);
     assert(KeyMetaData(data) == field);
 }

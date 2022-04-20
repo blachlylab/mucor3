@@ -9,13 +9,14 @@ import std.format : format;
 import std.string : indexOf;
 import std.bitmanip: nativeToLittleEndian, littleEndianToNative;
 import std.stdio;
+import std.file: exists;
 import std.exception : enforce;
 
 import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
-import libmucor.varquery.invertedindex.fieldindex;
 import libmucor.varquery.invertedindex.jsonvalue;
 import libmucor.varquery.invertedindex.binaryindex;
+import libmucor.varquery.invertedindex.store;
 import libmucor.khashl: khashl;
 import htslib.hts_endian;
 import std.digest.md : MD5Digest, toHexString;
@@ -24,24 +25,17 @@ char sep = '/';
 
 struct InvertedIndex
 {
-    BinaryIndex * bidx;
-    uint128[] recordMd5s;
-    khashl!(const(char)[], FieldIndex) fields;
-    this(string f){
+    BinaryIndexReader * bidxReader;
+    BinaryIndexWriter * bidxWriter;
+    this(string prefix){
         // read const sequence
-        
-        this.bidx = new BinaryIndex(f);
-        this.recordMd5s = bidx.sums;
-        foreach(k; bidx.keyMetaData) {
-            auto kv = k.deserialize_to_tuple(bidx.jsonKeyMetaData, bidx.keyData);
-            FieldIndex idx;
-            foreach(fkv; kv.value) {
-                auto kv2 = fkv.deserialize_to_tuple(bidx.data, bidx.fieldKeyData);
-                idx.hashmap[kv2.key] = kv2.value;
-            }
-            this.fields[kv.key] = idx;
+        if(prefix.exists){
+            this.bidxReader = new BinaryIndexReader(prefix);
+        } else {
+            this.bidxWriter = new BinaryIndexWriter(prefix);
         }
     }
+
     void addJsonObject(Asdf root, const(char)[] path = ""){
         if(path == ""){
             uint128 a;
@@ -49,7 +43,7 @@ struct InvertedIndex
             auto md5 = root["md5"].deserializeAsdf!string;
             root["md5"].remove;
             a.fromHexString(md5);
-            this.recordMd5s ~= a;
+            this.bidxWriter.sums.write(a);
         }
         foreach (key,value; root.byKeyValue)
         {
@@ -65,18 +59,7 @@ struct InvertedIndex
             }else{
                 valkey = JSONValue(value);
             }
-            auto p = path~sep~key in fields;
-            if(p){
-                ulong[] arr = new ulong[0];
-                auto val = (*p).hashmap.require(valkey,arr);
-                (*val) ~= this.recordMd5s.length - 1;
-            }else{
-                ulong[] arr = new ulong[0];
-                fields[path~sep~key] = FieldIndex();
-                FieldIndex * hm= (path~sep~key) in fields;
-                auto val = hm.hashmap.require(valkey,arr);
-                (*val) ~= this.recordMd5s.length - 1;
-            }
+            this.bidxWriter.insert(path~sep~key, valkey);
         }
         
     }
@@ -96,42 +79,26 @@ struct InvertedIndex
             }else{
                 valkey = JSONValue(value);
             }
-            auto p = path in fields;
-            if(p){
-                ulong[] arr = new ulong[0];
-                auto val = (*p).hashmap.require(valkey,arr);
-                (*val) ~= this.recordMd5s.length - 1; 
-            }else{
-                ulong[] arr = new ulong[0];
-                fields[path] = FieldIndex();
-                FieldIndex * hm= path in fields;
-                auto val = hm.hashmap.require(valkey,arr);
-                (*val) ~= this.recordMd5s.length - 1;
-            }
+            this.bidxWriter.insert(path, valkey);
         }
         
     }
 
-    void writeToFile(File f){
-        
-        auto bidx = BinaryIndex(this);
-        bidx.writeToFile(f);
-    }
-
     ulong[] allIds(){
-        return iota(0, this.recordMd5s.length).array;
+        return iota(0, this.bidxReader.sums.length).array;
         // return this.recordMd5s;
     }
 
-    const(FieldIndex)*[] getFields(string key)
+    JsonStoreReader*[] getFields(const(char)[] key)
     {
         auto keycopy = key.idup;
         if(key[0] != '/') throw new Exception("key is missing leading /");
-        const(FieldIndex)*[] ret;
+        JsonStoreReader*[] ret;
         auto wildcard = key.indexOf('*');
         if(wildcard == -1){
-            auto p = key in fields;
-            if(!p) throw new Exception(" key "~key~" is not found");
+            auto hash = getKeyHash(key);
+            auto p = hash in this.bidxReader.hashmap;
+            if(!p) throw new Exception(" key "~key.idup~" is not found");
             ret = [p];
             if(ret.length == 0){
                 stderr.writeln("Warning: Key"~ keycopy ~" was not found in index!");
@@ -139,7 +106,7 @@ struct InvertedIndex
         }else{
             key = key.replace("*",".*");
             auto reg = regex("^" ~ key ~"$");
-            ret = fields.byKey.std_filter!(x => !(x.matchFirst(reg).empty)).map!(x=> &fields[x]).array;
+            ret = this.bidxReader.getKeysWithJsonStore.std_filter!(x => !(x[0].matchFirst(reg).empty)).map!(x=> x[1]).array;
             if(ret.length == 0){
                 stderr.writeln("Warning: Key wildcards sequence "~ keycopy ~" matched no keys in index!");
             }
@@ -148,13 +115,13 @@ struct InvertedIndex
         return ret;
     }
 
-    ulong[] query(T)(string key,T value){
+    ulong[] query(T)(const(char)[] key,T value) {
         auto matchingFields = getFields(key);
         return matchingFields
                 .map!(x=> (*x).filter([value]))
                 .joiner.array.sort.uniq.array;
     }
-    ulong[] queryRange(T)(string key,T first,T second){
+    ulong[] queryRange(T)(const(char)[] key,T first,T second){
         auto matchingFields = getFields(key);
         return matchingFields
                 .map!(x=> (*x).filterRange([first,second]))
@@ -162,15 +129,15 @@ struct InvertedIndex
     }
     template queryOp(string op)
     {
-        ulong[] queryOp(T)(string key,T val){
+        ulong[] queryOp(T)(const(char)[] key,T val){
             auto matchingFields = getFields(key);
             return matchingFields
-                    .map!(x=> (*x).filterOp!op(val))
+                    .map!(x=> (*x).filterOp!(op, T)(val))
                     .joiner.array.sort.uniq.array;
         }
     }
     
-    ulong[] queryAND(T)(string key,T[] values){
+    ulong[] queryAND(T)(const(char)[] key,T[] values){
         auto matchingFields = getFields(key);
         return matchingFields.map!((x){
             auto results = values.map!(y=>(*x).filter([y]).sort.uniq.array).array;
@@ -180,7 +147,7 @@ struct InvertedIndex
             return intersect.array;
         }).joiner.array.sort.uniq.array;
     }
-    ulong[] queryOR(T)(string key,T[] values){
+    ulong[] queryOR(T)(const(char)[] key,T[] values){
         auto matchingFields = getFields(key);
         return matchingFields.map!(x=> (*x).filter(values)).joiner.array.sort.uniq.array;
     }
@@ -190,7 +157,7 @@ struct InvertedIndex
 
     uint128[] convertIds(ulong[] ids)
     {
-        return ids.map!(x => this.recordMd5s[x]).array;
+        return ids.map!(x => this.bidxReader.sums[x]).array;
     }
 
     auto opBinaryRight(string op)(InvertedIndex lhs)
@@ -222,40 +189,40 @@ struct InvertedIndex
 
 
 
-unittest{
-    import asdf;
-    import libmucor.jsonlops.basic: md5sumObject;
-    import std.array: array;
-    InvertedIndex idx;
-    idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.md5sumObject);
-    idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.md5sumObject);
-    idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.md5sumObject);
+// unittest{
+//     import asdf;
+//     import libmucor.jsonlops.basic: md5sumObject;
+//     import std.array: array;
+//     InvertedIndex idx;
+//     idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.md5sumObject);
+//     idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.md5sumObject);
+//     idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.md5sumObject);
 
-    assert(idx.recordMd5s.length == 3);
-    assert(idx.fields.byKey.array == ["/test", "/test4", "/test3", "/test2"]);
+//     assert(idx.recordMd5s.length == 3);
+//     assert(idx.fields.byKey.array == ["/test", "/test4", "/test3", "/test2"]);
 
-    assert(idx.fields["/test2"].filter(["foo"]) == [0]);
-    assert(idx.fields["/test3"].filterRange([1, 3]) == [1, 0]);
+//     assert(idx.fields["/test2"].filter(["foo"]) == [0]);
+//     assert(idx.fields["/test3"].filterRange([1, 3]) == [1, 0]);
 
-    auto bidx = BinaryIndex(idx);
-    writeln(bidx);
-    auto f = File("/tmp/test.idx", "w");
-    idx.writeToFile(f);
-    f.close;
+//     auto bidx = BinaryIndex(idx);
+//     writeln(bidx);
+//     auto f = File("/tmp/test.idx", "w");
+//     idx.writeToFile(f);
+//     f.close;
 
-    import std.file: read;
-    bidx = BinaryIndex(cast(ubyte[])read("/tmp/test.idx"));
-    writeln(bidx);
-    assert(bidx.md5ArrLen == 3);
-    assert(bidx.keyMetaDataLen == 4);
-    assert(bidx.jsonKeyMetaDataLen == 8);
-    assert(bidx.idDataLen == 9);
-    idx = InvertedIndex("/tmp/test.idx");
+//     import std.file: read;
+//     bidx = BinaryIndex(cast(ubyte[])read("/tmp/test.idx"));
+//     writeln(bidx);
+//     assert(bidx.md5ArrLen == 3);
+//     assert(bidx.keyMetaDataLen == 4);
+//     assert(bidx.jsonKeyMetaDataLen == 8);
+//     assert(bidx.idDataLen == 9);
+//     idx = InvertedIndex("/tmp/test.idx");
 
-    assert(idx.recordMd5s.length == 3);
-    writeln(idx.fields.byKey.array);
-    assert(idx.fields.byKey.array == ["/test2", "/test4", "/test3", "/test"]);
+//     assert(idx.recordMd5s.length == 3);
+//     writeln(idx.fields.byKey.array);
+//     assert(idx.fields.byKey.array == ["/test2", "/test4", "/test3", "/test"]);
 
-    assert(idx.fields["/test2"].filter(["foo"]) == [0]);
-    assert(idx.fields["/test3"].filterRange([1, 3]) == [1, 0]);
-}
+//     assert(idx.fields["/test2"].filter(["foo"]) == [0]);
+//     assert(idx.fields["/test3"].filterRange([1, 3]) == [1, 0]);
+// }

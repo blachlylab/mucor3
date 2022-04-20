@@ -10,7 +10,6 @@ import std.conv : to;
 import std.format : format;
 import std.typecons : Tuple;
 
-import libmucor.varquery.invertedindex.fieldindex;
 import libmucor.varquery.invertedindex.invertedindex;
 
 
@@ -85,14 +84,14 @@ enum QueryType
 }
 
 /// Query subunit
-alias Query = Tuple!(string, "key", string[], "values", QueryType, "type");
+alias Query = Tuple!(const(char)[], "key", const(char)[][], "values", QueryType, "type");
 
 /// Query parser results
-alias QueryParserResult = Tuple!(string, "query", string, "leftover", Query[], "results");
+alias QueryParserResult = Tuple!(const(char)[], "query", const(char)[], "leftover", Query[], "results");
 
 
 /// Match simple/base queries and extract
-auto parseSimpleQueries(string query)
+auto parseSimpleQueries(const(char)[] query)
 {
     QueryParserResult res;
     res.query = query;
@@ -105,11 +104,11 @@ auto parseSimpleQueries(string query)
                 res.results ~= Query(m[1],[m[2], m[3]], QueryType.Range);
                 break;
             case 2: //and
-                string[] vals = m[2].splitter(regex(`[\s]+AND[\s]+`)).array;
+                const(char)[][] vals = m[2].splitter(regex(`[\s]+AND[\s]+`)).array;
                 res.results ~= Query(m[1], vals, QueryType.AND);
                 break;
             case 3: //or
-                string[] vals = m[2].splitter(regex(`[\s]+OR[\s]+`)).array;
+                const(char)[][] vals = m[2].splitter(regex(`[\s]+OR[\s]+`)).array;
                 res.results ~= Query(m[1], vals, QueryType.OR);
                 break;
             case 4: //simple
@@ -190,7 +189,7 @@ auto logic_patterns = regex([
 ]);
 
 /// Parse secondary queries (used after basic queries are parse)
-auto parseLogicalStatements(string query, ulong i)
+auto parseLogicalStatements(const(char)[] query, ulong i)
 {
     // auto processedQueries = parseSimpleQueries(query);
     QueryParserResult res; //= processedQueries.results;
@@ -207,12 +206,12 @@ auto parseLogicalStatements(string query, ulong i)
             switch(m.whichPattern){
                 case 1: //(0 AND 1)
                     stderr.writeln("Matched AND: ", query);
-                    string[] vals = m[1].splitter(regex(`[\s]+AND[\s]+`)).array;
+                    const(char)[][] vals = m[1].splitter(regex(`[\s]+AND[\s]+`)).array;
                     res.results ~= Query("", vals, QueryType.AND);
                     break;
                 case 2: //(0 OR 1)
                     stderr.writeln("Matched OR: ", query);
-                    string[] vals = m[1].splitter(regex(`[\s]+OR[\s]+`)).array;
+                    const(char)[][] vals = m[1].splitter(regex(`[\s]+OR[\s]+`)).array;
                     res.results ~= Query("", vals, QueryType.OR);
                     break;
                 case 3: //simple
@@ -221,12 +220,12 @@ auto parseLogicalStatements(string query, ulong i)
                     break;
                 case 4: //0 AND 1
                     stderr.writeln("Matched AND: ", query);
-                    string[] vals = m[1].splitter(regex(`[\s]+AND[\s]+`)).array;
+                    const(char)[][] vals = m[1].splitter(regex(`[\s]+AND[\s]+`)).array;
                     res.results ~= Query("", vals, QueryType.AND);
                     break;
                 case 5: //0 OR 1
                     stderr.writeln("Matched OR: ", query);
-                    string[] vals = m[1].splitter(regex(`[\s]+OR[\s]+`)).array;
+                    const(char)[][] vals = m[1].splitter(regex(`[\s]+OR[\s]+`)).array;
                     res.results ~= Query("", vals, QueryType.OR);
                     break;
                 default:
@@ -276,7 +275,7 @@ unittest
 /// the inverted index
 /// returns the ids/md5sums of records that 
 /// fufill the criteria of the query (based on current index) 
-auto evalQuery(string q, InvertedIndex * idx)
+auto evalQuery(const(char)[] q, InvertedIndex * idx)
 {
     /// Parse queries into basic steps
     auto primaryQueries = parseSimpleQueries(q);

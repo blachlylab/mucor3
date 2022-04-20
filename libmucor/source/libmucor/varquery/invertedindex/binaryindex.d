@@ -2,7 +2,7 @@ module libmucor.varquery.invertedindex.binaryindex;
 import std.algorithm.setops;
 import std.regex;
 import std.algorithm : sort, uniq, map, std_filter = filter, joiner, each;
-import std.range : iota, takeExactly;
+import std.range : iota, takeExactly, zip;
 import std.array : array, replace;
 import std.conv : to;
 import std.format : format;
@@ -11,32 +11,15 @@ import std.bitmanip: nativeToLittleEndian, littleEndianToNative;
 import std.stdio;
 import std.exception : enforce;
 import htslib.hfile: off_t;
+import std.traits: isSomeString;
 
 import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
 import libmucor.varquery.invertedindex.invertedindex;
-import libmucor.varquery.invertedindex.fieldindex;
 import libmucor.varquery.invertedindex.metadata;
 import libmucor.varquery.invertedindex.jsonvalue;
+import libmucor.varquery.invertedindex.store;
 import libmucor.khashl;
-import htslib.hts_endian;
-import std.digest.md : MD5Digest, toHexString;
-import dhtslib.file;
-import htslib.hts;
-
-void htsFileRead(HtslibFile * f, ubyte[] buf) {
-    import htslib.bgzf: bgzf_read;
-    import htslib.hfile: hread;
-    import htslib.hts_log;
-
-    long bytes;
-    if(f.fp.is_bgzf) bytes = bgzf_read(f.fp.fp.bgzf, buf.ptr, buf.length);
-    else bytes = hread(f.fp.fp.hfile, buf.ptr, buf.length);
-    if(bytes < 0) hts_log_error(__FUNCTION__, "Error reading index");
-    else if(bytes != buf.length) {
-        hts_log_error(__FUNCTION__, "Index read did not return the correct number of bytes");
-    }
-}
 
 /** 
  * Represent inverted index as it exists on disk:
@@ -60,373 +43,208 @@ void htsFileRead(HtslibFile * f, ubyte[] buf) {
  * 
  * NOTE: string key data array's first 8 bytes are length of that data
  */
-struct BinaryIndex {
-    align:
-    ulong constant = 0x5845444e495f5156; // VQ_INDEX
-    ulong md5ArrLen;                 // # of md5 sums
-    ulong keyMetaDataLen;            // # of vcf data fields
-    ulong jsonKeyMetaDataLen;        // # of json data fields
-    ulong idDataLen;                 // # of data ids
-    ulong jsonKeyDataLen;            // len of json keys data 
-    uint128 dataChecksum;            // checksum of below data fields
+struct BinaryIndexWriter {
+    string prefix;
+    /// hashmap for writing
+    /// json value hash maps to a set of ids
+    khashl!(uint128, JsonStoreWriter) hashmap;
+    /// store json value meta data
+    KeyMetaStore metadata;
+    /// store json value hashes
+    MD5Store hashes;
 
-    uint128[] sums;                  // md5 sums
-    KeyMetaData[] keyMetaData;          // first set of keys metadata 
-    JsonKeyMetaData[] jsonKeyMetaData; // second set of keys metadata
-    ulong[] idData;                    // ulong ids
-    ubyte[] fieldKeyData;            // second set of keys: JsonValue
-    ubyte[] keyData;                 // first set of keys: String
+    ulong numSums;
+
+    /// store md5 sums
+    MD5Store sums;
+    /// store md5 sums
+    StringStore keys;
+
+    this(string prefix) {
+        this.prefix = prefix;
+        this.hashes = MD5Store(prefix ~ ".keys.md5", "wb");
+        this.metadata = KeyMetaStore(prefix ~  ".keys.meta", "wb");
+        this.sums = MD5Store(prefix ~  ".record.sums", "wb");
+        this.keys = StringStore(prefix ~  ".keys", "wb");
+    }
+
+    void insert(T)(T key, JSONValue item) 
+    if(isSomeString!T)
+    {
+        auto keyhash = getKeyHash(key);
+        auto p = keyhash in hashmap;
+        if(p) {
+            p.insert(item, this.numSums++);
+        } else {
+            KeyMetaData meta;
+            meta.keyHash = keyhash;
+            auto s = JsonStoreWriter(prefix ~ "_" ~ format("%x",keyhash));
+            this.hashmap[keyhash] = s;
+            s.insert(item, this.numSums++);
+            meta.keyOffset = this.keys.tell;
+            this.keys.write(key);
+            meta.keyLength = this.keys.tell - meta.keyOffset;
+            metadata.write(meta);
+        }
+    }
+}
+
+/// Stores json data and ids
+/// for a given field
+struct BinaryIndexReader {
+    string prefix;
+    /// hashmap for writing
+    /// json value hash maps to a set of ids
+    khashl!(uint128, JsonStoreReader) hashmap;
+    /// Key metadata
+    KeyMetaData[] metadata;
+    /// store md5 sums
+    uint128[] sums;
+    /// store json value hashes
+    MD5Store hashes;
+    /// store md5 sums
+    StringStore keys;
+
+    this(string prefix) {
+        this.prefix = prefix;
+        this.hashes = MD5Store(prefix ~ ".keys.md5", "rb");
+        this.metadata = KeyMetaStore(prefix ~  ".keys.meta", "rb").getAll;
+        this.sums = MD5Store(prefix ~  ".record.sums", "rb").getAll;
+        this.keys = StringStore(prefix ~  ".keys", "rb");
+        foreach(meta; this.metadata) {
+            hashmap[meta.keyHash] = JsonStoreReader(prefix ~ "_" ~ format("%x", meta.keyHash));
+        }
+        this.metadata = KeyMetaStore(prefix ~  ".json.meta", "rb").getAll;
+        this.sums = MD5Store(prefix ~  ".record.sums", "rb").getAll;
+    }
+
+    auto getKeysWithJsonStore() {
+        auto strkeys = this.metadata
+            .map!(meta => this.keys.readFromPosition(meta.keyOffset));
+        auto stores = this.metadata
+            .map!(meta => meta.keyHash in this.hashmap);
+        return zip(strkeys, stores);
+    }
+}
+
+// unittest
+// {
+//     {
+//         auto bidx = BinaryIndexWriter("/tmp/test");
+//         bidx.insert("testkey", JSONValue("testval"));
+//         bidx.sums.write(uint128(0));
+//         bidx.insert("testkey", JSONValue("testval2"));
+//         bidx.sums.write(uint128(1));
+//         bidx.insert("testkey2", JSONValue(0));
+//         bidx.sums.write(uint128(2));
+//         bidx.insert("testkey2", JSONValue(2));
+//         bidx.sums.write(uint128(3));
+//         bidx.insert("testkey2", JSONValue(3));
+//         bidx.sums.write(uint128(4));
+//         bidx.insert("testkey2", JSONValue(5));
+//         bidx.sums.write(uint128(5));
+//         bidx.insert("testkey3", JSONValue(1.2));
+//         bidx.sums.write(uint128(6));
+//     }
+
+//     {
+//         auto bidx = BinaryIndexReader("/tmp/test");
+//         assert(bidx.sums.length == 7);
+//         assert(bidx.metadata.length == 7);
+
+//     }
     
-    // Extra fields not serialized
+// }
 
-    HtslibFile * file;
-    off_t sumsOffset;
-    off_t keysMetaDataOffset;
-    off_t JsonKeysMetaDataOffset;
-    off_t dataOffset;
-    off_t fieldKeyDataOffset;
-    off_t keyDataOffset;
-    khashlSet!(JSONValue) loadedJsonValuesKeys;
-    khashlSet!(const(char)[]) loadedStringKeys;
 
-    this(InvertedIndex idx) {
-        // add md5sums
-        this.md5ArrLen = idx.recordMd5s.length;
-        this.sums = idx.recordMd5s;
-        foreach(kv; idx.fields.byKeyValue) {
-            KeyMetaData k;
-            // add key
-            k.keyOffset = this.keyData.length;
-            this.keyData ~= cast(ubyte[]) kv.key;
-            k.keyLength = this.keyData.length - k.keyOffset;
-            // add fields
-            k.fieldOffset = this.jsonKeyMetaData.length;
-            foreach (kv2; kv.value.hashmap.byKeyValue)
-            {
-                JsonKeyMetaData fk;
-                fk.type = kv2.key.getType;
-                // add field key
-                fk.keyOffset = this.fieldKeyData.length;
-                fieldKeyData ~= kv2.key.toBytes;
-                fk.keyLength = this.fieldKeyData.length - fk.keyOffset;
-                // add data
-                fk.dataOffset = this.data.length;
-                idData ~= kv2.value;
-                fk.dataLength = this.data.length - fk.dataOffset;
-                // add field key meta
-                this.jsonKeyMetaData ~= fk;
-            }
-            k.fieldLength = this.jsonKeyMetaData.length - k.fieldOffset;
-            this.keyMetaData ~= k;
-        }
-        this.keyMetaDataLen = this.keyMetaData.length; // # of vcf data fieldshis.keys.length;
-        this.jsonKeyMetaDataLen = this.jsonKeyMetaData.length; // # of json data fields
-        this.idDataLen = this.idData.length; // # of data ids
-        this.jsonKeyDataLen = this.fieldKeyData.length;
-        this.calculateChecksum; 
-    }
+// unittest{
+//     import asdf;
+//     import libmucor.jsonlops.basic: md5sumObject;
+//     import std.array: array;
+//     import libmucor.varquery.invertedindex.jsonvalue;
+//     InvertedIndex idx;
+//     idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.md5sumObject);
+//     idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.md5sumObject);
+//     idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.md5sumObject);
 
-    this(string fn){
-        this.file = new HtslibFile(fn, "rb");
-    }
-    /** 
-    * load from file in this order:
-    *  Constants
-    *  md5 checksums
-    *  key metadata
-    *  json key metadata
-    *  id data
-    *  json key data
-    *  string key data
-    * 
-    * NOTE: string key data array's first 8 bytes are length of that data
-    */
-    // this(ubyte[] data) {
-    //     auto p = data.ptr;
-    //     load_constants(p);
-    //     enforce((cast(char*)&this.constant)[0..8] == "VQ_INDEX", "File doesn't contain VQ_INDEX sequence");
-    //     // this.validateChecksum()
-    //     load_sums(p);
-    //     load_key_meta(p);
-    //     load_json_key_meta(p);
-    //     load_id_data(p);
-    //     load_field_key_data(p);
-    //     load_key_data(p);
-    // }
+//     assert(idx.recordMd5s.length == 3);
+//     assert(idx.fields.byKey.array == ["/test", "/test4", "/test3", "/test2"]);
 
-    void load_constants(){
-        ubyte[64] data;
-        htsFileRead(this.file, data[]);
-        auto p = data.ptr; 
-        // load constants
-        this.constant = le_to_u64(p);
-        p += 8;
-        this.md5ArrLen = le_to_u64(p);
-        p += 8;
-        this.keyMetaDataLen = le_to_u64(p);
-        p += 8;
-        this.jsonKeyMetaDataLen = le_to_u64(p);
-        p += 8;
-        this.idDataLen = le_to_u64(p);
-        p += 8;
-        this.jsonKeyDataLen = le_to_u64(p);
-        p += 8;
-        this.dataChecksum.hi = le_to_u64(p);
-        p += 8;
-        this.dataChecksum.lo = le_to_u64(p);
-        p += 8;
-    }
+//     assert(idx.fields["/test2"].filter(["foo"]) == [0]);
+//     assert(idx.fields["/test3"].filterRange([1, 3]) == [1, 0]);
 
-    void load_sums() {
-        ubyte[] data = new ubyte[this.md5ArrLen * 16];
-        htsFileRead(this.file, data);
-        auto p = data.ptr;
-        // load md5 sums
-        this.sums = new uint128[this.md5ArrLen];
-        foreach(i; 0..this.md5ArrLen) {
-            this.sums[i].hi = le_to_u64(p);
-            p += 8;
-            this.sums[i].lo = le_to_u64(p);
-            p += 8;
-        }
-    }
+//     ulong[] exp_constants = [6360565151759814998, 3, 4, 8, 9, 43, 1132386765224132344, 13579944864346696974];
+//     auto exp_sums = ["4BC5E16362F7052C4C90249CDE512C9D", "60E2DB9459D8C80620A8C2156FCAB161", "51D72970FC05BF560F7A0545A9A36687"];
+//     auto exp_keys = [KeyMetaData(0, 5, 0, 2), KeyMetaData(5, 6, 2, 1), KeyMetaData(11, 6, 3, 3), KeyMetaData(17, 6, 6, 2)];
+//     auto exp_fields = [JsonKeyMetaData(3, 0, 0, 5, 0, 2), JsonKeyMetaData(3, 0, 5, 5, 2, 1), JsonKeyMetaData(3, 0, 10, 3, 3, 1), JsonKeyMetaData(1, 0, 13, 8, 4, 1), JsonKeyMetaData(1, 0, 21, 8, 5, 1), JsonKeyMetaData(1, 0, 29, 8, 6, 1), JsonKeyMetaData(3, 0, 37, 3, 7, 1), JsonKeyMetaData(3, 0, 40, 3, 8, 1)];
+//     {
+//         auto bidx = BinaryIndex(idx);
+//         assert(cast(ulong[])bidx.serializeConstants == exp_constants);
+//         assert((cast(uint128[])bidx.serializeSums).map!(x => format("%x",x)).array == exp_sums);
+//         assert(cast(KeyMetaData[])bidx.serializeKeys == exp_keys);
+//         assert(cast(JsonKeyMetaData[])bidx.serializeFieldKeys == exp_fields);
 
-    void load_key_meta(){
-        ubyte[] data = new ubyte[this.keyMetaDataLen * 32];
-        htsFileRead(this.file, data);
-        auto p = data.ptr;
-        // load key metadata
-        this.keyMetaData = new KeyMetaData[this.keyMetaDataLen];
-        foreach(i; 0..this.keyMetaDataLen) {
-            this.keyMetaData[i] = KeyMetaData(p[0..32]);
-            p += 32;
-        }
-    }
+//         auto kv = bidx.keyMetaData[0].deserialize_to_tuple(bidx.jsonKeyMetaData, bidx.keyData);
+//         assert(kv.key == "/test");
+//         auto kv2 = kv.value[0].deserialize_to_tuple(bidx.data, bidx.fieldKeyData);
+//         assert(kv2.key == JSONValue("world"));
+//         assert(kv2.value == [1,2]);
+//         writeln(bidx.data);
+//         writeln(bidx.fieldKeyData);
+//         writeln(bidx.keyData);
+//         auto f = File("/tmp/test.bidx", "w");
+//         bidx.sums.writeToFile(f);
+//         f.close;
+//     }
 
-    void load_json_key_meta() {
-        ubyte[] data = new ubyte[this.jsonKeyMetaDataLen * 48];
-        htsFileRead(this.file, data);
-        auto p = data.ptr;
-        // load key metadata
-        this.jsonKeyMetaData = new JsonKeyMetaData[this.jsonKeyMetaDataLen];
-        foreach(i; 0..this.jsonKeyMetaDataLen) {
-            this.jsonKeyMetaData[i] = JsonKeyMetaData(p[0..48]);
-            p += 48;
-        }
-    }
+//     import std.file: read;
+//     auto data = cast(ubyte[])read("/tmp/test.bidx");
 
-    void loadKeys() {
+//     {
         
-    }
+//         BinaryIndex bidx;
 
-    void load_id_data(ref ubyte * p) {
-        this.data = new ulong[this.idDataLen];
-        // load data
-        foreach(i; 0..this.idDataLen) {
-            this.data[i] = le_to_u64(p);
-            p += 8;
-        }
-    }
-
-    void load_key_data(ref ubyte * p) {
-        auto len = le_to_u64(p);
-        p += 8;
-        // load key data
-        this.keyData = p[0..len];
-    }
-
-    void load_field_key_data(ref ubyte * p){
-        this.fieldKeyData = p[0..jsonKeyDataLen];
-        p += jsonKeyDataLen;
+//         auto p = data.ptr;
+//         bidx.loadConstants(p);
+//         enforce((cast(char*)&bidx.constant)[0..8] == "VQ_INDEX", "File doesn't contain VQ_INDEX sequence");
+//         assert(cast(ulong[])bidx.serializeConstants == exp_constants);
+//         // this.validateChecksum()
+//         bidx.loadSums(p);
+//         assert((cast(uint128[])bidx.serializeSums).map!(x => format("%x",x)).array == exp_sums);
+//         bidx.loadKeyMeta(p);
+//         assert(cast(KeyMetaData[])bidx.serializeKeys == exp_keys);
+//         bidx.loadJsonKeyMeta(p);
+//         assert(cast(JsonKeyMetaData[])bidx.serializeFieldKeys == exp_fields);
+//         bidx.loadIdData(p);
+//         bidx.loadFieldKeyData(p);
+//         bidx.loadKeyData(p);
+//         writeln(bidx.data);
+//         writeln(bidx.fieldKeyData);
+//         writeln(bidx.keyData);
         
-    }
+//         auto kv = bidx.keyMetaData[0].deserialize_to_tuple(bidx.jsonKeyMetaData, bidx.keyData);
+//         writeln(exp_fields);
+//         writeln(bidx.jsonKeyMetaData);
+//         writeln(kv);
+//         assert(kv.key == "/test");
+//         auto kv2 = kv.value[0].deserialize_to_tuple(bidx.data, bidx.fieldKeyData);
+//         assert(kv2.key == JSONValue("world"));
+//         assert(kv2.value == [1,2]);
+//     }
+//     {
+//         auto bidx = BinaryIndex(data);
 
-    void calculateChecksum() {
-        auto md5 = new MD5Digest();
-        md5.put(cast(ubyte[])this.sums);
-        md5.put(cast(ubyte[])this.keyMetaData);
-        md5.put(cast(ubyte[])this.jsonKeyMetaData);
-        md5.put(cast(ubyte[])this.data);
-        md5.put(this.fieldKeyData);
-        md5.put(this.keyData);
-        ubyte[16] buf;
-        md5.finish(buf);
-        uint128 sum;
-        sum.fromHexString(buf.toHexString);
-        this.dataChecksum = sum;
-    }
-
-    // void validateChecksum(ref ubyte * p) {
-    //     auto md5 = new MD5Digest();
-    //     uint128 sum;
-    //     sum.fromHexString(md5.digest(p[0..&data[$-1] - p]).toHexString);
-    //     enforce(this.dataChecksum == sum, "Data checksum doesn't match");
-    // }
-
-    ubyte[64] serialize_constants() {
-        ubyte[64] ret;
-        u64_to_le(this.constant, ret.ptr);
-        u64_to_le(this.md5ArrLen, ret.ptr + 8);
-        u64_to_le(this.keyMetaDataLen, ret.ptr + 16);
-        u64_to_le(this.jsonKeyMetaDataLen, ret.ptr + 24);
-        u64_to_le(this.idDataLen, ret.ptr + 32);
-        u64_to_le(this.jsonKeyDataLen, ret.ptr + 40);
-        u64_to_le(this.dataChecksum.hi, ret.ptr + 48);
-        u64_to_le(this.dataChecksum.lo, ret.ptr + 56);
-        return ret;
-    }
-
-    ubyte[] serialize_sums() {
-        ubyte[] ret = new ubyte[this.md5ArrLen * 16];
-        foreach(i; 0..this.md5ArrLen){
-            u64_to_le(this.sums[i].hi, ret.ptr + (16*i));
-            u64_to_le(this.sums[i].lo, ret.ptr + (16*i) + 8);
-        }
-        return ret;
-    }
-
-    ubyte[] serialize_keys() {
-        ubyte[] ret = new ubyte[this.keyMetaDataLen * 32];
-        foreach(i; 0..this.keyMetaDataLen){
-            (ret.ptr + (32*i))[0..32] = this.keyMetaData[i].serialize();
-        }
-        return ret;
-    }
-
-    ubyte[] serialize_field_keys() {
-        ubyte[] ret = new ubyte[this.jsonKeyMetaDataLen*48];
-        foreach(i; 0..this.jsonKeyMetaDataLen){
-            (ret.ptr + (48*i))[0..48] = this.jsonKeyMetaData[i].serialize();
-        }
-        return ret;
-    }
-
-    ubyte[] serialize_data() {
-        ubyte[] ret = new ubyte[this.idDataLen * 8];
-        foreach(i; 0..this.idDataLen){
-            u64_to_le(this.data[i], ret.ptr + (i*8));
-        }
-        return ret;
-    }
-    /** 
-    * Write to file in this order:
-    *  Constants
-    *  md5 checksums
-    *  key metadata
-    *  json key metadata
-    *  id data
-    *  json key data
-    *  string key data
-    * 
-    * NOTE: string key data array's first 8 bytes are length of that data
-    */
-    void writeToFile(File f){
+//         assert(cast(ulong[])bidx.serializeConstants == exp_constants);
+//         assert((cast(uint128[])bidx.serializeSums).map!(x => format("%x",x)).array == exp_sums);
+//         assert(cast(KeyMetaData[])bidx.serializeKeys == exp_keys);
+//         assert(cast(JsonKeyMetaData[])bidx.serializeFieldKeys == exp_fields);
         
-        // write constants
-        f.rawWrite(this.serialize_constants);
+//         auto kv = bidx.keyMetaData[0].deserialize_to_tuple(bidx.jsonKeyMetaData, bidx.keyData);
+//         assert(kv.key == "/test");
+//         auto kv2 = kv.value[0].deserialize_to_tuple(bidx.data, bidx.fieldKeyData);
+//         assert(kv2.key == JSONValue("world"));
+//         assert(kv2.value == [1,2]);
+//     }
 
-        f.rawWrite(this.serialize_sums);
+// }
 
-        f.rawWrite(this.serialize_keys);
-        f.rawWrite(this.serialize_field_keys);
-
-        f.rawWrite(this.serialize_data);
-        f.rawWrite(this.fieldKeyData);
-        auto keyDataLen = this.keyData.length;
-        ubyte[8] lenSpace = [0,0,0,0,0,0,0,0];
-        auto bytes =  lenSpace ~ this.keyData;
-        u64_to_le(keyDataLen, bytes.ptr);
-        f.rawWrite(bytes);
-    }
-}
-
-unittest{
-    import asdf;
-    import libmucor.jsonlops.basic: md5sumObject;
-    import std.array: array;
-    import libmucor.varquery.invertedindex.jsonvalue;
-    InvertedIndex idx;
-    idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.md5sumObject);
-    idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.md5sumObject);
-    idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.md5sumObject);
-
-    assert(idx.recordMd5s.length == 3);
-    assert(idx.fields.byKey.array == ["/test", "/test4", "/test3", "/test2"]);
-
-    assert(idx.fields["/test2"].filter(["foo"]) == [0]);
-    assert(idx.fields["/test3"].filterRange([1, 3]) == [1, 0]);
-
-    ulong[] exp_constants = [6360565151759814998, 3, 4, 8, 9, 43, 1132386765224132344, 13579944864346696974];
-    auto exp_sums = ["4BC5E16362F7052C4C90249CDE512C9D", "60E2DB9459D8C80620A8C2156FCAB161", "51D72970FC05BF560F7A0545A9A36687"];
-    auto exp_keys = [KeyMetaData(0, 5, 0, 2), KeyMetaData(5, 6, 2, 1), KeyMetaData(11, 6, 3, 3), KeyMetaData(17, 6, 6, 2)];
-    auto exp_fields = [JsonKeyMetaData(3, 0, 0, 5, 0, 2), JsonKeyMetaData(3, 0, 5, 5, 2, 1), JsonKeyMetaData(3, 0, 10, 3, 3, 1), JsonKeyMetaData(1, 0, 13, 8, 4, 1), JsonKeyMetaData(1, 0, 21, 8, 5, 1), JsonKeyMetaData(1, 0, 29, 8, 6, 1), JsonKeyMetaData(3, 0, 37, 3, 7, 1), JsonKeyMetaData(3, 0, 40, 3, 8, 1)];
-    {
-        auto bidx = BinaryIndex(idx);
-        assert(cast(ulong[])bidx.serialize_constants == exp_constants);
-        assert((cast(uint128[])bidx.serialize_sums).map!(x => format("%x",x)).array == exp_sums);
-        assert(cast(KeyMetaData[])bidx.serialize_keys == exp_keys);
-        assert(cast(JsonKeyMetaData[])bidx.serialize_field_keys == exp_fields);
-
-        auto kv = bidx.keyMetaData[0].deserialize_to_tuple(bidx.jsonKeyMetaData, bidx.keyData);
-        assert(kv.key == "/test");
-        auto kv2 = kv.value[0].deserialize_to_tuple(bidx.data, bidx.fieldKeyData);
-        assert(kv2.key == JSONValue("world"));
-        assert(kv2.value == [1,2]);
-        writeln(bidx.data);
-        writeln(bidx.fieldKeyData);
-        writeln(bidx.keyData);
-        auto f = File("/tmp/test.bidx", "w");
-        bidx.writeToFile(f);
-        f.close;
-    }
-
-    import std.file: read;
-    auto data = cast(ubyte[])read("/tmp/test.bidx");
-
-    {
-        
-        BinaryIndex bidx;
-
-        auto p = data.ptr;
-        bidx.load_constants(p);
-        enforce((cast(char*)&bidx.constant)[0..8] == "VQ_INDEX", "File doesn't contain VQ_INDEX sequence");
-        assert(cast(ulong[])bidx.serialize_constants == exp_constants);
-        // this.validateChecksum()
-        bidx.load_sums(p);
-        assert((cast(uint128[])bidx.serialize_sums).map!(x => format("%x",x)).array == exp_sums);
-        bidx.load_key_meta(p);
-        assert(cast(KeyMetaData[])bidx.serialize_keys == exp_keys);
-        bidx.load_json_key_meta(p);
-        assert(cast(JsonKeyMetaData[])bidx.serialize_field_keys == exp_fields);
-        bidx.load_id_data(p);
-        bidx.load_field_key_data(p);
-        bidx.load_key_data(p);
-        writeln(bidx.data);
-        writeln(bidx.fieldKeyData);
-        writeln(bidx.keyData);
-        
-        auto kv = bidx.keyMetaData[0].deserialize_to_tuple(bidx.jsonKeyMetaData, bidx.keyData);
-        writeln(exp_fields);
-        writeln(bidx.jsonKeyMetaData);
-        writeln(kv);
-        assert(kv.key == "/test");
-        auto kv2 = kv.value[0].deserialize_to_tuple(bidx.data, bidx.fieldKeyData);
-        assert(kv2.key == JSONValue("world"));
-        assert(kv2.value == [1,2]);
-    }
-    {
-        auto bidx = BinaryIndex(data);
-
-        assert(cast(ulong[])bidx.serialize_constants == exp_constants);
-        assert((cast(uint128[])bidx.serialize_sums).map!(x => format("%x",x)).array == exp_sums);
-        assert(cast(KeyMetaData[])bidx.serialize_keys == exp_keys);
-        assert(cast(JsonKeyMetaData[])bidx.serialize_field_keys == exp_fields);
-        
-        auto kv = bidx.keyMetaData[0].deserialize_to_tuple(bidx.jsonKeyMetaData, bidx.keyData);
-        assert(kv.key == "/test");
-        auto kv2 = kv.value[0].deserialize_to_tuple(bidx.data, bidx.fieldKeyData);
-        assert(kv2.key == JSONValue("world"));
-        assert(kv2.value == [1,2]);
-    }
-
-}
