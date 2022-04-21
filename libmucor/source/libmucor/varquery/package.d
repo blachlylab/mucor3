@@ -11,7 +11,7 @@ public import libmucor.varquery.query;
 import asdf : deserializeAsdf = deserialize, parseJsonByLine, Asdf;
 import libmucor.wideint : uint128;
 
-auto queryRange(R)(R range, JSONInvertedIndex idx, string queryStr)
+auto queryRange(R)(R range, InvertedIndex * idx, string queryStr)
 if (is(ElementType!R == Asdf))
 {
     auto idxs = evalQuery(queryStr, &idx);
@@ -43,13 +43,13 @@ if (is(ElementType!R == Asdf))
     });
 }
 
-auto query(R)(R range, JSONInvertedIndex idx, string queryStr)
+auto query(R)(R range, InvertedIndex * idx, string queryStr)
 if (is(ElementType!R == Asdf))
 {
     StopWatch sw;
     sw.start;
 
-    auto idxs = evalQuery(queryStr, &idx);
+    auto idxs = evalQuery(queryStr, idx);
     stderr.writeln("Time to parse query: ",sw.peek.total!"seconds"," seconds");
     stderr.writeln(idxs.length," records matched your query");
     sw.stop;
@@ -81,10 +81,10 @@ if (is(ElementType!R == Asdf))
     });
 }
 
-JSONInvertedIndex index(R)(R range)
+void index(R)(R range, string prefix)
 if (is(ElementType!R == Asdf))
 {
-    JSONInvertedIndex idx;
+    InvertedIndex * idx = new InvertedIndex(prefix, true);
 
     StopWatch sw;
     sw.start;
@@ -94,9 +94,10 @@ if (is(ElementType!R == Asdf))
         idx.addJsonObject(line);
         count++;
     }
-    assert(count == idx.recordMd5s.length,"number of md5s doesn't match number of records");
+    // assert(count == idx.recordMd5s.length,"number of md5s doesn't match number of records");
+    idx.close;
+
     sw.stop;
     stderr.writefln("Indexed %d records in %d secs",count,sw.peek.total!"seconds");
     stderr.writefln("Avg time to index record: %f usecs",float(sw.peek.total!"usecs") / float(count));
-    return idx;
 }

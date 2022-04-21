@@ -38,9 +38,9 @@ struct BinaryStore(T) {
     /// buffer for reading and writing
     ubyte[] buffer;
 
-    invariant {
-        assert(this.buffer.length <= 65_536);
-    }
+    // invariant {
+    //     assert(this.buffer.length <= 65_536);
+    // }
 
     this(string fn, string mode) {
         this.buffer.reserve(65_536);
@@ -79,7 +79,7 @@ struct BinaryStore(T) {
 
     /// add these bytes to the buffer
     void bufferBytes(ubyte[] bytes) {
-        assert(bytes.length + this.buffer.length <= 65_536);
+        // assert(bytes.length + this.buffer.length <= 65_536);
         this.buffer ~= bytes[];
     }
 
@@ -102,7 +102,7 @@ struct BinaryStore(T) {
             return;
         }
         /// if buffer full, write and reset
-        if(this.buffer.length == 65_536) {
+        if(this.buffer.length >= 65_536) {
             this.flush;
         }
 

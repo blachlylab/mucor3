@@ -42,6 +42,10 @@ struct InvertedIndex
         if(this.bidxWriter) this.bidxWriter.close;
     }
 
+    auto recordMd5s() {
+        return this.bidxReader.sums;
+    }
+
     void addJsonObject(Asdf root, const(char)[] path = "", uint128 md5 = uint128(0)){
         if(path == ""){
             if(root["md5"] == Asdf.init) hts_log_error(__FUNCTION__, "record with no md5");

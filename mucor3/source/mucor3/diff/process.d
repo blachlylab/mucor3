@@ -20,7 +20,7 @@ import mucor3.diff.stats;
 import mucor3.diff.util;
 import mucor3.diff: varKeys, samVarKeys, Set;
 
-JSONInvertedIndex[2] processVcfRaw(R)(R aRange, R bRange, string prefix){
+InvertedIndex*[2] processVcfRaw(R)(R aRange, R bRange, string prefix){
 
     Set aVar, bVar, aSamVar, bSamVar, aAFVar, bAFVar;
 
@@ -28,19 +28,23 @@ JSONInvertedIndex[2] processVcfRaw(R)(R aRange, R bRange, string prefix){
 
     mkdirRecurse(prefix);
 
-    JSONInvertedIndex aIdx = aRange
+    auto aname = prefix ~"a";
+    auto bname = prefix ~"b";
+    aRange
         .tee!(x => stats.aCount++)
         .tee!(x => aVar.insert(subset(x, varKeys)))
         .tee!(x => aSamVar.insert(subset(x, samVarKeys)))
         .tee!(x => aAFVar.insert(getAFValue(x, 0.01)))
-        .index;
-
-    JSONInvertedIndex bIdx = bRange
+        .index(aname);
+    bRange
         .tee!(x => stats.bCount++)
         .tee!(x => bVar.insert(subset(x, varKeys)))
         .tee!(x => bSamVar.insert(subset(x, samVarKeys)))
         .tee!(x => bAFVar.insert(getAFValue(x, 0.01)))
-        .index;
+        .index(bname);
+    
+    InvertedIndex * aIdx = new InvertedIndex(aname, false);
+    InvertedIndex * bIdx = new InvertedIndex(bname, false);
     
     writeAllSets(aVar, bVar, varKeys, stats.varCounts[], prefix, "unique.var");
     writeAllSets(aSamVar, bSamVar, samVarKeys, stats.samVarCounts[], prefix, "unique.sample.var");
@@ -48,13 +52,13 @@ JSONInvertedIndex[2] processVcfRaw(R)(R aRange, R bRange, string prefix){
 
     stderr.writeln("Raw stats");
     stderr.writeln(stats.toString);
-    JSONInvertedIndex[2] ret; 
+    InvertedIndex*[2] ret; 
     ret[0] = aIdx;
     ret[1] = bIdx;
     return ret;
 }
 
-void processVcfFiltered(R)(R aRange, R bRange, string queryStr, JSONInvertedIndex[2] indexes, string prefix){
+void processVcfFiltered(R)(R aRange, R bRange, string queryStr, InvertedIndex*[2] indexes, string prefix){
     Set aVar, bVar, aSamVar, bSamVar, aAFVar, bAFVar;
 
     VarStats stats;

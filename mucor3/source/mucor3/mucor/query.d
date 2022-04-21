@@ -31,7 +31,7 @@ void queryJsonFiles(string[] files, string idxFile, string queryStr, string outf
     StopWatch sw;
     sw.start;
 
-    JSONInvertedIndex idx = JSONInvertedIndex(idxFile);
+    InvertedIndex idx = InvertedIndex(idxFile, false);
     stderr.writeln("Time to load index: ",sw.peek.total!"seconds"," seconds");
     stderr.writefln("%d records in index",idx.recordMd5s.length);
 

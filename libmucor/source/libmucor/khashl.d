@@ -372,7 +372,7 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
         while(itr < this.kh_end())
         {
             move(this.keys[itr].key, key);
-            move(this.keys[itr].val, val);
+            static if(kh_is_map) move(this.keys[itr].val, val);
             itr++;
         }
     }
