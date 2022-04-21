@@ -20,19 +20,20 @@ import libmucor.varquery.invertedindex.store;
 import libmucor.khashl: khashl;
 import htslib.hts_endian;
 import std.digest.md : MD5Digest, toHexString;
+import htslib.hts_log;
 
 char sep = '/';
 
 struct InvertedIndex
 {
-    BinaryIndexReader * bidxReader;
-    BinaryIndexWriter * bidxWriter;
-    this(string prefix){
+    BinaryIndexReader bidxReader;
+    BinaryIndexWriter bidxWriter;
+    this(string prefix, bool write){
         // read const sequence
-        if(prefix.exists){
-            this.bidxReader = new BinaryIndexReader(prefix);
+        if(!write){
+            this.bidxReader = BinaryIndexReader(prefix);
         } else {
-            this.bidxWriter = new BinaryIndexWriter(prefix);
+            this.bidxWriter = BinaryIndexWriter(prefix);
         }
     }
 
@@ -101,17 +102,17 @@ struct InvertedIndex
             if(!p) throw new Exception(" key "~key.idup~" is not found");
             ret = [p];
             if(ret.length == 0){
-                stderr.writeln("Warning: Key"~ keycopy ~" was not found in index!");
+                hts_log_warning(__FUNCTION__,"Warning: Key"~ keycopy ~" was not found in index!");
             }
         }else{
             key = key.replace("*",".*");
             auto reg = regex("^" ~ key ~"$");
             ret = this.bidxReader.getKeysWithJsonStore.std_filter!(x => !(x[0].matchFirst(reg).empty)).map!(x=> x[1]).array;
             if(ret.length == 0){
-                stderr.writeln("Warning: Key wildcards sequence "~ keycopy ~" matched no keys in index!");
+                hts_log_warning(__FUNCTION__,"Warning: Key wildcards sequence "~ keycopy ~" matched no keys in index!");
             }
         }
-        debug stderr.writefln("Key %s matched %d keys",keycopy,ret.length);
+        debug hts_log_debug(__FUNCTION__, format("Key %s matched %d keys",keycopy,ret.length));
         return ret;
     }
 
@@ -189,40 +190,24 @@ struct InvertedIndex
 
 
 
-// unittest{
-//     import asdf;
-//     import libmucor.jsonlops.basic: md5sumObject;
-//     import std.array: array;
-//     InvertedIndex idx;
-//     idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.md5sumObject);
-//     idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.md5sumObject);
-//     idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.md5sumObject);
+unittest{
+    import asdf;
+    import libmucor.jsonlops.basic: md5sumObject;
+    import std.array: array;
+    import htslib.hts_log;
+    hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
+    {
+        auto idx = InvertedIndex("/tmp/test_index",true);
+        idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.md5sumObject);
+        idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.md5sumObject);
+        idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.md5sumObject);
+    }
 
-//     assert(idx.recordMd5s.length == 3);
-//     assert(idx.fields.byKey.array == ["/test", "/test4", "/test3", "/test2"]);
+    auto idx = InvertedIndex("/tmp/test_index",false);
+    assert(idx.bidxReader.sums.length == 3);
+    writeln(idx.getFields("/*").map!(x => x.getJsonValues));
+    writeln(idx.query("/test2","foo"));
+    assert(idx.query("/test2","foo") == [0]);
+    assert(idx.queryRange("/test3", 1, 3) == [1, 0]);
 
-//     assert(idx.fields["/test2"].filter(["foo"]) == [0]);
-//     assert(idx.fields["/test3"].filterRange([1, 3]) == [1, 0]);
-
-//     auto bidx = BinaryIndex(idx);
-//     writeln(bidx);
-//     auto f = File("/tmp/test.idx", "w");
-//     idx.writeToFile(f);
-//     f.close;
-
-//     import std.file: read;
-//     bidx = BinaryIndex(cast(ubyte[])read("/tmp/test.idx"));
-//     writeln(bidx);
-//     assert(bidx.md5ArrLen == 3);
-//     assert(bidx.keyMetaDataLen == 4);
-//     assert(bidx.jsonKeyMetaDataLen == 8);
-//     assert(bidx.idDataLen == 9);
-//     idx = InvertedIndex("/tmp/test.idx");
-
-//     assert(idx.recordMd5s.length == 3);
-//     writeln(idx.fields.byKey.array);
-//     assert(idx.fields.byKey.array == ["/test2", "/test4", "/test3", "/test"]);
-
-//     assert(idx.fields["/test2"].filter(["foo"]) == [0]);
-//     assert(idx.fields["/test3"].filterRange([1, 3]) == [1, 0]);
-// }
+}

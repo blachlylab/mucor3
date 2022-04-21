@@ -20,6 +20,8 @@ import libmucor.varquery.invertedindex.metadata;
 import libmucor.varquery.invertedindex.jsonvalue;
 import libmucor.varquery.invertedindex.store;
 import libmucor.khashl;
+import htslib.hts_log;
+import std.format: format;
 
 /** 
  * Represent inverted index as it exists on disk:
@@ -68,6 +70,10 @@ struct BinaryIndexWriter {
         this.keys = StringStore(prefix ~  ".keys", "wb");
     }
 
+    ~this() {
+        this.hashmap.kh_release;
+    }
+
     void insert(T)(T key, JSONValue item) 
     if(isSomeString!T)
     {
@@ -78,6 +84,7 @@ struct BinaryIndexWriter {
         } else {
             KeyMetaData meta;
             meta.keyHash = keyhash;
+            hts_log_info(__FUNCTION__, format("creating new json index %s for key %s", prefix ~ "_" ~ format("%x",keyhash), key));
             auto s = JsonStoreWriter(prefix ~ "_" ~ format("%x",keyhash));
             this.hashmap[keyhash] = s;
             s.insert(item, this.numSums++);
@@ -105,17 +112,23 @@ struct BinaryIndexReader {
     /// store md5 sums
     StringStore keys;
 
+    ~this() {
+        this.hashmap.kh_release;
+    }
+
     this(string prefix) {
         this.prefix = prefix;
         this.hashes = MD5Store(prefix ~ ".keys.md5", "rb");
         this.metadata = KeyMetaStore(prefix ~  ".keys.meta", "rb").getAll;
+        hts_log_info(__FUNCTION__, format("loading key index %s with %d keys", prefix, this.metadata.length));
         this.sums = MD5Store(prefix ~  ".record.sums", "rb").getAll;
         this.keys = StringStore(prefix ~  ".keys", "rb");
+        writeln(this.metadata.length);
         foreach(meta; this.metadata) {
             hashmap[meta.keyHash] = JsonStoreReader(prefix ~ "_" ~ format("%x", meta.keyHash));
         }
-        this.metadata = KeyMetaStore(prefix ~  ".json.meta", "rb").getAll;
-        this.sums = MD5Store(prefix ~  ".record.sums", "rb").getAll;
+        // this.metadata = KeyMetaStore(prefix ~  ".json.meta", "rb").getAll;
+        // this.sums = MD5Store(prefix ~  ".record.sums", "rb").getAll;
     }
 
     auto getKeysWithJsonStore() {
@@ -127,34 +140,35 @@ struct BinaryIndexReader {
     }
 }
 
-// unittest
-// {
-//     {
-//         auto bidx = BinaryIndexWriter("/tmp/test");
-//         bidx.insert("testkey", JSONValue("testval"));
-//         bidx.sums.write(uint128(0));
-//         bidx.insert("testkey", JSONValue("testval2"));
-//         bidx.sums.write(uint128(1));
-//         bidx.insert("testkey2", JSONValue(0));
-//         bidx.sums.write(uint128(2));
-//         bidx.insert("testkey2", JSONValue(2));
-//         bidx.sums.write(uint128(3));
-//         bidx.insert("testkey2", JSONValue(3));
-//         bidx.sums.write(uint128(4));
-//         bidx.insert("testkey2", JSONValue(5));
-//         bidx.sums.write(uint128(5));
-//         bidx.insert("testkey3", JSONValue(1.2));
-//         bidx.sums.write(uint128(6));
-//     }
+unittest
+{
+    import htslib.hts_log;
+    hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
+    {
+        auto bidx = BinaryIndexWriter("/tmp/test");
+        bidx.insert("testkey", JSONValue("testval"));
+        bidx.sums.write(uint128(0));
+        bidx.insert("testkey", JSONValue("testval2"));
+        bidx.sums.write(uint128(1));
+        bidx.insert("testkey2", JSONValue(0));
+        bidx.sums.write(uint128(2));
+        bidx.insert("testkey2", JSONValue(2));
+        bidx.sums.write(uint128(3));
+        bidx.insert("testkey2", JSONValue(3));
+        bidx.sums.write(uint128(4));
+        bidx.insert("testkey2", JSONValue(5));
+        bidx.sums.write(uint128(5));
+        bidx.insert("testkey3", JSONValue(1.2));
+        bidx.sums.write(uint128(6));
+    }
 
-//     {
-//         auto bidx = BinaryIndexReader("/tmp/test");
-//         assert(bidx.sums.length == 7);
-//         assert(bidx.metadata.length == 7);
-
-//     }
+    {
+        auto bidx = BinaryIndexReader("/tmp/test");
+        assert(bidx.sums.length == 7);
+        assert(bidx.metadata.length == 3);
+    }
     
-// }
+}
 
 
 // unittest{

@@ -6,11 +6,13 @@ import htslib.hts_log;
 import dhtslib.memory;
 import core.stdc.stdio: SEEK_SET, SEEK_CUR;
 import std.format: format;
+import std.stdio;
 
 struct StoreFile {
     char[] mode;
     char[] fn;
     Bgzf bgzf;
+    bool eof;
 
     this(string fn, string mode){
         this.fn = fn.dup ~ '\0';
@@ -23,33 +25,26 @@ struct StoreFile {
         this.bgzf = Bgzf(bgzf_hopen(hf, this.mode.ptr));
     }
 
-    ~this(){
-        if(this.bgzf.getRef != null && this.bgzf.is_write)
-            bgzf_flush(this.bgzf);
-    }
-
-    bool isEof(){
-        return cast(bool)this.bgzf.last_block_eof;
-    }
-
     ulong tell() {
         return bgzf_tell(this.bgzf);
     }
 
     void seek(ulong pos) {
-        bgzf_seek(this.bgzf, pos, SEEK_SET);
+        auto err = bgzf_seek(this.bgzf, pos, SEEK_SET);
+        if(err < 0) hts_log_error(__FUNCTION__, "Error seeking file");
     }
 
     void seekFromCur(ulong pos) {
-        bgzf_seek(this.bgzf, pos, SEEK_CUR);
+        auto err = bgzf_seek(this.bgzf, pos, SEEK_CUR);
+        if(err < 0) hts_log_error(__FUNCTION__, "Error seeking file");
     }
 
     void readRaw(ubyte[] buf) {
         long bytes = bgzf_read(this.bgzf, buf.ptr, buf.length);
         if(bytes < 0) hts_log_error(__FUNCTION__, "Error reading data");
+        if(bytes == 0) this.eof = true;
     }
     
-
     void writeRaw(ubyte[] buf) {
         long bytes = bgzf_write(this.bgzf, buf.ptr, buf.length);
         if(bytes < 0) hts_log_error(__FUNCTION__, "Error writing data");

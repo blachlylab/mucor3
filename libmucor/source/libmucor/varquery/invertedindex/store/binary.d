@@ -14,53 +14,6 @@ import std.stdio: File;
 import htslib.hts_log;
 import htslib.hts_endian;
 
-void htsFileRead(HtslibFile * f, ubyte[] buf) {
-    
-
-    long bytes;
-    if(f.fp.is_bgzf) bytes = bgzf_read(f.fp.fp.bgzf, buf.ptr, buf.length);
-    else bytes = hread(f.fp.fp.hfile, buf.ptr, buf.length);
-    if(bytes < 0) hts_log_error(__FUNCTION__, "Error reading data");
-    else if(bytes != buf.length) {
-        hts_log_error(__FUNCTION__, "Read did not return the correct number of bytes");
-    }
-}
-
-void htsFileWrite(HtslibFile * f, ubyte[] buf) {
-    import htslib.bgzf: bgzf_write;
-    import htslib.hfile: hwrite;
-    import htslib.hts_log;
-
-    long bytes;
-    if(f.fp.is_bgzf) bytes = bgzf_write(f.fp.fp.bgzf, buf.ptr, buf.length);
-    else bytes = hwrite(f.fp.fp.hfile, buf.ptr, buf.length);
-    if(bytes < 0) hts_log_error(__FUNCTION__, "Error writing data");
-    else if(bytes != buf.length) {
-        hts_log_error(__FUNCTION__, "Write did not write the correct number of bytes");
-    }
-}
-
-HtslibFile open(string fn, string mode) {
-    import htslib.kstring;
-    import htslib.hts;
-    import htslib.hfile;
-    import dhtslib.memory;
-    import dhtslib.util;
-
-    HtslibFile f;
-    f.fn = Kstring(initKstring());
-    ks_initialize(f.fn);
-    kputsn(fn.ptr, fn.length, f.fn);
-    f.mode = mode.dup ~ '\0';
-    auto hf = hopen(ks_str(f.fn), f.mode.ptr);
-    assert(hf);
-    auto htsf = hts_hopen(hf, ks_str(f.fn), f.mode.ptr);
-    assert(htsf);
-    f.fp = HtsFile(htsf);
-    assert(f.fp);
-    return f;
-}
-
 alias UlongStore = BinaryStore!ulong;
 alias LongStore = BinaryStore!long;
 alias DoubleStore = BinaryStore!double;
@@ -91,8 +44,12 @@ struct BinaryStore(T) {
         foreach(c; mode) {
             if(c =='w')
                 this.isWrite = true;
-        }
-            
+        }       
+    }
+    
+    this(this) {
+        file = file;
+        this.bufLen = 0;
     }
 
     ~this() {
@@ -122,7 +79,7 @@ struct BinaryStore(T) {
     }
 
     bool isEOF(){
-        return this.file.isEof;
+        return this.file.eof;
     }
 
     /// write raw byte array and return offset
@@ -244,6 +201,7 @@ struct BinaryStore(T) {
             ret ~= this.read;
         } while(!this.isEOF);
         this.file.seek(0);
+        this.file.eof = false;
         return ret[0..$-1];
     }
 }
@@ -258,15 +216,11 @@ unittest {
         store.write(2);
         assert(store.bufLen == 16);
         store.write(3);
-        assert(store.bufLen == 24);
-        writeln("Written file");
-        
+        assert(store.bufLen == 24);   
     }
 
     {
-        
         auto store = UlongStore("/tmp/ulong.store", "rb");
-        writeln(store.getAll());
         assert(store.getAll() == [1, 2, 3]);
     }
 
@@ -280,16 +234,44 @@ unittest {
         store.write("addendum: some more text");
 
         store.write("note: text");
-
-        writeln("Written file");
         
     }
 
     {
         
         auto store = StringStore("/tmp/string.store", "rb");
-        writeln(store.getAll());
         assert(store.getAll() == ["HERES a bunch of text", "HERES a bunch of text plus some extra", "addendum: some more text", "note: text"]);
+    }
+
+    {
+        auto store = KeyMetaStore("/tmp/keymeta.store", "wb");
+        store.write(KeyMetaData(uint128(0), 1, 3));
+        assert(store.bufLen == 32);
+        store.write(KeyMetaData(uint128(1), 3, 5));
+        assert(store.bufLen == 64);
+        store.write(KeyMetaData(uint128(2), 7, 8));
+        assert(store.bufLen == 96);   
+    }
+
+    {
+        auto store = KeyMetaStore("/tmp/keymeta.store", "rb");
+        assert(store.getAll() == [KeyMetaData(uint128(0), 1, 3), KeyMetaData(uint128(1), 3, 5), KeyMetaData(uint128(2), 7, 8)]);
+    }
+
+    {
+        
+        auto store = JsonMetaStore("/tmp/json.store", "wb");
+        store.write(JsonKeyMetaData(uint128(0), 0, 0, 1, 3));
+        assert(store.bufLen == 48);
+        store.write(JsonKeyMetaData(uint128(1), 1, 2, 3, 5));
+        assert(store.bufLen == 96);
+        store.write(JsonKeyMetaData(uint128(2), 3, 0 ,7, 8));
+        assert(store.bufLen == 144);   
+    }
+
+    {
+        auto store = JsonMetaStore("/tmp/json.store", "rb");
+        assert(store.getAll() == [JsonKeyMetaData(uint128(0), 0, 0, 1, 3), JsonKeyMetaData(uint128(1), 1, 2, 3, 5), JsonKeyMetaData(uint128(2), 3, 0, 7, 8)]);
     }
 
 }

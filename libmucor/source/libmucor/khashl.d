@@ -361,6 +361,21 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
         this.count = 0; 
       }
     }
+
+    void kh_release()
+    {
+        this.kh_clear;
+        import std.algorithm: move;
+        KT key;
+        VT val;
+        khint_t itr;
+        while(itr < this.kh_end())
+        {
+            move(this.keys[itr].key, key);
+            move(this.keys[itr].val, val);
+            itr++;
+        }
+    }
   
     khint_t kh_getp(const(Bucket) * key) const
     {
