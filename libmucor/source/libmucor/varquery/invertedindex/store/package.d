@@ -7,6 +7,7 @@ import libmucor.wideint;
 import libmucor.varquery.invertedindex.jsonvalue;
 import std.digest.md;
 import std.sumtype: match;
+import std.format: format;
 
 uint128 getKeyHash(const(char)[] key) {
     return cast(uint128) md5Of(key);
@@ -20,6 +21,10 @@ uint128 getValueHash(JSONValue val) {
         },
         (long x) => cast(uint128) md5Of((cast(ubyte*)&x)[0..8]),
         (double x) => cast(uint128) md5Of((cast(ubyte*)&x)[0..8]),
-        (const(char)[] x) => cast(uint128) md5Of(x),
+        (const(char)[] x) => getKeyHash(x),
     );
+}
+
+string getShortHash(uint128 v) {
+    return format("%x", v)[0..8];
 }

@@ -13,6 +13,9 @@ import std.traits;
 import std.stdio: File;
 import htslib.hts_log;
 import htslib.hts_endian;
+import core.sync.mutex: Mutex;
+import core.atomic;
+import core.stdc.stdlib: calloc, free;
 
 alias UlongStore = BinaryStore!ulong;
 alias LongStore = BinaryStore!long;
@@ -22,6 +25,9 @@ alias MD5Store = BinaryStore!uint128;
 alias KeyMetaStore = BinaryStore!KeyMetaData;
 alias JsonMetaStore = BinaryStore!JsonKeyMetaData;
 
+/// Universal buffered type store
+/// 
+/// BUFFER NOT THREAD SAFE
 struct BinaryStore(T) {
     /// file backing store
     StoreFile file;
@@ -29,17 +35,15 @@ struct BinaryStore(T) {
     /// is file writeable
     bool isWrite;
 
-    /// buffer length currently used
-    ulong bufLen;
-
     /// buffer for reading and writing
-    ubyte[4096] buffer;
-    
+    ubyte[] buffer;
+
     invariant {
-        assert(this.bufLen <= 4096);
+        assert(this.buffer.length <= 65_536);
     }
 
     this(string fn, string mode) {
+        this.buffer.reserve(65_536);
         this.file = StoreFile(fn, mode);
         foreach(c; mode) {
             if(c =='w')
@@ -47,31 +51,40 @@ struct BinaryStore(T) {
         }       
     }
     
+    // @disable this(this);
     this(this) {
         file = file;
-        this.bufLen = 0;
     }
 
-    ~this() {
-        this.flush;
+    // ~this() {
+    //     this.close;
+    // }
+
+    void close() {
+        import std.format;
+        
+        if(isWrite && this.file.bgzf.getRef) {
+            hts_log_debug(__FUNCTION__, format("closing %s", this.file.fn));
+            this.flush;
+        }
+        this.file = StoreFile.init;
     }
 
     /// flush buffer and reset
     void flush() {
-        if(this.bufLen > 0)
-            this.file.writeRaw(cast(ubyte[])this.buffer[0..this.bufLen]);
-        this.bufLen = 0;
+        if(this.buffer.length > 0)
+            this.file.writeRaw(cast(ubyte[])this.buffer[0..this.buffer.length]);
+        this.buffer.length = 0;
     }
 
     /// add these bytes to the buffer
     void bufferBytes(ubyte[] bytes) {
-        assert(bytes.length + this.bufLen <= 4096);
-        this.buffer[this.bufLen..this.bufLen + bytes.length] = bytes[];
-        this.bufLen += bytes.length;
+        assert(bytes.length + this.buffer.length <= 65_536);
+        this.buffer ~= bytes[];
     }
 
     ulong tell(){
-        return this.file.tell + this.bufLen;
+        return this.file.tell + this.buffer.length;
     }
 
     void seek(ulong pos){
@@ -89,7 +102,7 @@ struct BinaryStore(T) {
             return;
         }
         /// if buffer full, write and reset
-        if(bufLen == buffer.length) {
+        if(this.buffer.length == 65_536) {
             this.flush;
         }
 
@@ -97,11 +110,11 @@ struct BinaryStore(T) {
         /// flush buffer
         /// write data in 4kb chunks
         /// then buffer remaining
-        if(bytes.length > 4096) {
+        if(bytes.length > 65_536) {
             this.flush;
-            foreach(i; 0..(bytes.length / 4096)) {
-                this.file.writeRaw(bytes[0..4096]);
-                bytes = bytes[4096..$];
+            foreach(i; 0..(bytes.length / 65_536)) {
+                this.file.writeRaw(bytes[0..65_536]);
+                bytes = bytes[65_536..$];
             }
             this.bufferBytes(bytes);
         } else {
@@ -210,23 +223,24 @@ unittest {
     import std.stdio;
     {
         
-        auto store = UlongStore("/tmp/ulong.store", "wb");
+        auto store = new UlongStore("/tmp/ulong.store", "wb");
         store.write(1);
-        assert(store.bufLen == 8);
+        assert(store.buffer.length == 8);
         store.write(2);
-        assert(store.bufLen == 16);
+        assert(store.buffer.length == 16);
         store.write(3);
-        assert(store.bufLen == 24);   
+        assert(store.buffer.length == 24);   
+        store.close;
     }
 
     {
-        auto store = UlongStore("/tmp/ulong.store", "rb");
+        auto store = new UlongStore("/tmp/ulong.store", "rb");
         assert(store.getAll() == [1, 2, 3]);
     }
 
     {
         
-        auto store = StringStore("/tmp/string.store", "wb");
+        auto store = new StringStore("/tmp/string.store", "wb");
         store.write("HERES a bunch of text");
         
         store.write("HERES a bunch of text plus some extra");
@@ -234,43 +248,46 @@ unittest {
         store.write("addendum: some more text");
 
         store.write("note: text");
+        store.close;
         
     }
 
     {
         
-        auto store = StringStore("/tmp/string.store", "rb");
+        auto store = new StringStore("/tmp/string.store", "rb");
         assert(store.getAll() == ["HERES a bunch of text", "HERES a bunch of text plus some extra", "addendum: some more text", "note: text"]);
     }
 
     {
-        auto store = KeyMetaStore("/tmp/keymeta.store", "wb");
+        auto store = new KeyMetaStore("/tmp/keymeta.store", "wb");
         store.write(KeyMetaData(uint128(0), 1, 3));
-        assert(store.bufLen == 32);
+        assert(store.buffer.length == 32);
         store.write(KeyMetaData(uint128(1), 3, 5));
-        assert(store.bufLen == 64);
+        assert(store.buffer.length == 64);
         store.write(KeyMetaData(uint128(2), 7, 8));
-        assert(store.bufLen == 96);   
+        assert(store.buffer.length == 96);   
+        store.close;
     }
 
     {
-        auto store = KeyMetaStore("/tmp/keymeta.store", "rb");
+        auto store = new KeyMetaStore("/tmp/keymeta.store", "rb");
         assert(store.getAll() == [KeyMetaData(uint128(0), 1, 3), KeyMetaData(uint128(1), 3, 5), KeyMetaData(uint128(2), 7, 8)]);
     }
 
     {
         
-        auto store = JsonMetaStore("/tmp/json.store", "wb");
+        auto store = new JsonMetaStore("/tmp/json.store", "wb");
         store.write(JsonKeyMetaData(uint128(0), 0, 0, 1, 3));
-        assert(store.bufLen == 48);
+        assert(store.buffer.length == 48);
         store.write(JsonKeyMetaData(uint128(1), 1, 2, 3, 5));
-        assert(store.bufLen == 96);
+        assert(store.buffer.length == 96);
         store.write(JsonKeyMetaData(uint128(2), 3, 0 ,7, 8));
-        assert(store.bufLen == 144);   
+        assert(store.buffer.length == 144);
+        store.close;   
     }
 
     {
-        auto store = JsonMetaStore("/tmp/json.store", "rb");
+        auto store = new JsonMetaStore("/tmp/json.store", "rb");
         assert(store.getAll() == [JsonKeyMetaData(uint128(0), 0, 0, 1, 3), JsonKeyMetaData(uint128(1), 1, 2, 3, 5), JsonKeyMetaData(uint128(2), 3, 0, 7, 8)]);
     }
 

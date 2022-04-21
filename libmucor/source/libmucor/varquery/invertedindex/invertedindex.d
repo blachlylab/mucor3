@@ -26,25 +26,28 @@ char sep = '/';
 
 struct InvertedIndex
 {
-    BinaryIndexReader bidxReader;
-    BinaryIndexWriter bidxWriter;
+    BinaryIndexReader * bidxReader;
+    BinaryIndexWriter * bidxWriter;
     this(string prefix, bool write){
         // read const sequence
         if(!write){
-            this.bidxReader = BinaryIndexReader(prefix);
+            this.bidxReader = new BinaryIndexReader(prefix);
         } else {
-            this.bidxWriter = BinaryIndexWriter(prefix);
+            this.bidxWriter = new BinaryIndexWriter(prefix);
         }
     }
 
-    void addJsonObject(Asdf root, const(char)[] path = ""){
+    void close() {
+        if(this.bidxReader) this.bidxReader.close;
+        if(this.bidxWriter) this.bidxWriter.close;
+    }
+
+    void addJsonObject(Asdf root, const(char)[] path = "", uint128 md5 = uint128(0)){
         if(path == ""){
-            uint128 a;
-            debug if(root["md5"] == Asdf.init) stderr.writeln("record with no md5");
-            auto md5 = root["md5"].deserializeAsdf!string;
+            if(root["md5"] == Asdf.init) hts_log_error(__FUNCTION__, "record with no md5");
+            auto m = root["md5"].deserializeAsdf!string;
             root["md5"].remove;
-            a.fromHexString(md5);
-            this.bidxWriter.sums.write(a);
+            md5.fromHexString(m);
         }
         foreach (key,value; root.byKeyValue)
         {
@@ -62,7 +65,11 @@ struct InvertedIndex
             }
             this.bidxWriter.insert(path~sep~key, valkey);
         }
-        
+        if(path == ""){
+            assert(md5 != uint128(0));
+            this.bidxWriter.sums.write(md5);
+            this.bidxWriter.numSums++;
+        }
     }
     void addJsonArray(Asdf root, const(char)[] path){
         assert(path != "");
@@ -197,17 +204,18 @@ unittest{
     import htslib.hts_log;
     hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
     {
-        auto idx = InvertedIndex("/tmp/test_index",true);
+        auto idx = new InvertedIndex("/tmp/test_idx",true);
         idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.md5sumObject);
         idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.md5sumObject);
         idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.md5sumObject);
+        idx.close;
     }
-
-    auto idx = InvertedIndex("/tmp/test_index",false);
-    assert(idx.bidxReader.sums.length == 3);
-    writeln(idx.getFields("/*").map!(x => x.getJsonValues));
-    writeln(idx.query("/test2","foo"));
-    assert(idx.query("/test2","foo") == [0]);
-    assert(idx.queryRange("/test3", 1, 3) == [1, 0]);
+    {
+        auto idx = InvertedIndex("/tmp/test_idx",false);
+        assert(idx.bidxReader.sums.length == 3);
+        assert(idx.query("/test2","foo") == [0]);
+        assert(idx.queryRange("/test3", 1, 3) == [0, 1]);
+        idx.close;
+    }
 
 }
