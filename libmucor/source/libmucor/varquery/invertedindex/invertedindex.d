@@ -7,7 +7,6 @@ import std.array : array, replace;
 import std.conv : to;
 import std.format : format;
 import std.string : indexOf;
-import std.bitmanip: nativeToLittleEndian, littleEndianToNative;
 import std.stdio;
 import std.file: exists;
 import std.exception : enforce;
@@ -18,7 +17,6 @@ import libmucor.varquery.invertedindex.jsonvalue;
 import libmucor.varquery.invertedindex.binaryindex;
 import libmucor.varquery.invertedindex.store;
 import libmucor.khashl: khashl;
-import htslib.hts_endian;
 import std.digest.md : MD5Digest, toHexString;
 import htslib.hts_log;
 

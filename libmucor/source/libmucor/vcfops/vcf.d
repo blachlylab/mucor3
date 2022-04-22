@@ -91,7 +91,7 @@ HeaderConfig getHeaderConfig(VCFHeader header)
 }
 
 /// Parse individual records to JSON
-JsonValue parseRecord(VCFRecord record, HeaderConfig cfg){
+Json parseRecord(VCFRecord record, HeaderConfig cfg){
     record.unpack(UnpackLevel.All);
 
     // create root json object

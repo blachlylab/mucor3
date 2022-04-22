@@ -14,9 +14,9 @@ import std.stdio;
 import dhtslib.vcf;
 import htslib.hts_log;
 import libmucor.vcfops.vcf;
-import libmucor.jsonlops.jsonvalue;
+import libmucor.jsonlops.json;
 
-JsonValue parseInfos(VCFRecord * rec, HeaderConfig cfg, ulong numAlts)
+Json parseInfos(VCFRecord * rec, HeaderConfig cfg, ulong numAlts)
 {
     auto infoObj = makeJsonObject;
     auto byAllele = makeJsonArray(numAlts);
@@ -33,11 +33,11 @@ JsonValue parseInfos(VCFRecord * rec, HeaderConfig cfg, ulong numAlts)
             continue;
         }
         auto hdrInfo = cfg.infos[key];
-        JsonValue data;
+        Json data;
         final switch(info.type){
             // char/string
             case BcfRecordType.Char:
-                infoObj[key] = JsonValue(info.to!string);
+                infoObj[key] = Json(info.to!string);
                 continue;
             // float or float array
             case BcfRecordType.Float:
@@ -70,7 +70,7 @@ JsonValue parseInfos(VCFRecord * rec, HeaderConfig cfg, ulong numAlts)
     return infoObj;
 }
 
-JsonValue parseInfo(T)(ref InfoField item, FieldInfo hdrInfo) {
+Json parseInfo(T)(ref InfoField item, FieldInfo hdrInfo) {
     final switch(hdrInfo.n){
         case HeaderLengths.OnePerAllele:
             return parseOnePerAllele!T(item);
@@ -83,7 +83,7 @@ JsonValue parseInfo(T)(ref InfoField item, FieldInfo hdrInfo) {
     }
 }
 
-JsonValue parseOnePerAllele(T, V)(ref V item, ulong[] sampleIdxs = [], int[][] genotypes = []) {
+Json parseOnePerAllele(T, V)(ref V item, ulong[] sampleIdxs = [], int[][] genotypes = []) {
     
     static if (is(V == InfoField))
     {
@@ -130,7 +130,7 @@ JsonValue parseOnePerAllele(T, V)(ref V item, ulong[] sampleIdxs = [], int[][] g
     
 }
 
-JsonValue parseOnePerAltAllele(T, V)(ref V item, ulong[] sampleIdxs = [], int[][] genotypes = []) {
+Json parseOnePerAltAllele(T, V)(ref V item, ulong[] sampleIdxs = [], int[][] genotypes = []) {
     static if (is(V == InfoField))
     {
         auto byAllele = makeJsonArray(item.len);
@@ -165,7 +165,7 @@ JsonValue parseOnePerAltAllele(T, V)(ref V item, ulong[] sampleIdxs = [], int[][
     }
 }
 
-JsonValue parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, string[] samples)
+Json parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, string[] samples)
 {
     auto bySample = makeJsonObject;
     ulong[] samplesIdxs;
@@ -218,7 +218,7 @@ JsonValue parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, string[
         if(key == "GT")
             continue;
         
-        JsonValue data;
+        Json data;
         final switch(fmt.type){
             // char/string
             case BcfRecordType.Char:
@@ -278,7 +278,7 @@ JsonValue parseFormats(VCFRecord * rec, HeaderConfig cfg, ulong numAlts, string[
 }
 
 
-JsonValue parseFormat(T)(ref FormatField item, FieldInfo hdrInfo, ulong[] sampleIdxs, int[][] genotypes) {
+Json parseFormat(T)(ref FormatField item, FieldInfo hdrInfo, ulong[] sampleIdxs, int[][] genotypes) {
 
     final switch(hdrInfo.n){
         case HeaderLengths.OnePerAllele:
@@ -353,31 +353,31 @@ unittest
     
 }
 
-auto expandBySample(JsonValue obj)
+auto expandBySample(Json obj)
 {
     auto samples = (*obj["FORMAT"].asObjectRef);
     return samples.byKey.map!((y) {
-        auto root = JsonValue(obj.dup.value);
+        auto root = Json(obj.dup.value);
         root["sample"] = y;
-        root["FORMAT"] = JsonValue(samples[y]);
+        root["FORMAT"] = Json(samples[y]);
         return root;
     });
 }
 
-auto expandByAnno(JsonValue obj, string key)
+auto expandByAnno(Json obj, string key)
 {
     auto annos = (*(*(*obj["INFO"])[key]).asArrayRef);
     auto len = (*(*obj["INFO"])[key]).length;
     return iota(len)
-        .filter!(y => JsonValue(annos[y])["allele"].asValue!string == obj["ALT"].asValue!string)
+        .filter!(y => Json(annos[y])["allele"].asValue!string == obj["ALT"].asValue!string)
         .map!((y) {
-            auto root = JsonValue(obj.dup.value);
-            (*root["INFO"])[key] = JsonValue(annos[y]);
+            auto root = Json(obj.dup.value);
+            (*root["INFO"])[key] = Json(annos[y]);
             return root;
         });
 }
 
-auto expandMultiAllelicSites(bool sampleExpanded)(JsonValue obj, ulong numAlts)
+auto expandMultiAllelicSites(bool sampleExpanded)(Json obj, ulong numAlts)
 {
     static if(sampleExpanded){
         auto i_exists = ("INFO" in (*obj.asObjectRef)) != null;
@@ -390,7 +390,7 @@ auto expandMultiAllelicSites(bool sampleExpanded)(JsonValue obj, ulong numAlts)
         auto fmt_vals = fba_exists ? (*(*(*obj["FORMAT"])["by_allele"]).asArrayRef) : [];
         return iota(numAlts).map!((i) {
 
-            auto root = JsonValue(obj.dup.value);
+            auto root = Json(obj.dup.value);
 
             if(fba_exists)
                 root["FORMAT"].asObjectRef.remove("by_allele");
@@ -400,19 +400,19 @@ auto expandMultiAllelicSites(bool sampleExpanded)(JsonValue obj, ulong numAlts)
 
             if(info_vals.length > 0){
                 assert(info_vals.length == numAlts);
-                auto vals = (*JsonValue(info_vals[i]).asObjectRef);
+                auto vals = (*Json(info_vals[i]).asObjectRef);
                 foreach (k; vals.byKey)
                 {
-                    (*root["INFO"])[k] = JsonValue(vals[k]);
+                    (*root["INFO"])[k] = Json(vals[k]);
                 }
             }
 
             if(fmt_vals.length > 0){
                 assert(fmt_vals.length == numAlts);
-                auto vals = (*JsonValue(fmt_vals[i]).asObjectRef);
+                auto vals = (*Json(fmt_vals[i]).asObjectRef);
                 foreach (k; vals.byKey)
                 {
-                    (*root["FORMAT"])[k] =JsonValue(vals[k]);
+                    (*root["FORMAT"])[k] =Json(vals[k]);
                 }
             }
 
@@ -428,17 +428,17 @@ auto expandMultiAllelicSites(bool sampleExpanded)(JsonValue obj, ulong numAlts)
         auto fmt = (*(*obj["FORMAT"]).asObjectRef);
         return iota(numAlts).map!((i) {
 
-            auto root = JsonValue(obj.dup.value);
+            auto root = Json(obj.dup.value);
 
             if(iba_exists)
                 (*root["INFO"]).asObjectRef.remove("by_allele");
 
             if(info_vals.length > 0){
                 assert(info_vals.length == numAlts);
-                auto vals = (*JsonValue(info_vals[i]).asObjectRef);
+                auto vals = (*Json(info_vals[i]).asObjectRef);
                 foreach (k; vals.byKey)
                 {
-                    (*root["INFO"])[k] = JsonValue(vals[k]);
+                    (*root["INFO"])[k] = Json(vals[k]);
                 }
             }
 
@@ -448,25 +448,25 @@ auto expandMultiAllelicSites(bool sampleExpanded)(JsonValue obj, ulong numAlts)
                 auto fba_exists = f_exists ? (("by_allele" in (*(*(*obj["FORMAT"])[key]).asObjectRef)) != null) : false;
                 if(fba_exists)
                     (*(*root["FORMAT"])[key]).asObjectRef.remove("by_allele");
-                auto fmt_vals = fba_exists ? (*JsonValue(fmt[key])["byAllele"].asArrayRef) : [];
+                auto fmt_vals = fba_exists ? (*Json(fmt[key])["byAllele"].asArrayRef) : [];
                 if(fmt_vals.length > 0){
-                    auto vals = (*JsonValue(fmt_vals[i]).asObjectRef);
+                    auto vals = (*Json(fmt_vals[i]).asObjectRef);
                     foreach (k; vals.byKey)
                     {
-                        (*(*root["FORMAT"])[key])[k] = JsonValue(vals[k]);
+                        (*(*root["FORMAT"])[key])[k] = Json(vals[k]);
                     }
                 }    
             }
             
 
             if (numAlts > 1)
-                root["ALT"] = JsonValue((*obj["ALT"].asArrayRef)[i]);
+                root["ALT"] = Json((*obj["ALT"].asArrayRef)[i]);
             return root;
         });
     }
 }
 
-ulong getNumAlts(JsonValue obj)
+ulong getNumAlts(Json obj)
 {
     return (*obj["ALT"]).value.tryMatch!(
         (string x) => 1,
@@ -474,7 +474,7 @@ ulong getNumAlts(JsonValue obj)
     );
 }
 
-void applyOperations(JsonValue obj, bool anno, bool allele, bool sam, bool norm, int * input_count, int * output_count, ref File output)
+void applyOperations(Json obj, bool anno, bool allele, bool sam, bool norm, int * input_count, int * output_count, ref File output)
 {
     import core.atomic: atomicOp;
     *input_count+=1;

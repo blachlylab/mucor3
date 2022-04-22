@@ -12,7 +12,7 @@ import libmucor.varquery.invertedindex.store.file;
 import std.traits;
 import std.stdio: File;
 import htslib.hts_log;
-import htslib.hts_endian;
+import libmucor.hts_endian;
 import core.sync.mutex: Mutex;
 import core.atomic;
 import core.stdc.stdlib: calloc, free;
@@ -39,11 +39,11 @@ struct BinaryStore(T) {
     ubyte[] buffer;
 
     // invariant {
-    //     assert(this.buffer.length <= 65_536);
+    //     assert(this.buffer.length <= 4096);
     // }
 
     this(string fn, string mode) {
-        this.buffer.reserve(65_536);
+        this.buffer.reserve(4096);
         this.file = StoreFile(fn, mode);
         foreach(c; mode) {
             if(c =='w')
@@ -79,7 +79,7 @@ struct BinaryStore(T) {
 
     /// add these bytes to the buffer
     void bufferBytes(ubyte[] bytes) {
-        // assert(bytes.length + this.buffer.length <= 65_536);
+        // assert(bytes.length + this.buffer.length <= 4096);
         this.buffer ~= bytes[];
     }
 
@@ -102,7 +102,7 @@ struct BinaryStore(T) {
             return;
         }
         /// if buffer full, write and reset
-        if(this.buffer.length >= 65_536) {
+        if(this.buffer.length >= 4096) {
             this.flush;
         }
 
@@ -110,11 +110,11 @@ struct BinaryStore(T) {
         /// flush buffer
         /// write data in 4kb chunks
         /// then buffer remaining
-        if(bytes.length > 65_536) {
+        if(bytes.length > 4096) {
             this.flush;
-            foreach(i; 0..(bytes.length / 65_536)) {
-                this.file.writeRaw(bytes[0..65_536]);
-                bytes = bytes[65_536..$];
+            foreach(i; 0..(bytes.length / 4096)) {
+                this.file.writeRaw(bytes[0..4096]);
+                bytes = bytes[4096..$];
             }
             this.bufferBytes(bytes);
         } else {

@@ -10,5 +10,5 @@
 		"asdf": "~>0.7.8",
 		"dhtslib": "~>0.14.0+htslib-1.13"
 	},
-	"_dflags": ["--fsanitize=address", "--gc", "--frame-pointer=all"]
+	"_dflags": ["-linker=lld"]
 }

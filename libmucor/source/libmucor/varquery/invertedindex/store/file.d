@@ -4,7 +4,7 @@ import htslib.hts;
 import htslib.bgzf;
 import htslib.hts_log;
 import dhtslib.memory;
-import core.stdc.stdio: SEEK_SET, SEEK_CUR;
+import core.stdc.stdio: SEEK_SET, SEEK_CUR, SEEK_END;
 import std.format: format;
 import std.stdio;
 
@@ -36,6 +36,11 @@ struct StoreFile {
 
     void seekFromCur(ulong pos) {
         auto err = bgzf_seek(this.bgzf, pos, SEEK_CUR);
+        if(err < 0) hts_log_error(__FUNCTION__, "Error seeking file");
+    }
+
+    void seekToEnd() {
+        auto err = bgzf_seek(this.bgzf, 0, SEEK_END);
         if(err < 0) hts_log_error(__FUNCTION__, "Error seeking file");
     }
 

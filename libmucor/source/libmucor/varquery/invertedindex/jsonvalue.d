@@ -12,7 +12,7 @@ import asdf: deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
 import libmucor.khashl;
 import std.sumtype;
-import htslib.hts_endian;
+import libmucor.hts_endian;
 import std.typecons: Tuple, tuple;
 import std.exception: enforce;
 
@@ -26,13 +26,13 @@ bool isNumericStringInteger(const(char)[] val)
     return true;
 }
 
-alias JsonTypes = SumType!(const(char)[], double, long, bool);
+alias JsonValueTypes = SumType!(const(char)[], double, long, bool);
 
 /// Struct that represents JSON data
 /// and can be used with a hashmap
 struct JSONValue
 {
-    JsonTypes val;
+    JsonValueTypes val;
 
     this(Asdf json)
     {

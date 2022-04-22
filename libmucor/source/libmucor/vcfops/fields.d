@@ -43,7 +43,7 @@ string[16] ANN_FIELDS = [
 string[4] LOF_FIELDS =["Gene","ID","num_transcripts","percent_affected"];
 TYPES[4] LOF_TYPES =[TYPES.STRING,TYPES.STRING,TYPES.INT,TYPES.FLOAT];
 
-void parseAnnotationField(JsonValue * info_root, string key, string[] field_identifiers, TYPES[] types = [], bool condense = true)
+void parseAnnotationField(Json * info_root, string key, string[] field_identifiers, TYPES[] types = [], bool condense = true)
 {
     // if not in INFO, return
     if(!(key in (*(*info_root).asObjectRef))) return;

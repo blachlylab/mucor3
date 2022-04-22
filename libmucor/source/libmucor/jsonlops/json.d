@@ -1,4 +1,4 @@
-module libmucor.jsonlops.jsonvalue;
+module libmucor.jsonlops.json;
 
 import std.algorithm: map;
 import std.sumtype: SumType, This, match, tryMatch;
@@ -14,7 +14,7 @@ alias JsonTypes = SumType!(string, float, long, This[], khashl!(string, This, tr
 alias JsonObject = JsonTypes.Types[4];
 alias JsonArray = JsonTypes.Types[3];
 
-struct JsonValue
+struct Json
 {
     JsonTypes value;
 
@@ -23,15 +23,15 @@ struct JsonValue
         value = val;
     }
 
-    /// duplicate a JsonValue
-    JsonValue dup()
+    /// duplicate a Json
+    Json dup()
     {
         return (this.value).match!(
-            (long x) => JsonValue(x),
-            (float x) => JsonValue(x),
-            (string x) => JsonValue(x.idup),
-            (JsonArray x) => JsonValue(x.dup),
-            (JsonObject x) => JsonValue(x.dup)
+            (long x) => Json(x),
+            (float x) => Json(x),
+            (string x) => Json(x.idup),
+            (JsonArray x) => Json(x.dup),
+            (JsonObject x) => Json(x.dup)
         );
     }
 
@@ -40,27 +40,27 @@ struct JsonValue
         return (*this.asArrayRef).length;
     }
 
-    JsonValue * opIndex(ulong i)
+    Json * opIndex(ulong i)
     {
-        return cast(JsonValue *) &((*this.asArrayRef)[i]);
+        return cast(Json *) &((*this.asArrayRef)[i]);
     }
 
-    JsonValue * opIndex(string f)
+    Json * opIndex(string f)
     {
-        return cast(JsonValue *) &((*this.asObjectRef)[f]);
+        return cast(Json *) &((*this.asObjectRef)[f]);
     }
 
-    void opIndexAssign(JsonValue val, string f)
+    void opIndexAssign(Json val, string f)
     {
         (*this.asObjectRef)[f] = val.value;
     }
 
-    void opIndexAssign(JsonValue val, ulong i)
+    void opIndexAssign(Json val, ulong i)
     {
         (*this.asArrayRef)[i] = val.value;
     }
 
-    void opAssign(JsonValue val)
+    void opAssign(Json val)
     {
         this.value = val.value;
     }
@@ -68,7 +68,7 @@ struct JsonValue
     void opAssign(T)(T val)
     if(isIntegral!T || isFloatingPoint!T || isSomeString!T || is(T == JsonObject) || is(T == JsonArray))
     {
-        this = JsonValue(val);
+        this = Json(val);
     }
 
     void opAssign(T)(T val)
@@ -76,12 +76,12 @@ struct JsonValue
     {
         JsonArray arr = new JsonTypes[val.length];
         foreach(j,elem; val){
-            arr[j] = JsonValue(elem).value;
+            arr[j] = Json(elem).value;
         }
         this = arr;
     }
 
-    bool opEquals(JsonValue val) {
+    bool opEquals(Json val) {
         import std.math: isClose;
         alias check = match!(
             (string a, string b) => a == b,
@@ -90,7 +90,7 @@ struct JsonValue
             (JsonObject a, JsonObject b) {
                 foreach(kv; a.byKeyValue){
                     if(!(kv.key in b)) return false;
-                    if(JsonValue(kv.value) != JsonValue(b[kv.key]))
+                    if(Json(kv.value) != Json(b[kv.key]))
                         return false;
                 }
                 return true;
@@ -98,7 +98,7 @@ struct JsonValue
             (JsonArray a, JsonArray b) {
                 if(a.length != b.length) return false;
                 foreach(i,v; a){
-                    if(JsonValue(v) != JsonValue(b[i]))
+                    if(Json(v) != Json(b[i]))
                         return false;
                 }
                 return true;
@@ -118,7 +118,7 @@ struct JsonValue
         else
             auto v = val;
 
-        (*this.asObjectRef)[f] = JsonValue(v).value;
+        (*this.asObjectRef)[f] = Json(v).value;
     }
 
     void opIndexAssign(T)(T val, ulong i)
@@ -131,7 +131,7 @@ struct JsonValue
         else
             auto v = val;
 
-        (*this.asArrayRef)[i] = JsonValue(v).value;
+        (*this.asArrayRef)[i] = Json(v).value;
     }
 
     void opIndexAssign(T)(T val, string f)
@@ -139,9 +139,9 @@ struct JsonValue
     {
         JsonArray arr = new JsonTypes[val.length];
         foreach(i,elem; val){
-            arr[i] = JsonValue(elem).value;
+            arr[i] = Json(elem).value;
         }
-        (*this.asObjectRef)[f] = JsonValue(arr).value;
+        (*this.asObjectRef)[f] = Json(arr).value;
     }
 
     void opIndexAssign(T)(T val, ulong i)
@@ -155,9 +155,9 @@ struct JsonValue
     }
 
 
-    // JsonValue * copy()
+    // Json * copy()
     // {
-    //     return JsonValue((*this.value).dup);
+    //     return Json((*this.value).dup);
     // }
 
     T asValue(T)()
@@ -202,7 +202,7 @@ struct JsonValue
                 Asdf[] arr;
                 foreach (ref v; x)
                 {
-                    arr ~= JsonValue(v).serializeToAsdf;
+                    arr ~= Json(v).serializeToAsdf;
                 }
                 return makeAsdfArray(arr); 
             },
@@ -210,7 +210,7 @@ struct JsonValue
                 Asdf[string] obj;
                 foreach (ref kv; x.byKeyValue)
                 {
-                    obj[kv.key] = JsonValue(kv.value).serializeToAsdf;
+                    obj[kv.key] = Json(kv.value).serializeToAsdf;
                 }
                 return makeAsdfObject(obj); 
             }
@@ -218,22 +218,22 @@ struct JsonValue
     }
 }
 
-JsonValue makeJsonObject()
+Json makeJsonObject()
 {
     JsonObject obj;
-    return JsonValue(obj);
+    return Json(obj);
 }
 
-JsonValue makeJsonArray(ulong length = 0)
+Json makeJsonArray(ulong length = 0)
 {
     JsonArray arr = new JsonTypes[length];
-    return JsonValue(arr);
+    return Json(arr);
 }
 
 
 unittest
 {
-    auto a = JsonValue(1L);
+    auto a = Json(1L);
     auto b = a.dup;
     b = 2L;
 
@@ -282,7 +282,7 @@ unittest
 
 pragma(inline, true)
 /// recursively normalize or flatten asdf objects
-JsonValue normalize(JsonValue obj, string sep = ['.']){
+Json normalize(Json obj, string sep = ['.']){
     
     auto mut = makeJsonObject;
     normalize(obj,[],mut, sep);
@@ -290,12 +290,12 @@ JsonValue normalize(JsonValue obj, string sep = ['.']){
 }
 
 /// recursively normalize or flatten asdf objects
-void normalize(const JsonValue value, string path, JsonValue mut, string sep){
+void normalize(const Json value, string path, Json mut, string sep){
     value.value.match!(
         (const JsonArray x) {
             foreach (val; x)
             {
-                auto v = JsonValue(val);
+                auto v = Json(val);
                 normalize(v, path, mut, sep);
             }
         },
@@ -304,7 +304,7 @@ void normalize(const JsonValue value, string path, JsonValue mut, string sep){
                 path ~= sep;
             foreach (kv; x.byKeyValue)
             {
-                auto v = JsonValue(kv.value);
+                auto v = Json(kv.value);
                 normalize(v,path~kv.key, mut, sep);
             }
         },
@@ -315,7 +315,7 @@ void normalize(const JsonValue value, string path, JsonValue mut, string sep){
     );
 }
 
-void normalizeValue(const JsonValue value, string path, JsonValue mut, string sep){
+void normalizeValue(const Json value, string path, Json mut, string sep){
     
     if(path in (*(mut).asObjectRef)){    
         

@@ -13,7 +13,7 @@ import libmucor.khashl;
 import libmucor.varquery.invertedindex.jsonvalue;
 import libmucor.varquery.invertedindex.binaryindex;
 import std.sumtype;
-import htslib.hts_endian;
+import libmucor.hts_endian;
 import std.typecons: Tuple, tuple;
 import std.exception: enforce;
 
