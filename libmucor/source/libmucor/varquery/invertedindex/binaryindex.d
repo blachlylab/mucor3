@@ -48,9 +48,14 @@ import std.format: format;
  */
 struct BinaryIndexWriter {
     string prefix;
-    /// hashmap for writing
-    /// json value hash maps to a set of ids
-    khashl!(uint128, JsonStoreWriter *) hashmap;
+    /// hashset of observed keys
+    khashlSet!(uint128) seenKeys;
+    /// Json store
+    JsonStoreWriter * jsonStore;
+
+    /// Id file cache
+    IdFileCacheWriter * idCache;
+
     /// store json value meta data
     KeyMetaStore * metadata;
     /// store json value hashes
@@ -65,16 +70,17 @@ struct BinaryIndexWriter {
 
     this(string prefix) {
         this.prefix = prefix;
-        this.hashes = new MD5Store(prefix ~ ".keys.md5", "wb");
-        this.metadata = new KeyMetaStore(prefix ~  ".keys.meta", "wb");
-        this.sums = new MD5Store(prefix ~  ".record.sums", "wb");
-        this.keys = new StringStore(prefix ~  ".keys", "wb");
+        this.hashes = new MD5Store(prefix ~ ".keys.md5", "wbu");
+        this.metadata = new KeyMetaStore(prefix ~  ".keys.meta", "wbu");
+        this.sums = new MD5Store(prefix ~  ".record.sums", "wbu");
+        this.keys = new StringStore(prefix ~  ".keys", "wbu");
+        this.jsonStore = new JsonStoreWriter(prefix);
+        this.idCache = new IdFileCacheWriter(prefix);
     }
 
     void close() {
-        foreach(k;this.hashmap.byKey){
-            (*(k in this.hashmap)).close;
-        }
+        this.idCache.close;
+        this.jsonStore.close;
         this.hashes.close;
         this.metadata.close;
         this.sums.close;
@@ -86,22 +92,23 @@ struct BinaryIndexWriter {
     {
         hts_log_debug(__FUNCTION__, format("inserting json value %s for key %s", item, key));
         auto keyhash = getKeyHash(key);
-        auto p = keyhash in hashmap;
-        if(p) {
-            (*p).insert(item, this.numSums);
-        } else {
+        auto p = keyhash in seenKeys;
+        if(!p) {
+            this.seenKeys.insert(keyhash);
+
             KeyMetaData meta;
             meta.keyHash = keyhash;
-            auto fn = format("%s_%s", prefix, meta.keyHash.getShortHash);
-            hts_log_debug(__FUNCTION__, format("creating new json index %s for key %s", fn, key));
-            auto s = new JsonStoreWriter(fn);
-            this.hashmap[keyhash] = s;
-            s.insert(item, this.numSums);
             meta.keyOffset = this.keys.tell;
             this.keys.write(key);
             meta.keyLength = this.keys.tell - meta.keyOffset;
             metadata.write(meta);
-        }
+        } 
+        
+        auto valHash = this.jsonStore.insert(item);
+
+        auto newHash = combineHash(keyhash, valHash);
+
+        this.idCache.insert(newHash, this.numSums);
     }
 }
 
@@ -109,9 +116,15 @@ struct BinaryIndexWriter {
 /// for a given field
 struct BinaryIndexReader {
     string prefix;
-    /// hashmap for writing
-    /// json value hash maps to a set of ids
-    khashl!(uint128, JsonStoreReader) hashmap;
+    /// hashset of observed keys
+    khashlSet!(uint128) seenKeys;
+
+    /// json store
+    JsonStoreReader * jsonStore;
+
+    /// Id file cache
+    IdFileCacheReader * idCache;
+
     /// Key metadata
     KeyMetaData[] metadata;
     /// store md5 sums
@@ -125,33 +138,32 @@ struct BinaryIndexReader {
         this.prefix = prefix;
         this.hashes = new MD5Store(prefix ~ ".keys.md5", "rb");
         auto md = new KeyMetaStore(prefix ~  ".keys.meta", "rb");
-        this.metadata = md.getAll;
+        this.metadata = md.getAll.array;
         md.close;
         hts_log_debug(__FUNCTION__, format("loading key index %s with %d keys", prefix, this.metadata.length));
-        this.sums = new MD5Store(prefix ~  ".record.sums", "rb").getAll;
+        this.sums = new MD5Store(prefix ~  ".record.sums", "rb").getAll.array;
         this.keys = new StringStore(prefix ~  ".keys", "rb");
-        foreach(meta; this.metadata) {
-            auto fn = format("%s_%s", prefix, meta.keyHash.getShortHash);
-            hashmap[meta.keyHash] = JsonStoreReader(fn);
+        this.jsonStore = new JsonStoreReader(prefix);
+        this.idCache = new IdFileCacheReader(prefix);
+        foreach (KeyMetaData key; metadata)
+        {
+            this.seenKeys.insert(key.keyHash);
         }
-        // this.metadata = KeyMetaStore(prefix ~  ".json.meta", "rb").getAll;
-        // this.sums = MD5Store(prefix ~  ".record.sums", "rb").getAll;
     }
 
     void close() {
-        foreach(k;this.hashmap.byKey){
-            (k in this.hashmap).close;
-        }
+        this.jsonStore.close;
+        this.idCache.close;
         this.hashes.close;
         this.keys.close;
     }
 
-    auto getKeysWithJsonStore() {
+    auto getKeysWithId() {
         auto strkeys = this.metadata
             .map!(meta => this.keys.readFromPosition(meta.keyOffset));
-        auto stores = this.metadata
-            .map!(meta => meta.keyHash in this.hashmap);
-        return zip(strkeys, stores);
+        auto hashes = this.metadata
+            .map!(meta => meta.keyHash);
+        return zip(strkeys, hashes);
     }
 }
 

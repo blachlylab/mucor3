@@ -29,6 +29,7 @@ struct KeyMetaData {
     uint128 keyHash;
     ulong keyOffset;
     ulong keyLength;
+    @nogc:
 
     this(uint128 keyHash, ulong keyOffset, ulong keyLength) {
         this.keyHash = keyHash;
@@ -72,6 +73,8 @@ struct JsonKeyMetaData {
     ulong padding;
     ulong keyOffset;
     ulong keyLength;
+
+    @nogc:
 
     this(uint128 keyHash, ulong type, ulong padding, ulong keyOffset, ulong keyLength){
         this.keyHash = keyHash;

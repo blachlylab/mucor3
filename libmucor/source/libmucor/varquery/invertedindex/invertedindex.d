@@ -1,7 +1,7 @@
 module libmucor.varquery.invertedindex.invertedindex;
 import std.algorithm.setops;
 import std.regex;
-import std.algorithm : sort, uniq, map, std_filter = filter, joiner, each;
+import std.algorithm : sort, uniq, map, std_filter = filter, joiner, each, cartesianProduct, reduce;
 import std.range : iota, takeExactly;
 import std.array : array, replace;
 import std.conv : to;
@@ -99,24 +99,23 @@ struct InvertedIndex
         // return this.recordMd5s;
     }
 
-    JsonStoreReader*[] getFields(const(char)[] key)
+    uint128[] getFields(const(char)[] key)
     {
         auto keycopy = key.idup;
         if(key[0] != '/') throw new Exception("key is missing leading /");
-        JsonStoreReader*[] ret;
+        uint128[] ret;
         auto wildcard = key.indexOf('*');
         if(wildcard == -1){
             auto hash = getKeyHash(key);
-            auto p = hash in this.bidxReader.hashmap;
-            if(!p) throw new Exception(" key "~key.idup~" is not found");
-            ret = [p];
+            if(!(hash in this.bidxReader.seenKeys)) throw new Exception(" key "~key.idup~" is not found");
+            ret = [hash];
             if(ret.length == 0){
                 hts_log_warning(__FUNCTION__,"Warning: Key"~ keycopy ~" was not found in index!");
             }
         }else{
             key = key.replace("*",".*");
             auto reg = regex("^" ~ key ~"$");
-            ret = this.bidxReader.getKeysWithJsonStore.std_filter!(x => !(x[0].matchFirst(reg).empty)).map!(x=> x[1]).array;
+            ret = this.bidxReader.getKeysWithId.std_filter!(x => !(x[0].matchFirst(reg).empty)).map!(x=> x[1]).array;
             if(ret.length == 0){
                 hts_log_warning(__FUNCTION__,"Warning: Key wildcards sequence "~ keycopy ~" matched no keys in index!");
             }
@@ -127,39 +126,48 @@ struct InvertedIndex
 
     ulong[] query(T)(const(char)[] key,T value) {
         auto matchingFields = getFields(key);
-        return matchingFields
-                .map!(x=> (*x).filter([value]))
-                .joiner.array.sort.uniq.array;
+        auto matchingValues = this.bidxReader.jsonStore.filter([value]);
+        return cartesianProduct(matchingFields, matchingValues)
+            .map!(x => combineHash(x[0], x[1]))
+            .map!( x => this.bidxReader.idCache.getIds(x))
+            .joiner.array.sort.uniq.array;
     }
     ulong[] queryRange(T)(const(char)[] key,T first,T second){
         auto matchingFields = getFields(key);
-        return matchingFields
-                .map!(x=> (*x).filterRange([first,second]))
-                .joiner.array.sort.uniq.array;
+        auto matchingValues = this.bidxReader.jsonStore.filterRange([first, second]);
+        return cartesianProduct(matchingFields, matchingValues)
+            .map!(x => combineHash(x[0], x[1]))
+            .map!( x => this.bidxReader.idCache.getIds(x))
+            .joiner.array.sort.uniq.array;
     }
     template queryOp(string op)
     {
         ulong[] queryOp(T)(const(char)[] key,T val){
             auto matchingFields = getFields(key);
-            return matchingFields
-                    .map!(x=> (*x).filterOp!(op, T)(val))
-                    .joiner.array.sort.uniq.array;
+            auto matchingValues = this.bidxReader.jsonStore.filterOp!(op, T)(val);
+            return cartesianProduct(matchingFields, matchingValues)
+                .map!(x => combineHash(x[0], x[1]))
+                .map!( x => this.bidxReader.idCache.getIds(x))
+                .joiner.array.sort.uniq.array;
         }
     }
     
     ulong[] queryAND(T)(const(char)[] key,T[] values){
         auto matchingFields = getFields(key);
-        return matchingFields.map!((x){
-            auto results = values.map!(y=>(*x).filter([y]).sort.uniq.array).array;
-            auto intersect = results[0];
-            foreach (item; results)
-                intersect = setIntersection(intersect,item).array;
-            return intersect.array;
-        }).joiner.array.sort.uniq.array;
+        auto matchingValues = this.bidxReader.jsonStore.filter(values);
+        return reduce!((a, b) => setIntersection(a, b).array)(
+                cartesianProduct(matchingFields, matchingValues)
+                    .map!(x => combineHash(x[0], x[1]))
+                    .map!( x => this.bidxReader.idCache.getIds(x).array.sort.array)
+            ).array.sort.uniq.array;
     }
     ulong[] queryOR(T)(const(char)[] key,T[] values){
         auto matchingFields = getFields(key);
-        return matchingFields.map!(x=> (*x).filter(values)).joiner.array.sort.uniq.array;
+        auto matchingValues = this.bidxReader.jsonStore.filter(values);
+        return cartesianProduct(matchingFields, matchingValues)
+            .map!(x => combineHash(x[0], x[1]))
+            .map!( x => this.bidxReader.idCache.getIds(x))
+            .joiner.array.sort.uniq.array;
     }
     ulong[] queryNOT(ulong[] values){
         return allIds.sort.uniq.setDifference(values).array;

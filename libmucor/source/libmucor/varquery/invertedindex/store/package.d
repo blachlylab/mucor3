@@ -2,6 +2,7 @@ module libmucor.varquery.invertedindex.store;
 
 public import libmucor.varquery.invertedindex.store.binary;
 public import libmucor.varquery.invertedindex.store.json;
+public import libmucor.varquery.invertedindex.store.filecache;
 
 import libmucor.wideint;
 import libmucor.varquery.invertedindex.jsonvalue;
@@ -55,6 +56,17 @@ uint128 getValueHash(JSONValue val) {
             return ret;
         }
     );
+}
+
+uint128 combineHash(uint128 a, uint128 b) {
+    uint128 ret;
+    uint256 v;
+    v.hi = a;
+    v.lo = b;
+    ret.hi = SEED1;
+    ret.lo = SEED2;
+    SpookyHash.Hash128(&v, 32, &ret.hi, &ret.lo);
+    return ret;
 }
 
 string getShortHash(uint128 v) {

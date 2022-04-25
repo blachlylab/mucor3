@@ -559,36 +559,47 @@ private:
         {
         case 15:
         d += (cast(ulong)u.p8[14]) << 48;
+        goto case 14;
         case 14:
             d += (cast(ulong)u.p8[13]) << 40;
+        goto case 13;
         case 13:
             d += (cast(ulong)u.p8[12]) << 32;
+        goto case 12;
         case 12:
             d += u.p32[2];
             c += u.p64[0];
             break;
         case 11:
             d += (cast(ulong)u.p8[10]) << 16;
+        goto case 10;
         case 10:
             d += (cast(ulong)u.p8[9]) << 8;
+        goto case 9;
         case 9:
             d += cast(ulong)u.p8[8];
+        goto case 8;
         case 8:
             c += u.p64[0];
             break;
         case 7:
             c += (cast(ulong)u.p8[6]) << 48;
+        goto case 6;
         case 6:
             c += (cast(ulong)u.p8[5]) << 40;
+        goto case 5;
         case 5:
             c += (cast(ulong)u.p8[4]) << 32;
+        goto case 4;
         case 4:
             c += u.p32[0];
             break;
         case 3:
             c += (cast(ulong)u.p8[2]) << 16;
+        goto case 2;
         case 2:
             c += (cast(ulong)u.p8[1]) << 8;
+        goto case 1;
         case 1:
             c += cast(ulong)u.p8[0];
             break;

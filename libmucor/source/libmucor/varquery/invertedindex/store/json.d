@@ -20,9 +20,9 @@ import std.array: array;
 /// for a given field
 struct JsonStoreWriter {
     string prefix;
-    /// hashmap for writing
-    /// json value hash maps to a set of ids
-    khashl!(uint128, IdsStoreWriter *) hashmap;
+
+    /// hashset of observed values
+    khashlSet!(uint128) valuesSeen;
 
     /// store json value meta data
     JsonMetaStore * metadata;
@@ -35,36 +35,26 @@ struct JsonStoreWriter {
 
     this(string prefix) {
         this.prefix = prefix;
-        this.metadata = new JsonMetaStore(prefix ~  ".json.meta", "wb");
-        this.longs = new LongStore(prefix ~  ".json.longs", "wb");
-        this.doubles = new DoubleStore(prefix ~  ".json.doubles", "wb");
-        this.strings = new StringStore(prefix ~  ".json.strings", "wb");
+        this.metadata = new JsonMetaStore(prefix ~  ".json.meta", "wbu");
+        this.longs = new LongStore(prefix ~  ".json.longs", "wbu");
+        this.doubles = new DoubleStore(prefix ~  ".json.doubles", "wbu");
+        this.strings = new StringStore(prefix ~  ".json.strings", "wbu");
     }
 
     void close() {
-        foreach(k;this.hashmap.byKey.array){
-            (*(k in this.hashmap)).close;
-        }
         this.metadata.close;
         this.longs.close;
         this.doubles.close;
         this.strings.close;
     }
 
-    void insert(JSONValue item, ulong id) {
+    auto insert(JSONValue item) {
         auto keyhash = getValueHash(item);
-        auto p = keyhash in hashmap;
-        if(p) {
-            (*p).insert(id);
-        } else {
+        auto p = keyhash in this.valuesSeen;
+        if(!p) {
             JsonKeyMetaData meta;
             meta.keyHash = keyhash;
             meta.type = item.getType;
-            auto fn = format("%s_%s", prefix, meta.keyHash.getShortHash);
-            hts_log_debug(__FUNCTION__, format("creating new id index %s for json value %s", fn, item));
-            this.hashmap[keyhash] = new IdsStoreWriter(fn);
-
-            (*(keyhash in this.hashmap)).insert(id);
             (item.val).match!(
                 (bool x) {
                     meta.padding = (cast(ulong)x) + 1;
@@ -86,7 +76,9 @@ struct JsonStoreWriter {
                 }
             );
             metadata.write(meta);
+            valuesSeen.insert(keyhash);
         }
+        return keyhash;
     }
 }
 
@@ -94,9 +86,9 @@ struct JsonStoreWriter {
 /// for a given field
 struct JsonStoreReader {
 
-    /// hashmap for writing
-    /// json value hash maps to a set of ids
-    khashl!(uint128, IdsStoreReader) hashmap;
+    /// hashset of observed values
+    khashlSet!(uint128) valuesSeen;
+
     JsonKeyMetaData[] metadata;
     /// store integer json values
     LongStore * longs;
@@ -110,42 +102,27 @@ struct JsonStoreReader {
         this.doubles = new DoubleStore(prefix ~ ".json.doubles", "rb");
         this.strings = new StringStore(prefix ~ ".json.strings", "rb");
         auto md = new JsonMetaStore(prefix ~  ".json.meta", "rb");
-        this.metadata = md.getAll;
+        this.metadata = md.getAll.array;
         md.close;
-        hts_log_debug(__FUNCTION__, format("loading json index %s with %d keys", prefix, this.metadata.length));
-        foreach(meta; this.metadata) {
-            auto fn = format("%s_%s", prefix, meta.keyHash.getShortHash);
-            hashmap[meta.keyHash] = IdsStoreReader(fn);
+        foreach (JsonKeyMetaData key; metadata)
+        {
+            this.valuesSeen.insert(key.keyHash);
         }
     }
 
     void close() {
-        foreach(k;this.hashmap.byKey){
-            (k in this.hashmap).close;
-        }
         this.longs.close;
         this.doubles.close;
         this.strings.close;
     }
 
-    ulong[] filter(T)(T[] items)
+    auto filter(T)(T[] items)
     {
-        debug {
-            foreach(k;items){
-                auto v = JSONValue(k);
-                auto hash = getValueHash(v);
-                if (!(hash in hashmap)) {
-                    hts_log_warning(__FUNCTION__, format("Value %s with hash %x not found", v, hash));
-                }
-            }
-        }
         return items.map!(x => getValueHash(JSONValue(x)))
-            .std_filter!(x => x in hashmap)
-            .map!(x => (*(x in hashmap)).getIds)
-            .joiner.array; 
+            .std_filter!(x => x in valuesSeen);
     }
 
-    ulong[] filterRange(T)(T[] range)
+    auto filterRange(T)(T[] range)
     {
         assert(range.length==2);
         assert(range[0]<=range[1]);
@@ -170,11 +147,10 @@ struct JsonStoreReader {
         return zip(hashes, values)
             .std_filter!(x=>x[1] >= range[0])
             .std_filter!(x=>x[1] < range[1])
-            .map!(x => (cast(IdsStoreReader)hashmap[x[0]]).getIds)
-            .joiner.array;
+            .map!(x => x[0]);
     }
 
-    ulong[] filterOp(string op, T)(T val)
+    auto filterOp(string op, T)(T val)
     {
         auto type = JSONValue(val).getType;
         // JSONValue[2] r = [JSONValue(range[0]), JSONValue(range[1]];
@@ -196,8 +172,7 @@ struct JsonStoreReader {
         mixin("auto func = ("~T.stringof~" a) => a "~op~" val;");
         return zip(hashes, values)
             .std_filter!(x => func(x[1]))
-            .map!(x => (cast(IdsStoreReader)hashmap[x[0]]).getIds)
-            .joiner.array;
+            .map!(x => x[0]);
     }
 
     auto getJsonValues() {
@@ -235,7 +210,7 @@ struct IdsStoreWriter {
     UlongStore * ids;
 
     this(string prefix) {
-        this.ids = new UlongStore(prefix ~ ".ids", "wb");
+        this.ids = new UlongStore(prefix ~ ".ids", "wbu");
     }
 
     void close() {
@@ -260,7 +235,7 @@ struct IdsStoreReader {
     }
 
     ulong[] getIds() {
-        return this.ids.getAll;
+        return this.ids.getAll.array;
     }
 }
 
@@ -271,23 +246,29 @@ unittest
     hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
     {
         auto jidx = JsonStoreWriter("/tmp/test_jidx");
-        jidx.insert(JSONValue("testval"), 0);
-        jidx.insert(JSONValue("testval2"), 1);
-        jidx.insert(JSONValue(0), 2);
-        jidx.insert(JSONValue(2), 3);
-        jidx.insert(JSONValue(3), 4);
-        jidx.insert(JSONValue(5), 5);
-        jidx.insert(JSONValue(1.2), 6);
+        jidx.insert(JSONValue("testval"));
+        jidx.insert(JSONValue("testval2"));
+        jidx.insert(JSONValue(0));
+        jidx.insert(JSONValue(2));
+        jidx.insert(JSONValue(3));
+        jidx.insert(JSONValue(5));
+        jidx.insert(JSONValue(1.2));
+
+        jidx.insert(JSONValue("testval2"));
+        jidx.insert(JSONValue(3));
+        jidx.insert(JSONValue(5));
+        jidx.insert(JSONValue(1.2));
         jidx.close;
     }
     {
         auto jidx = JsonStoreReader("/tmp/test_jidx");
         assert(jidx.getJsonValues.array.length == 7);
         assert(jidx.metadata.length == 7);
-        assert(jidx.getJsonValuesByType!(const(char)[]) == ["testval", "testval2"]);
-        assert(jidx.getJsonValuesByType!(long) == [0, 2, 3, 5]);
-        assert(jidx.getJsonValuesByType!(double) == [1.2]);
-        assert(jidx.filter(["testval", "testval2"]) == [0, 1]);
+        assert(jidx.getJsonValuesByType!(const(char)[]).array == ["testval", "testval2"]);
+        assert(jidx.getJsonValuesByType!(long).array == [0, 2, 3, 5]);
+        assert(jidx.getJsonValuesByType!(double).array == [1.2]);
+        writeln(jidx.filter(["testval", "testval2"]).map!(x => format("%x", x)).array);
+        assert(jidx.filter(["testval", "testval2"]).map!(x => format("%x", x)).array == ["593B6F8099E807BA705B5CAF4AFFB497", "F3D78B7682E976BF2BB122AFB37DF618"]);
     }
     
 }

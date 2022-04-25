@@ -15,7 +15,8 @@ import htslib.hts_log;
 import libmucor.hts_endian;
 import core.sync.mutex: Mutex;
 import core.atomic;
-import core.stdc.stdlib: calloc, free;
+import core.stdc.stdlib: malloc, free;
+import core.stdc.stdio: printf;
 
 alias UlongStore = BinaryStore!ulong;
 alias LongStore = BinaryStore!long;
@@ -24,6 +25,11 @@ alias StringStore = BinaryStore!(const(char)[]);
 alias MD5Store = BinaryStore!uint128;
 alias KeyMetaStore = BinaryStore!KeyMetaData;
 alias JsonMetaStore = BinaryStore!JsonKeyMetaData;
+
+struct SingletonId {
+    uint128 key;
+    ulong id;
+}
 
 /// Universal buffered type store
 /// 
@@ -36,25 +42,31 @@ struct BinaryStore(T) {
     bool isWrite;
 
     /// buffer for reading and writing
-    ubyte[] buffer;
+    ubyte * buffer;
+
+    ulong bufLen;
+
+    ulong bufSize = 65536;
 
     // invariant {
-    //     assert(this.buffer.length <= 4096);
+    //     assert(this.bufLen <= this.bufSize);
     // }
+    @nogc:
 
     this(string fn, string mode) {
-        this.buffer.reserve(4096);
+        this.buffer = cast(ubyte*)malloc(this.bufSize);
+        this.bufLen = 0;
         this.file = StoreFile(fn, mode);
         foreach(c; mode) {
-            if(c =='w')
+            if(c =='w' || c == 'a')
                 this.isWrite = true;
         }       
     }
     
     // @disable this(this);
-    this(this) {
-        file = file;
-    }
+    // this(this) {
+    //     file = file;
+    // }
 
     // ~this() {
     //     this.close;
@@ -63,28 +75,34 @@ struct BinaryStore(T) {
     void close() {
         import std.format;
         
-        if(isWrite && this.file.bgzf.getRef) {
-            hts_log_debug(__FUNCTION__, format("closing %s", this.file.fn));
+        if(isWrite && this.file.bgzf) {
+            debug printf("closing %s\n", this.file.fn.ptr);
             this.flush;
         }
-        this.file = StoreFile.init;
+        this.bufLen = 0;
+        if(this.buffer) {
+            free(this.buffer);
+        }
+        this.file.close;
+        // this.buffer = null;
     }
 
     /// flush buffer and reset
     void flush() {
-        if(this.buffer.length > 0)
-            this.file.writeRaw(cast(ubyte[])this.buffer[0..this.buffer.length]);
-        this.buffer.length = 0;
+        if(this.bufLen > 0)
+            this.file.writeRaw(cast(ubyte[])this.buffer[0..this.bufLen]);
+        this.bufLen = 0;
     }
 
     /// add these bytes to the buffer
     void bufferBytes(ubyte[] bytes) {
-        // assert(bytes.length + this.buffer.length <= 4096);
-        this.buffer ~= bytes[];
+        assert(bytes.length + this.bufLen <= this.bufSize);
+        this.buffer[this.bufLen..this.bufLen + bytes.length] = bytes[];
+        this.bufLen = this.bufLen + bytes.length;
     }
 
     ulong tell(){
-        return this.file.tell + this.buffer.length;
+        return this.file.tell + this.bufLen;
     }
 
     void seek(ulong pos){
@@ -98,11 +116,11 @@ struct BinaryStore(T) {
     /// write raw byte array and return offset
     void writeRaw(ubyte[] bytes) {
         if(!isWrite) {
-            hts_log_error(__FUNCTION__, "File is not writeable");
+            printf("File is not writeable");
             return;
         }
         /// if buffer full, write and reset
-        if(this.buffer.length >= 4096) {
+        if(this.bufLen >= this.bufSize) {
             this.flush;
         }
 
@@ -110,15 +128,23 @@ struct BinaryStore(T) {
         /// flush buffer
         /// write data in 4kb chunks
         /// then buffer remaining
-        if(bytes.length > 4096) {
+        if(bytes.length > this.bufSize) {
             this.flush;
-            foreach(i; 0..(bytes.length / 4096)) {
-                this.file.writeRaw(bytes[0..4096]);
-                bytes = bytes[4096..$];
+            foreach(i; 0..(bytes.length / this.bufSize)) {
+                this.file.writeRaw(bytes[0..this.bufSize]);
+                bytes = bytes[this.bufSize..$];
             }
             this.bufferBytes(bytes);
-        } else {
+        } else if(bytes.length + this.bufLen > this.bufSize) {
+            auto part = this.bufSize - this.bufLen;
+            this.bufferBytes(bytes[0 .. part]);
+            this.flush;
+            this.bufferBytes(bytes[part .. $]);
+        }else {
             this.bufferBytes(bytes);
+        }
+        static if(isSomeString!T){
+            free(bytes.ptr);
         }
     }
 
@@ -142,9 +168,15 @@ struct BinaryStore(T) {
         } else static if(is(T == KeyMetaData)){
             return item.serialize; 
         } else static if(isSomeString!T){
-            ubyte[] buf = new ubyte[8 + item.length];
+            ubyte[] buf = (cast(ubyte*)malloc(8 + item.length))[0..8 + item.length];
             u64_to_le(item.length, buf.ptr);
             buf[8..$] = cast(ubyte[])item;
+            return buf;
+        } else static if(is(T == SingletonId)) {
+            ubyte[T.sizeof] buf;
+            u64_to_le(item.key.hi, buf.ptr);
+            u64_to_le(item.key.lo, buf.ptr + 8);
+            u64_to_le(item.id, buf.ptr + 16);
             return buf;
         } else {
             static assert(0, "Not a valid store type!");
@@ -194,10 +226,17 @@ struct BinaryStore(T) {
             ubyte[8] buf;
             this.file.readRaw(buf);
             auto length = le_to_u64(buf.ptr);
-            char[] s;
-            s.length = length;
+            char[] s = (cast(char*)malloc(length))[0..length];
             this.file.readRaw(cast(ubyte[])s);
             return cast(T)s;
+        } else static if(is(T == SingletonId)) {
+            ubyte[24] buf;
+            this.file.readRaw(buf);
+            SingletonId ret;
+            ret.key.hi = le_to_u64(buf.ptr);
+            ret.key.lo = le_to_u64(buf.ptr + 8);
+            ret.id = le_to_u64(buf.ptr + 16);
+            return ret;
         } else {
             static assert(0, "Not a valid store type!");
         }
@@ -208,34 +247,52 @@ struct BinaryStore(T) {
         return this.read();
     }
 
-    T[] getAll() {
-        T[] ret;
-        do {
-            ret ~= this.read;
-        } while(!this.isEOF);
-        this.file.seek(0);
-        this.file.eof = false;
-        return ret[0..$-1];
+    auto getAll() {
+        struct GetAll {
+            BinaryStore!T * store;
+            T front;
+            bool empty;
+            this(BinaryStore!T * s) {
+                this.store = s;
+                this.store.file.seek(0);
+                this.popFront;
+            }
+
+            void popFront() {
+                if(!this.empty) {
+                    front = this.store.read;
+                }
+                this.empty = this.store.isEOF;
+                if(this.empty) {
+                    this.store.file.seek(0);
+                    this.store.file.eof = false;
+                }
+            }
+
+        }
+        return GetAll(&this);
     }
 }
 
 unittest {
     import std.stdio;
+    import std.array: array;
     {
         
         auto store = new UlongStore("/tmp/ulong.store", "wb");
         store.write(1);
-        assert(store.buffer.length == 8);
+        assert(store.bufLen == 8);
         store.write(2);
-        assert(store.buffer.length == 16);
+        assert(store.bufLen == 16);
         store.write(3);
-        assert(store.buffer.length == 24);   
+        assert(store.bufLen == 24);   
         store.close;
     }
 
     {
         auto store = new UlongStore("/tmp/ulong.store", "rb");
-        assert(store.getAll() == [1, 2, 3]);
+        writeln(store.getAll().array);
+        assert(store.getAll().array == [1, 2, 3]);
     }
 
     {
@@ -255,40 +312,40 @@ unittest {
     {
         
         auto store = new StringStore("/tmp/string.store", "rb");
-        assert(store.getAll() == ["HERES a bunch of text", "HERES a bunch of text plus some extra", "addendum: some more text", "note: text"]);
+        assert(store.getAll().array == ["HERES a bunch of text", "HERES a bunch of text plus some extra", "addendum: some more text", "note: text"]);
     }
 
     {
         auto store = new KeyMetaStore("/tmp/keymeta.store", "wb");
         store.write(KeyMetaData(uint128(0), 1, 3));
-        assert(store.buffer.length == 32);
+        assert(store.bufLen == 32);
         store.write(KeyMetaData(uint128(1), 3, 5));
-        assert(store.buffer.length == 64);
+        assert(store.bufLen == 64);
         store.write(KeyMetaData(uint128(2), 7, 8));
-        assert(store.buffer.length == 96);   
+        assert(store.bufLen == 96);   
         store.close;
     }
 
     {
         auto store = new KeyMetaStore("/tmp/keymeta.store", "rb");
-        assert(store.getAll() == [KeyMetaData(uint128(0), 1, 3), KeyMetaData(uint128(1), 3, 5), KeyMetaData(uint128(2), 7, 8)]);
+        assert(store.getAll().array == [KeyMetaData(uint128(0), 1, 3), KeyMetaData(uint128(1), 3, 5), KeyMetaData(uint128(2), 7, 8)]);
     }
 
     {
         
         auto store = new JsonMetaStore("/tmp/json.store", "wb");
         store.write(JsonKeyMetaData(uint128(0), 0, 0, 1, 3));
-        assert(store.buffer.length == 48);
+        assert(store.bufLen == 48);
         store.write(JsonKeyMetaData(uint128(1), 1, 2, 3, 5));
-        assert(store.buffer.length == 96);
+        assert(store.bufLen == 96);
         store.write(JsonKeyMetaData(uint128(2), 3, 0 ,7, 8));
-        assert(store.buffer.length == 144);
+        assert(store.bufLen == 144);
         store.close;   
     }
 
     {
         auto store = new JsonMetaStore("/tmp/json.store", "rb");
-        assert(store.getAll() == [JsonKeyMetaData(uint128(0), 0, 0, 1, 3), JsonKeyMetaData(uint128(1), 1, 2, 3, 5), JsonKeyMetaData(uint128(2), 3, 0, 7, 8)]);
+        assert(store.getAll().array == [JsonKeyMetaData(uint128(0), 0, 0, 1, 3), JsonKeyMetaData(uint128(1), 1, 2, 3, 5), JsonKeyMetaData(uint128(2), 3, 0, 7, 8)]);
     }
 
 }
