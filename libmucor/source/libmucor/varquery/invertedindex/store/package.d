@@ -63,8 +63,8 @@ uint128 combineHash(uint128 a, uint128 b) {
     uint256 v;
     v.hi = a;
     v.lo = b;
-    ret.hi = SEED1;
-    ret.lo = SEED2;
+    ret.hi = SEED2;
+    ret.lo = SEED4;
     SpookyHash.Hash128(&v, 32, &ret.hi, &ret.lo);
     return ret;
 }

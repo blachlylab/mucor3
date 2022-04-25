@@ -10,5 +10,5 @@
 		"asdf": "~>0.7.8",
 		"dhtslib": "~>0.14.0+htslib-1.13"
 	},
-	"_dflags": ["-linker=lld"]
+	"_dflags": ["-gc","--fsanitize=address", "--disable-linker-strip-dead"]
 }

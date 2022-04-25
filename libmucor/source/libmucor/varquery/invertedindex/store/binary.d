@@ -16,7 +16,7 @@ import libmucor.hts_endian;
 import core.sync.mutex: Mutex;
 import core.atomic;
 import core.stdc.stdlib: malloc, free;
-import core.stdc.stdio: printf;
+import core.stdc.stdio: fprintf, stderr;
 
 alias UlongStore = BinaryStore!ulong;
 alias LongStore = BinaryStore!long;
@@ -26,9 +26,25 @@ alias MD5Store = BinaryStore!uint128;
 alias KeyMetaStore = BinaryStore!KeyMetaData;
 alias JsonMetaStore = BinaryStore!JsonKeyMetaData;
 
-struct SingletonId {
+struct SmallsIds {
     uint128 key;
-    ulong id;
+    ulong[] ids;
+
+    ubyte[] serialize() {
+        ubyte[] ret = new ubyte[16 + 8 + (this.ids.length*8)];
+        auto p = ret.ptr;
+        u64_to_le(this.key.hi, p);
+        p += 8;
+        u64_to_le(this.key.lo, p);
+        p += 8;
+        u64_to_le(this.ids.length, p);
+        p += 8;
+        foreach(id; ids){
+            u64_to_le(id, p);
+            p += 8;
+        }
+        return ret;
+    }
 }
 
 /// Universal buffered type store
@@ -51,7 +67,6 @@ struct BinaryStore(T) {
     // invariant {
     //     assert(this.bufLen <= this.bufSize);
     // }
-    @nogc:
 
     this(string fn, string mode) {
         this.buffer = cast(ubyte*)malloc(this.bufSize);
@@ -76,7 +91,7 @@ struct BinaryStore(T) {
         import std.format;
         
         if(isWrite && this.file.bgzf) {
-            debug printf("closing %s\n", this.file.fn.ptr);
+            hts_log_debug(__FUNCTION__, format("closing %s", this.file.fn.ptr));
             this.flush;
         }
         this.bufLen = 0;
@@ -116,7 +131,7 @@ struct BinaryStore(T) {
     /// write raw byte array and return offset
     void writeRaw(ubyte[] bytes) {
         if(!isWrite) {
-            printf("File is not writeable");
+            hts_log_error(__FUNCTION__, "File is not writeable");
             return;
         }
         /// if buffer full, write and reset
@@ -172,12 +187,8 @@ struct BinaryStore(T) {
             u64_to_le(item.length, buf.ptr);
             buf[8..$] = cast(ubyte[])item;
             return buf;
-        } else static if(is(T == SingletonId)) {
-            ubyte[T.sizeof] buf;
-            u64_to_le(item.key.hi, buf.ptr);
-            u64_to_le(item.key.lo, buf.ptr + 8);
-            u64_to_le(item.id, buf.ptr + 16);
-            return buf;
+        } else static if(is(T == SmallsIds)) {
+            return item.serialize;
         } else {
             static assert(0, "Not a valid store type!");
         }
@@ -229,13 +240,21 @@ struct BinaryStore(T) {
             char[] s = (cast(char*)malloc(length))[0..length];
             this.file.readRaw(cast(ubyte[])s);
             return cast(T)s;
-        } else static if(is(T == SingletonId)) {
+        } else static if(is(T == SmallsIds)) {
             ubyte[24] buf;
             this.file.readRaw(buf);
-            SingletonId ret;
+            SmallsIds ret;
             ret.key.hi = le_to_u64(buf.ptr);
             ret.key.lo = le_to_u64(buf.ptr + 8);
-            ret.id = le_to_u64(buf.ptr + 16);
+            ret.ids.length = le_to_u64(buf.ptr + 16);
+            ubyte[] data = new ubyte[ret.ids.length*8];
+            this.file.readRaw(data);
+            auto p = data.ptr;
+            foreach (ref id; ret.ids)
+            {
+                le_to_u64(p);   
+                p += 8;
+            }
             return ret;
         } else {
             static assert(0, "Not a valid store type!");

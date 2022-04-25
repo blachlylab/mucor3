@@ -70,10 +70,10 @@ struct BinaryIndexWriter {
 
     this(string prefix) {
         this.prefix = prefix;
-        this.hashes = new MD5Store(prefix ~ ".keys.md5", "wbu");
-        this.metadata = new KeyMetaStore(prefix ~  ".keys.meta", "wbu");
-        this.sums = new MD5Store(prefix ~  ".record.sums", "wbu");
-        this.keys = new StringStore(prefix ~  ".keys", "wbu");
+        this.hashes = new MD5Store(prefix ~ ".keys.md5", "wb");
+        this.metadata = new KeyMetaStore(prefix ~  ".keys.meta", "wb");
+        this.sums = new MD5Store(prefix ~  ".record.sums", "wb");
+        this.keys = new StringStore(prefix ~  ".keys", "wb");
         this.jsonStore = new JsonStoreWriter(prefix);
         this.idCache = new IdFileCacheWriter(prefix);
     }
@@ -90,6 +90,12 @@ struct BinaryIndexWriter {
     void insert(T)(T key, JSONValue item) 
     if(isSomeString!T)
     {
+        if(this.numSums != 0 && this.numSums % 1000 == 0) {
+            hts_log_info("IdCacheWriter", format("Cache size: %d", this.idCache.cache.length));
+            hts_log_info("IdCacheWriter", format("Smalls size: %d", this.idCache.smalls.count));
+            hts_log_info("IdCacheWriter", format("Files opened: %d", this.idCache.openedFiles.count));
+            stderr.writeln();
+        }
         hts_log_debug(__FUNCTION__, format("inserting json value %s for key %s", item, key));
         auto keyhash = getKeyHash(key);
         auto p = keyhash in seenKeys;
