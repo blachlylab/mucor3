@@ -107,6 +107,7 @@ struct InvertedIndex
         auto wildcard = key.indexOf('*');
         if(wildcard == -1){
             auto hash = getKeyHash(key);
+            // writefln("%x",hash);
             if(!(hash in this.bidxReader.seenKeys)) throw new Exception(" key "~key.idup~" is not found");
             ret = [hash];
             if(ret.length == 0){

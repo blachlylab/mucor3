@@ -7,7 +7,6 @@ import std.conv : to, ConvException;
 import std.traits;
 import std.meta;
 
-import asdf: deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
 import libmucor.khashl;
 import libmucor.varquery.invertedindex.jsonvalue;
@@ -37,26 +36,6 @@ struct KeyMetaData {
         this.keyLength = keyLength;
         assert(keyLength > 0);
     }
-
-    this(ubyte[] data) {
-        auto p = data.ptr;
-        this.keyHash.hi = le_to_u64(p);
-        p += 8;
-        this.keyHash.lo = le_to_u64(p);
-        p += 8;
-        this.keyOffset = le_to_u64(p);
-        p += 8;
-        this.keyLength = le_to_u64(p);
-    }
-
-    ubyte[32] serialize() {
-        ubyte[32] ret;
-        u64_to_le(this.keyHash.hi, ret.ptr + 0);
-        u64_to_le(this.keyHash.lo, ret.ptr + 8);
-        u64_to_le(this.keyOffset, ret.ptr + 16);
-        u64_to_le(this.keyLength, ret.ptr + 24);
-        return ret;
-    }
 }
 
 /** 
@@ -84,44 +63,37 @@ struct JsonKeyMetaData {
         this.keyLength = keyLength;
         assert(this.keyLength > 0);
     }
-
-    this(ubyte[] data) {
-        auto p = data.ptr;
-        this.keyHash.hi = le_to_u64(p);
-        p += 8;
-        this.keyHash.lo = le_to_u64(p);
-        p += 8;
-        this.type = le_to_u64(p);
-        p += 8;
-        this.padding = le_to_u64(p);
-        p += 8;
-        this.keyOffset = le_to_u64(p);
-        p += 8;
-        this.keyLength = le_to_u64(p);
-    }
-
-    ubyte[48] serialize() {
-        ubyte[48] ret;
-        u64_to_le(this.keyHash.hi, ret.ptr + 0);
-        u64_to_le(this.keyHash.lo, ret.ptr + 8);
-        u64_to_le(this.type, ret.ptr + 16);
-        u64_to_le(this.padding, ret.ptr + 24);
-        u64_to_le(this.keyOffset, ret.ptr + 32);
-        u64_to_le(this.keyLength, ret.ptr + 40);
-        return ret;
-    }
 }
 
 unittest{
+    import libmucor.varquery.invertedindex.store: serialize, deserialize;
+    
     auto field = JsonKeyMetaData(uint128(2), 0, 2, 1, 3);
-    auto data = field.serialize;
+    ubyte[48] data;
+    auto p = data.ptr;
+    field.serialize(p);
     assert(cast(ulong[])data == [0, 2, 0, 2, 1, 3]);
-    assert(JsonKeyMetaData(data) == field);
+    JsonKeyMetaData c;
+    p = data.ptr;
+    assert(deserialize!JsonKeyMetaData(p) == field);
 }
 
+// unittest{
+//     auto field = KeyMetaData(uint128(2), 1, 3);
+//     auto data = field.serialize;
+//     assert(cast(ulong[])data == [0, 2, 1, 3]);
+//     assert(KeyMetaData(data) == field);
+// }
+
 unittest{
+    import libmucor.varquery.invertedindex.store: serialize, deserialize;
+    
     auto field = KeyMetaData(uint128(2), 1, 3);
-    auto data = field.serialize;
+    ubyte[32] data;
+    auto p = data.ptr;
+    field.serialize(p);
     assert(cast(ulong[])data == [0, 2, 1, 3]);
-    assert(KeyMetaData(data) == field);
+    KeyMetaData c;
+    p = data.ptr;
+    assert(deserialize!KeyMetaData(p) == field);
 }

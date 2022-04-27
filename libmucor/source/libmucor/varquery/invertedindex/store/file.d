@@ -35,7 +35,7 @@ struct StoreFile {
             throw new Exception(format("Either file not found or error opening: %s, %s", fromStringz(this.fn.ptr), fromStringz(strerror(errno))));
         }
         this.bgzf = bgzf_hopen(hf, this.mode.ptr);
-        if(global_pool){
+        if(global_pool && this.bgzf.is_write){
             bgzf_thread_pool(this.bgzf, cast(htslib.bgzf.hts_tpool*) global_pool.pool, global_pool.qsize);
         }
         assert(this.bgzf);

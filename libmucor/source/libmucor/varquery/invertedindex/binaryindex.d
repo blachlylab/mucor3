@@ -90,12 +90,12 @@ struct BinaryIndexWriter {
     void insert(T)(T key, JSONValue item) 
     if(isSomeString!T)
     {
-        if(this.numSums != 0 && this.numSums % 1000 == 0) {
-            hts_log_info("IdCacheWriter", format("Cache size: %d", this.idCache.cache.length));
-            hts_log_info("IdCacheWriter", format("Smalls size: %d", this.idCache.smalls.count));
-            hts_log_info("IdCacheWriter", format("Files opened: %d", this.idCache.openedFiles.count));
-            stderr.writeln();
-        }
+        // if(this.numSums != 0 && this.numSums % 1000 == 0) {
+            // hts_log_info("IdCacheWriter", format("Cache size: %d", this.idCache.cache.length));
+            // hts_log_info("IdCacheWriter", format("Smalls size: %d", this.idCache.smalls.count));
+            // hts_log_info("IdCacheWriter", format("Files opened: %d", this.idCache.openedFiles.count));
+            // stderr.writeln();
+        // }
         hts_log_debug(__FUNCTION__, format("inserting json value %s for key %s", item, key));
         auto keyhash = getKeyHash(key);
         auto p = keyhash in seenKeys;

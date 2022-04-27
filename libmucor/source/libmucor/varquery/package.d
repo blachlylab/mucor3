@@ -2,7 +2,7 @@ module libmucor.varquery;
 
 import std.stdio;
 import std.datetime.stopwatch : StopWatch;
-import std.algorithm: map;
+import std.algorithm: filter;
 import std.range;
 
 public import libmucor.varquery.invertedindex;
@@ -10,6 +10,7 @@ public import libmucor.varquery.query;
 
 import asdf : deserializeAsdf = deserialize, parseJsonByLine, Asdf;
 import libmucor.wideint : uint128;
+import libmucor.khashl;
 
 auto queryRange(R)(R range, InvertedIndex * idx, string queryStr)
 if (is(ElementType!R == Asdf))
@@ -54,30 +55,18 @@ if (is(ElementType!R == Asdf))
     stderr.writeln(idxs.length," records matched your query");
     sw.stop;
 
-    bool[uint128] hashmap;
-    foreach(key;idx.convertIds(idx.allIds)){
-        hashmap[key] = false;
+    khashlSet!(uint128) selectedSums;
+    foreach(key;idxs){
+        selectedSums.insert(key);
     }
 
-    foreach (key; idxs)
-    {
-        hashmap[key] = true;
-    }
-
-    return range.enumerate.map!((x) {
-        auto i = x.index;
-        auto line = x.value;
+    return range.filter!((line) {
+        // auto i = x.index;
+        // auto line = x.value;
         uint128 a;
         a.fromHexString(deserializeAsdf!string(line["md5"]));
-        assert(idx.recordMd5s[i] ==  a);
-        auto val = hashmap.get(a, false);
-        if(a in hashmap){
-            if(hashmap[a])
-                return line;
-            throw new Exception("Something odd happened");
-        }else{
-            throw new Exception("record not present in index");
-        }
+        // assert(idx.recordMd5s[i] ==  a);
+        return a in selectedSums ? true : false;
     });
 }
 
