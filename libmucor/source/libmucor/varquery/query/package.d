@@ -12,7 +12,6 @@ import std.typecons : Tuple;
 
 import libmucor.varquery.invertedindex.invertedindex;
 
-
 /**
 * Logic for parsing string query and filter results using inverted index.
 * Uses NOT, AND, and OR operators with key and values represent as key:value
