@@ -15,6 +15,7 @@ import std.algorithm : sort, uniq, map, std_filter = filter, canFind, joiner;
 import std.range: chain, zip;
 import std.traits;
 import std.array: array;
+import std.range: InputRange, inputRangeObject;
 
 /// Stores json data and ids
 /// for a given field
@@ -150,7 +151,7 @@ struct JsonStoreReader {
             .map!(x => x[0]);
     }
 
-    auto filterOp(string op, T)(T val)
+    InputRange!uint128 filterOp(string op, T)(T val)
     {
         auto type = JSONValue(val).getType;
         // JSONValue[2] r = [JSONValue(range[0]), JSONValue(range[1]];
@@ -168,11 +169,13 @@ struct JsonStoreReader {
             auto values =  this.doubles.getAll();
         } else static if(isSomeString!T) {
             auto values = this.strings.getAll();    
+        } else {
+            static assert(0);
         }
         mixin("auto func = ("~T.stringof~" a) => a "~op~" val;");
         return zip(hashes, values)
             .std_filter!(x => func(x[1]))
-            .map!(x => x[0]);
+            .map!(x => x[0]).inputRangeObject;
     }
 
     auto getJsonValues() {

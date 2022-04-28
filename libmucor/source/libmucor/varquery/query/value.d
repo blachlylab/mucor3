@@ -15,6 +15,7 @@ alias DoubleRange = Tuple!(double, "start", double, "end");
 
 /// Values can be any of string, double, or long
 alias ValueExpr = SumType!(
+    bool, 
     double,
     long,
     string,
@@ -47,13 +48,58 @@ struct Value {
     bool opEquals(const Value other) const
     {
         return match!(
-            (long _a, long _b) => true,
-            (double _a, double _b) => true,
-            (string _a, string _b) => true,
-            (DoubleRange _a, DoubleRange _b) => true,
-            (LongRange _a, LongRange _b) => true,
-            (_a, _b) => false
+            (bool a, bool b) => a == b,
+            (long a, long b) => a == b,
+            (double a, double b) => a == b,
+            (string a, string b) => a == b,
+            (DoubleRange a, DoubleRange b) => a == b,
+            (LongRange a, LongRange b) => a == b,
+            (_a, _b) => false,
         )(*this.expr, *other.expr);
+    }
+
+    T getInner(T)(){
+        import std.traits;
+        static if(isSomeString!T){
+            return (*this.expr).tryMatch!(
+                (string x) {
+                    return cast(T) x;
+                }
+            );
+        } else static if(isIntegral!T){
+            return (*this.expr).tryMatch!(
+                (long x) {
+                    return cast(T) x;
+                }
+            );
+        } else static if(isFloatingPoint!T){
+            return (*this.expr).tryMatch!(
+                (double x) {
+                    return cast(T) x;
+                }
+            );
+        } else static if(isBoolean!T){
+            return (*this.expr).tryMatch!(
+                (bool x) {
+                    return x;
+                }
+            );
+        } else static if(isArray!T && isFloatingPoint!(ElementType!T)){
+            return (*this.expr).tryMatch!(
+                (DoubleRange x) {
+                    return cast(T) [x.start, x.end];
+                }
+            );
+        } else static if(isArray!T && isIntegral!(ElementType!T)){
+            return (*this.expr).tryMatch!(
+                (LongRange x) {
+                    return cast(T) [x.start, x.end];
+                }
+            );
+        } else {
+            static assert(0);
+        }
+            
     }
 }
 
@@ -79,8 +125,14 @@ Value parseValue(string query) {
         try {
             return Value(parse!double(q));
         } catch (ConvException e) {
-
-            return Value(q);
+            if(q == "true" || q == "True" || q == "TRUE"){
+                return Value(true);
+            } else if(q == "false" || q == "False" || q == "FALSE"){
+                return Value(false);
+            } else {
+                return Value(q);
+            }
+            
         }
     }
 }
@@ -107,23 +159,32 @@ bool isNumericStringAnInteger(const(char)[] val)
 
 
 unittest {
+    import std;
     /// Test ints
-    assert("1".parseValue == Value(1));
-    assert("1000".parseValue == Value(1000));
-    assert("-1000".parseValue == Value(-1000));
+    assert("1".parseValue.getInner!long == 1);
+    assert("1000".parseValue.getInner!long == 1000);
+    assert("-1000".parseValue.getInner!long == -1000);
     
     /// Test floats
-    assert("1.0".parseValue == Value(1.0));
-    assert("0x1p-52".parseValue == Value(double.epsilon));
-    assert("0x1.FFFFFFFFFFFFFp1023".parseValue == Value(double.max));
-    assert("1.175494351e-38F".parseValue == Value(1.175494351e-38F));
-    assert("-1.175494351e-38F".parseValue == Value(-1.175494351e-38F));
+    assert("1.0".parseValue.getInner!double == 1.0);
+    assert("0x1p-52".parseValue.getInner!double == double.epsilon);
+    assert("0x1.FFFFFFFFFFFFFp1023".parseValue.getInner!double == double.max);
+    assert("1.175494351e-38F".parseValue.getInner!double == 1.175494351e-38F);
+    assert("-1.175494351e-38F".parseValue.getInner!double == -1.175494351e-38F);
     assert("nan".parseValue.isNan);
     assert("inf".parseValue.isInf);
 
     /// Test strings
-    assert("hello".parseValue == Value("hello"));
-    assert("\"hello\"".parseValue == Value("hello"));
+    assert("hello".parseValue.getInner!string == "hello");
+    assert("\"hello\"".parseValue.getInner!string == "hello");
+
+    /// Test bools
+    assert("true".parseValue.getInner!bool == true);
+    assert("True".parseValue.getInner!bool == true);
+    assert("TRUE".parseValue.getInner!bool == true);
+    assert("false".parseValue.getInner!bool == false);
+    assert("False".parseValue.getInner!bool == false);
+    assert("FALSE".parseValue.getInner!bool == false);
 }
 
 alias NotValue = Tuple!(Value, "value");

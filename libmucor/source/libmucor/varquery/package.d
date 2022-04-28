@@ -49,14 +49,17 @@ if (is(ElementType!R == Asdf))
 {
     StopWatch sw;
     sw.start;
-
-    auto idxs = evalQuery(queryStr, idx);
-    stderr.writeln("Time to parse query: ",sw.peek.total!"seconds"," seconds");
-    stderr.writeln(idxs.length," records matched your query");
+    auto q = parseQuery(queryStr);
+    stderr.writeln("Time to parse query: ",sw.peek.total!"usecs"," usecs");
+    sw.reset;
+    auto idxs = evaluateQuery(q, idx);
+    stderr.writeln("Time to evaluate query: ",sw.peek.total!"seconds"," seconds");
     sw.stop;
+    stderr.writeln(idxs.count," records matched your query");
+    
 
     khashlSet!(uint128) selectedSums;
-    foreach(key;idxs){
+    foreach(key; idx.convertIds(idxs)){
         selectedSums.insert(key);
     }
 

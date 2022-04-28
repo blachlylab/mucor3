@@ -35,16 +35,15 @@ void queryJsonFiles(string[] files, string idxFile, string queryStr, string outf
     stderr.writeln("Time to load index: ",sw.peek.total!"seconds"," seconds");
     stderr.writefln("%d records in index",idx.recordMd5s.length);
 
-    sw.stop;
     sw.reset;
-    sw.start;
+    auto q = parseQuery(queryStr);
+    hts_log_info(__FUNCTION__, format("Time to parse query: %d usecs", sw.peek.total!"usecs"));
 
-    auto idxs = evalQuery(queryStr, &idx);
-    hts_log_info(__FUNCTION__, format("Time to parse query: %d seconds", sw.peek.total!"seconds"));
-
-    sw.stop;
     sw.reset;
-    sw.start;
+    auto idxs = evaluateQuery(q, &idx);
+    hts_log_info(__FUNCTION__, format("Time to evaluate query: %d seconds", sw.peek.total!"seconds"));
+    
+    sw.reset;
     
     khashlSet!uint128 hashmap;
     foreach(key;idx.convertIds(idx.allIds)){

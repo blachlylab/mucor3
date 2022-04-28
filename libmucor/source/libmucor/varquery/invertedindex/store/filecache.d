@@ -196,21 +196,26 @@ struct IdFileCacheReader {
         f.close;
     }
 
-    ulong[] getIds(uint128 key) {
+    khashlSet!(ulong) getIds(uint128 key) {
+        khashlSet!(ulong) ret;
         /// id file is currently open
         if(key in hashes){
             AccessedIdFile f;
             f.openRead(this.prefix, key);
-            return f.getIds.array;
+            foreach(x; f.getIds) {
+                ret.insert(x);
+            }
+            return ret;
         }
-
-        auto r = this.smalls.getAll.filter!(x => x.key == key);
-        if(r.empty) {
-            hts_log_warning(__FUNCTION__, format("Key %x not preset", key));
-            return [];
-        } else {
-            return r.map!(x => x.ids).joiner.array;
+        
+        foreach(x; this.smalls.getAll.filter!(x => x.key == key))
+        {
+            foreach (k; x.ids)
+            {
+                ret.insert(k);    
+            }
         }
+        return ret;
     }
 
     void close() {
@@ -274,10 +279,10 @@ unittest
     {
         auto fcache = new IdFileCacheReader("/tmp/test_fcache");
         // f.openRead("/tmp/test_fcache", uint128(0));
-        assert(fcache.getIds(uint128(0)).array == [0, 8, 9, 10]);
-        assert(fcache.getIds(uint128(1)).array == [1, 2, 3, 4]);
-        assert(fcache.getIds(uint128(2)).array == [5, 6, 7]);
-        assert(fcache.getIds(uint128(4)).array == [11]);
+        assert(fcache.getIds(uint128(0)).byKey.array == [0, 8, 9, 10]);
+        assert(fcache.getIds(uint128(1)).byKey.array == [2, 4, 1, 3]);
+        assert(fcache.getIds(uint128(2)).byKey.array == [7, 6, 5]);
+        assert(fcache.getIds(uint128(4)).byKey.array == [11]);
     }
     
 }
