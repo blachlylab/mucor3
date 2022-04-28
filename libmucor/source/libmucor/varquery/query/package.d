@@ -12,19 +12,8 @@ import std.typecons : Tuple;
 
 import libmucor.varquery.invertedindex.invertedindex;
 
-/**
-* Logic for parsing string query and filter results using inverted index.
-* Uses NOT, AND, and OR operators with key and values represent as key:value
-* e.g.: key1=val1 -> get all records where key1=val1
-* e.g.: key1=val1 AND key2=val2 -> get all records where key1=val1 and key2=val2
-* e.g.: key1=val1 OR key2=val2 -> get all records where key1=val1 or key2=val2
-* e.g.: key1=(val1 OR key2) -> get all records where key1=val1 or key1=val2
-* can get complicated
-* e.g.: NOT (key1:val1 AND key2:(val2 OR val3) AND key3:1-2) OR key4:val4 OR key5:(val5 AND val6)
-*
-* Operators: =, :, >, >=, <, <=, AND, NOT, OR
-* Other specials: (, )
-**/
+
+
 
 /// Capture a Key
 enum KEY_CAP_PATTERN = `([A-Za-z0-9._/*]+)`;
@@ -397,3 +386,4 @@ auto evalQuery(const(char)[] q, InvertedIndex * idx)
     // at the end convert internal ids to md5sums
     return idx.convertIds(queryResults[secondaryQueries.leftover.to!ulong]);
 }
+
