@@ -3,10 +3,11 @@ module mucor3.wrangler.mask;
 import std.stdio;
 import std.array:split;
 import asdf;
+import libmucor.error;
 
 void run_mask_key(string[] args){
     if(args.length==0){
-        writeln(
+        log_info(__FUNCTION__,
         "Join multiple documents together based on given index. Overlapping"~
         " fields in rows are combined into arrays."
         );
@@ -16,7 +17,7 @@ void run_mask_key(string[] args){
 }
 void run_mask_value(string[] args){
     if(args.length==0){
-        writeln(
+        log_info(__FUNCTION__,
         "Join multiple documents together based on given index. Overlapping"~
         " fields in rows are combined into arrays."
         );

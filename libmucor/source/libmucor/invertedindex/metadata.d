@@ -1,4 +1,4 @@
-module libmucor.varquery.invertedindex.metadata;
+module libmucor.invertedindex.metadata;
 import std.algorithm.setops;
 import std.algorithm : sort, uniq, map, std_filter = filter, canFind, joiner;
 import std.math : isClose;
@@ -9,8 +9,8 @@ import std.meta;
 
 import libmucor.wideint : uint128;
 import libmucor.khashl;
-import libmucor.varquery.invertedindex.jsonvalue;
-import libmucor.varquery.invertedindex.binaryindex;
+import libmucor.jsonlops.jsonvalue;
+import libmucor.invertedindex.binaryindex;
 import std.sumtype;
 import libmucor.hts_endian;
 import std.typecons: Tuple, tuple;
@@ -66,7 +66,7 @@ struct JsonKeyMetaData {
 }
 
 unittest{
-    import libmucor.varquery.invertedindex.store: serialize, deserialize;
+    import libmucor.invertedindex.store: serialize, deserialize;
     
     auto field = JsonKeyMetaData(uint128(2), 0, 2, 1, 3);
     ubyte[48] data;
@@ -86,7 +86,7 @@ unittest{
 // }
 
 unittest{
-    import libmucor.varquery.invertedindex.store: serialize, deserialize;
+    import libmucor.invertedindex.store: serialize, deserialize;
     
     auto field = KeyMetaData(uint128(2), 1, 3);
     ubyte[32] data;

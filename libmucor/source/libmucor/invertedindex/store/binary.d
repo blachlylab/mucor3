@@ -1,4 +1,4 @@
-module libmucor.varquery.invertedindex.store.binary;
+module libmucor.invertedindex.store.binary;
 
 import dhtslib.file;
 import htslib.hts;
@@ -6,10 +6,10 @@ import htslib.bgzf;
 import htslib.hfile;
 import libmucor.error;
 import libmucor.wideint;
-import libmucor.varquery.invertedindex.jsonvalue;
-import libmucor.varquery.invertedindex.metadata;
-import libmucor.varquery.invertedindex.store.file;
-import libmucor.varquery.invertedindex.store: serialize, deserialize, sizeDeserialized, sizeSerialized;
+import libmucor.jsonlops.jsonvalue;
+import libmucor.invertedindex.metadata;
+import libmucor.invertedindex.store.file;
+import libmucor.invertedindex.store: serialize, deserialize, sizeDeserialized, sizeSerialized;
 import std.traits;
 import std.stdio: File;
 import libmucor.hts_endian;

@@ -1,4 +1,4 @@
-module libmucor.varquery.invertedindex.store.file;
+module libmucor.invertedindex.store.file;
 import htslib.hfile;
 import htslib.hts;
 import htslib.bgzf;

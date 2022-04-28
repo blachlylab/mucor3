@@ -1,4 +1,4 @@
-module libmucor.varquery.invertedindex.binaryindex;
+module libmucor.invertedindex.binaryindex;
 import std.algorithm.setops;
 import std.regex;
 import std.algorithm : sort, uniq, map, std_filter = filter, joiner, each;
@@ -16,10 +16,10 @@ import std.file: exists;
 
 import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
-import libmucor.varquery.invertedindex.invertedindex;
-import libmucor.varquery.invertedindex.metadata;
-import libmucor.varquery.invertedindex.jsonvalue;
-import libmucor.varquery.invertedindex.store;
+import libmucor.invertedindex.invertedindex;
+import libmucor.invertedindex.metadata;
+import libmucor.jsonlops.jsonvalue;
+import libmucor.invertedindex.store;
 import libmucor.khashl;
 import libmucor.error;
 import std.format: format;

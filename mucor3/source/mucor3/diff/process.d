@@ -14,7 +14,7 @@ import dhtslib.coordinates;
 import asdf : deserializeAsdf = deserialize, Asdf, AsdfNode, serializeToAsdf;
 import libmucor.vcfops;
 import libmucor.jsonlops;
-import libmucor.varquery;
+import mucor3.varquery;
 
 import mucor3.diff.stats;
 import mucor3.diff.util;

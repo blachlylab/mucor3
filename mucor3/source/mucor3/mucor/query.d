@@ -1,7 +1,7 @@
 module mucor3.mucor.query;
 import std.stdio;
 import asdf;
-import libmucor.varquery;
+import mucor3.varquery;
 import std.algorithm: map;
 import std.parallelism: taskPool, parallel;
 import core.sync.mutex: Mutex;

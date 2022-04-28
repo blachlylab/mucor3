@@ -1,4 +1,4 @@
-module libmucor.varquery.invertedindex.invertedindex;
+module libmucor.invertedindex.invertedindex;
 import std.algorithm.setops;
 import std.algorithm : sort, uniq, map, std_filter = filter, joiner, each, cartesianProduct, reduce;
 import std.range : iota, takeExactly;
@@ -12,13 +12,13 @@ import std.exception : enforce;
 
 import asdf: deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
-import libmucor.varquery.invertedindex.jsonvalue;
-import libmucor.varquery.invertedindex.binaryindex;
-import libmucor.varquery.invertedindex.store;
+import libmucor.jsonlops.jsonvalue;
+import libmucor.invertedindex.binaryindex;
+import libmucor.invertedindex.store;
 import libmucor.khashl;
 import std.digest.md : MD5Digest, toHexString;
 import libmucor.error;
-import libmucor.varquery.query;
+import libmucor.query;
 import std.sumtype;
 
 char sep = '/';

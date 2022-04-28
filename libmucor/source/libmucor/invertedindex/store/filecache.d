@@ -1,5 +1,5 @@
-module libmucor.varquery.invertedindex.store.filecache;
-import libmucor.varquery.invertedindex.store.binary;
+module libmucor.invertedindex.store.filecache;
+import libmucor.invertedindex.store.binary;
 import libmucor.wideint;
 import libmucor.khashl;
 import std.container: BinaryHeap;

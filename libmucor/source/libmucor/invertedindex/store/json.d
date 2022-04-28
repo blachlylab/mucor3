@@ -1,9 +1,9 @@
-module libmucor.varquery.invertedindex.store.json;
+module libmucor.invertedindex.store.json;
 
-import libmucor.varquery.invertedindex.store.binary;
-import libmucor.varquery.invertedindex.jsonvalue;
-import libmucor.varquery.invertedindex.metadata;
-import libmucor.varquery.invertedindex.store: getKeyHash, getValueHash, getShortHash;
+import libmucor.invertedindex.store.binary;
+import libmucor.jsonlops.jsonvalue;
+import libmucor.invertedindex.metadata;
+import libmucor.invertedindex.store: getKeyHash, getValueHash, getShortHash;
 import libmucor.wideint; 
 import libmucor.khashl;
 import std.file: exists;

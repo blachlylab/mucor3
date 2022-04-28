@@ -1,17 +1,17 @@
-module libmucor.varquery.invertedindex.store;
+module libmucor.invertedindex.store;
 
-public import libmucor.varquery.invertedindex.store.binary;
-public import libmucor.varquery.invertedindex.store.json;
-public import libmucor.varquery.invertedindex.store.filecache;
+public import libmucor.invertedindex.store.binary;
+public import libmucor.invertedindex.store.json;
+public import libmucor.invertedindex.store.filecache;
 
 import libmucor.wideint;
-import libmucor.varquery.invertedindex.jsonvalue;
+import libmucor.jsonlops.jsonvalue;
 import std.digest.md;
 import std.sumtype: match;
 import std.format: format;
 import libmucor.spookyhash;
 import libmucor.hts_endian;
-import libmucor.varquery.invertedindex.metadata;
+import libmucor.invertedindex.metadata;
 import std.traits;
 
 uint128 getKeyHash(const(char)[] key) {

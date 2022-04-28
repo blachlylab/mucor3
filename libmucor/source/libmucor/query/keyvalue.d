@@ -1,4 +1,4 @@
-module libmucor.varquery.query.keyvalue;
+module libmucor.query.keyvalue;
 
 import std.stdio;
 import std.algorithm.setops;
@@ -14,9 +14,9 @@ import std.string;
 import std.algorithm.searching;
 import htslib.hts_log;
 
-import libmucor.varquery.query.value;
-import libmucor.varquery.query.expr;
-import libmucor.varquery.query.util;
+import libmucor.query.value;
+import libmucor.query.expr;
+import libmucor.query.util;
 
 /// key op value
 alias KeyValue = Tuple!(ValueOp, "op", string, "lhs", Value, "rhs");

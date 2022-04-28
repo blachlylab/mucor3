@@ -1,4 +1,4 @@
-module libmucor.varquery.invertedindex.jsonvalue;
+module libmucor.jsonlops.jsonvalue;
 
 import std.algorithm.setops;
 import std.algorithm : sort, uniq, map, std_filter = filter, canFind, joiner;

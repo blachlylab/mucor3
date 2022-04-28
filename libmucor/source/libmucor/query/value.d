@@ -1,4 +1,4 @@
-module libmucor.varquery.query.value;
+module libmucor.query.value;
 
 import std.sumtype;
 import std.functional : partial;
