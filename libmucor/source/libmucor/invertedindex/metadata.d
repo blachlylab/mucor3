@@ -13,8 +13,8 @@ import libmucor.jsonlops.jsonvalue;
 import libmucor.invertedindex.binaryindex;
 import std.sumtype;
 import libmucor.hts_endian;
-import std.typecons: Tuple, tuple;
-import std.exception: enforce;
+import std.typecons : Tuple, tuple;
+import std.exception : enforce;
 
 /** 
  *  key_type: 1, 15 padd
@@ -23,14 +23,16 @@ import std.exception: enforce;
  *
  * Total size: 48 bytes
  */
-struct KeyMetaData {
-    align:
+struct KeyMetaData
+{
+align:
     uint128 keyHash;
     ulong keyOffset;
     ulong keyLength;
-    @nogc:
+@nogc:
 
-    this(uint128 keyHash, ulong keyOffset, ulong keyLength) {
+    this(uint128 keyHash, ulong keyOffset, ulong keyLength)
+    {
         this.keyHash = keyHash;
         this.keyOffset = keyOffset;
         this.keyLength = keyLength;
@@ -45,17 +47,19 @@ struct KeyMetaData {
  *
  * Total size: 48 bytes
  */
-struct JsonKeyMetaData {
-    align:
+struct JsonKeyMetaData
+{
+align:
     uint128 keyHash;
     ulong type;
     ulong padding;
     ulong keyOffset;
     ulong keyLength;
 
-    @nogc:
+@nogc:
 
-    this(uint128 keyHash, ulong type, ulong padding, ulong keyOffset, ulong keyLength){
+    this(uint128 keyHash, ulong type, ulong padding, ulong keyOffset, ulong keyLength)
+    {
         this.keyHash = keyHash;
         this.type = type;
         this.padding = padding;
@@ -65,14 +69,15 @@ struct JsonKeyMetaData {
     }
 }
 
-unittest{
-    import libmucor.invertedindex.store: serialize, deserialize;
-    
+unittest
+{
+    import libmucor.invertedindex.store : serialize, deserialize;
+
     auto field = JsonKeyMetaData(uint128(2), 0, 2, 1, 3);
     ubyte[48] data;
     auto p = data.ptr;
     field.serialize(p);
-    assert(cast(ulong[])data == [0, 2, 0, 2, 1, 3]);
+    assert(cast(ulong[]) data == [0, 2, 0, 2, 1, 3]);
     JsonKeyMetaData c;
     p = data.ptr;
     assert(deserialize!JsonKeyMetaData(p) == field);
@@ -85,14 +90,15 @@ unittest{
 //     assert(KeyMetaData(data) == field);
 // }
 
-unittest{
-    import libmucor.invertedindex.store: serialize, deserialize;
-    
+unittest
+{
+    import libmucor.invertedindex.store : serialize, deserialize;
+
     auto field = KeyMetaData(uint128(2), 1, 3);
     ubyte[32] data;
     auto p = data.ptr;
     field.serialize(p);
-    assert(cast(ulong[])data == [0, 2, 1, 3]);
+    assert(cast(ulong[]) data == [0, 2, 1, 3]);
     KeyMetaData c;
     p = data.ptr;
     assert(deserialize!KeyMetaData(p) == field);

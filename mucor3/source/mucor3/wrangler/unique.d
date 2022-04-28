@@ -12,10 +12,12 @@ import libmucor.error;
 void unique_main(string[] args)
 {
     auto res = getopt(args);
-    if(res.helpWanted){
-        log_info(__FUNCTION__, "Transforms JSON input via stdin so that arrays contain only unique values");
+    if (res.helpWanted)
+    {
+        log_info(__FUNCTION__,
+                "Transforms JSON input via stdin so that arrays contain only unique values");
         return;
     }
-    foreach(obj;stdin.byChunk(4096).parseJsonByLine.map!unique)
+    foreach (obj; stdin.byChunk(4096).parseJsonByLine.map!unique)
         obj.writeln;
 }

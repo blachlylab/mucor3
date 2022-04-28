@@ -24,13 +24,13 @@ module libmucor.khashl;
 */
 
 import std.traits : isNumeric, isSomeString, isSigned, hasMember, isArray;
-import core.stdc.stdint;    // uint32_t, etc.
-import core.memory;         // GC
+import core.stdc.stdint; // uint32_t, etc.
+import core.memory; // GC
 
 import asdf;
 import libmucor.wideint;
-import libmucor.jsonlops.jsonvalue: JSONValue;
-import std.sumtype: match;
+import libmucor.jsonlops.jsonvalue : JSONValue;
+import std.sumtype : match;
 
 /*!
   @header
@@ -58,22 +58,25 @@ pragma(inline, true)
     {
         return (flag[i >> 5] >> (i & 0x1fU) & 1U);
     }
+
     void __kh_set_used(T)(khint32_t[] flag, T i)
     {
         (flag[i >> 5] |= 1U << (i & 0x1fU));
     }
+
     void __kh_set_unused(T)(khint32_t[] flag, T i)
     {
         (flag[i >> 5] &= ~(1U << (i & 0x1fU)));
     }
-    
-    khint_t __kh_h2b(khint_t hash, khint_t bits) 
-    { 
-        return hash * 2654435769U >> (32 - bits); 
+
+    khint_t __kh_h2b(khint_t hash, khint_t bits)
+    {
+        return hash * 2654435769U >> (32 - bits);
     }
 
-    auto __kh_fsize(khint_t m){
-        return ((m) < 32? 1 : (m)>>5);
+    auto __kh_fsize(khint_t m)
+    {
+        return ((m) < 32 ? 1 : (m) >> 5);
     }
 }
 
@@ -99,27 +102,29 @@ template khashlSet(KT, bool cached = false)
     alias khashlSet = khashl!(KT, ubyte, false, cached);
 }
 
-struct khashl(KT, VT, bool kh_is_map = true, bool cached = false)
-if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
+struct khashl(KT, VT, bool kh_is_map = true, bool cached = false) if (!isSigned!KT) // @suppress(dscanner.style.phobos_naming_convention)
 {
     static assert(kh_is_map || is(VT == ubyte));
 
     alias __hash_func = kh_hash!KT.kh_hash_func;
-    alias __hash_equal= kh_equal!(Bucket,cached).kh_hash_equal;
+    alias __hash_equal = kh_equal!(Bucket, cached).kh_hash_equal;
 
     alias kh_t = khashl; /// klib uses 'kh_t' struct name
 
-    struct Bucket {
+    struct Bucket
+    {
         KT key;
-        static if(kh_is_map) VT val;
-        static if(cached) khint_t hash;
+        static if (kh_is_map)
+            VT val;
+        static if (cached)
+            khint_t hash;
     }
 
-    khint_t bits, count; 
-    khint32_t[] used; 
-    Bucket[] keys; 
+    khint_t bits, count;
+    khint32_t[] used;
+    Bucket[] keys;
 
-    pragma(inline, true):
+pragma(inline, true):
     // ~this()
     // {
     //     //kh_destroy(&this); // the free(this) at the end of kh_destroy will SIGSEGV
@@ -129,59 +134,60 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
     //     kfree(cast(void*) this.keys);
     //     kfree(cast(void*) this.used);
     // }
-    
-    
 
-    typeof(this) dup() {
+    typeof(this) dup()
+    {
         return typeof(this)(this.bits, this.count, this.used.dup, this.keys.dup);
     }
 
-        /// Lookup by key
-    bool opBinaryRight(string op: "in")(const(KT) key) const
+    /// Lookup by key
+    bool opBinaryRight(string op : "in")(const(KT) key) const
     {
-        static if(cached)  
+        static if (cached)
             const(Bucket) ins = Bucket(*cast(KT*)&key, __hash_func(key));
         else
             const(Bucket) ins = Bucket(*cast(KT*)&key);
-        auto x = this.kh_get( ins);
-        if(x == this.kh_end())
+        auto x = this.kh_get(ins);
+        if (x == this.kh_end())
         {
             return false;
         }
         return true;
     }
 
-    
-
     /// remove key/value pair
     void remove(KT key)
     {
         Bucket ins;
         ins.key = key;
-        static if(cached) ins.hash = __hash_func(ins.key); //cache the hash
+        static if (cached)
+            ins.hash = __hash_func(ins.key); //cache the hash
         auto x = this.kh_get(ins);
         this.kh_del(x);
     }
 
-    static if(kh_is_map){
-        
+    static if (kh_is_map)
+    {
+
         /// Lookup by key
-        VT * opBinaryRight(string op: "in")(const(KT) key)
+        VT* opBinaryRight(string op : "in")(const(KT) key)
         {
             Bucket ins;
             ins.key = key;
-            static if(cached)  ins.hash = __hash_func(ins.key); //cache the hash
-            auto x = this.kh_get( ins);
-                if(x == this.kh_end())
-                    return null;
-                return &this.keys[x].val;
+            static if (cached)
+                ins.hash = __hash_func(ins.key); //cache the hash
+            auto x = this.kh_get(ins);
+            if (x == this.kh_end())
+                return null;
+            return &this.keys[x].val;
         }
         /// Lookup by key
         ref const(VT) opIndex(const(KT) key) const
         {
             Bucket ins;
             ins.key = key;
-            static if(cached) ins.hash = __hash_func(ins.key); //cache the hash
+            static if (cached)
+                ins.hash = __hash_func(ins.key); //cache the hash
             auto x = this.kh_get(ins);
             return this.keys[x].val;
         }
@@ -192,27 +198,32 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
             int absent;
             Bucket ins;
             ins.key = key;
-            static if(cached) ins.hash = __hash_func(ins.key); //cache the hash
+            static if (cached)
+                ins.hash = __hash_func(ins.key); //cache the hash
             auto x = this.kh_put(ins, &absent);
             this.keys[x].val = cast(VT) val;
-            static if(cached) this.keys[x].hash = ins.hash; //cache the hash
+            static if (cached)
+                this.keys[x].hash = ins.hash; //cache the hash
         }
-        
+
         /// Get or create if does not exist; mirror built-in hashmap
         /// https://dlang.org/spec/hash-map.html#inserting_if_not_present
-        VT * require(const(KT) key, lazy const(VT) initval)
+        VT* require(const(KT) key, lazy const(VT) initval)
         {
-            static assert (kh_is_map == true, "require() not sensible in a hash set");
+            static assert(kh_is_map == true, "require() not sensible in a hash set");
             Bucket ins;
             ins.key = key;
-            static if(cached) ins.hash = __hash_func(ins.key); //cache the hash
+            static if (cached)
+                ins.hash = __hash_func(ins.key); //cache the hash
             auto x = this.kh_get(ins);
-            if (x == this.kh_end()) {
+            if (x == this.kh_end())
+            {
                 // not present
                 int absent;
                 x = this.kh_put(ins, &absent);
                 this.keys[x].val = cast(VT) initval;
-                static if(cached) this.keys[x].hash = ins.hash; //cache the hash
+                static if (cached)
+                    this.keys[x].hash = ins.hash; //cache the hash
             }
             return &this.keys[x].val;
         }
@@ -222,45 +233,56 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
             /** Manipulating the hash table during iteration results in undefined behavior */
             struct KeyValueRange
             {
-                import std.typecons: Tuple;
+                import std.typecons : Tuple;
+
                 alias KV = Tuple!(const(KT), "key", const(VT), "value");
                 const(kh_t)* kh;
                 khint_t itr;
-                bool empty()    // non-const as may call popFront
+                bool empty() // non-const as may call popFront
                 {
                     //return (this.itr == kh_end(this.kh));
-                    if (this.itr == kh.kh_end()) return true;
+                    if (this.itr == kh.kh_end())
+                        return true;
                     // Handle the case of deleted keys
-                    else if (__kh_used(this.kh.used, this.itr) == 0) {
-                        while(__kh_used(this.kh.used, this.itr) == 0) {
+    else if (__kh_used(this.kh.used, this.itr) == 0)
+                    {
+                        while (__kh_used(this.kh.used, this.itr) == 0)
+                        {
                             this.popFront();
-                            if (this.itr == kh.kh_end()) return true;
+                            if (this.itr == kh.kh_end())
+                                return true;
                         }
                         return false;
                     }
                     return false;
                 }
+
                 const(KV) front()
                 {
                     const(KV) ret = KV(kh.keys[this.itr].key, kh.keys[this.itr].val);
                     return ret;
                 }
+
                 void popFront()
                 {
-                    if(this.itr < kh.kh_end()) {
+                    if (this.itr < kh.kh_end())
+                    {
                         this.itr++;
                     }
                 }
             }
+
             return KeyValueRange(&this);
         }
 
-    } else {
+    }
+    else
+    {
 
         void insert(const(KT) key)
         {
             int absent;
-            static if(cached) 
+            static if (cached)
                 const Bucket ins = Bucket(*cast(KT*)&key, __hash_func(key));
             else
                 const Bucket ins = Bucket(*cast(KT*)&key);
@@ -272,7 +294,7 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
             kh_t ret;
             foreach (k; this.byKey)
             {
-                if(k in other)
+                if (k in other)
                     ret.insert(k);
             }
             return ret;
@@ -283,7 +305,7 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
             kh_t ret;
             foreach (k; this.byKey)
             {
-                if(!(k in other))
+                if (!(k in other))
                     ret.insert(k);
             }
             return ret;
@@ -301,13 +323,20 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
 
         auto opBinaryRight(string op)(const(kh_t) other) const
         {
-            static if(op == "&"){
+            static if (op == "&")
+            {
                 return this.intersection(other);
-            } else static if(op == "-") {
+            }
+            else static if (op == "-")
+            {
                 return this.difference(other);
-            } else static if(op == "|") {
+            }
+            else static if (op == "|")
+            {
                 return this.set_union(other);
-            } else {
+            }
+            else
+            {
                 static assert(0, "op not implemented");
             }
         }
@@ -323,179 +352,231 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
         {
             const(kh_t)* kh;
             khint_t itr;
-            bool empty()    // non-const as may call popFront
+            bool empty() // non-const as may call popFront
             {
                 //return (this.itr == kh_end(this.kh));
-                if (this.itr == kh.kh_end()) return true;
+                if (this.itr == kh.kh_end())
+                    return true;
                 // Handle the case of deleted keys
-                else if (__kh_used(this.kh.used, this.itr) == 0) {
-                    while(__kh_used(this.kh.used, this.itr) == 0) {
+                else if (__kh_used(this.kh.used, this.itr) == 0)
+                {
+                    while (__kh_used(this.kh.used, this.itr) == 0)
+                    {
                         this.popFront();
-                        if (this.itr == kh.kh_end()) return true;
+                        if (this.itr == kh.kh_end())
+                            return true;
                     }
                     return false;
                 }
                 return false;
             }
+
             ref const(KT) front()
             {
                 return kh.keys[this.itr].key;
             }
+
             void popFront()
             {
-                if(this.itr < kh.kh_end()) {
+                if (this.itr < kh.kh_end())
+                {
                     this.itr++;
                 }
             }
         }
+
         return KeyRange(&this);
     }
-    
 
     void kh_clear()
     {
-      if (this.used)
-      {
-        uint32_t n_buckets = 1U << this.bits; 
-        this.used[] = 0;
-        this.count = 0; 
-      }
+        if (this.used)
+        {
+            uint32_t n_buckets = 1U << this.bits;
+            this.used[] = 0;
+            this.count = 0;
+        }
     }
 
     void kh_release()
     {
         this.kh_clear;
-        import std.algorithm: move;
+        import std.algorithm : move;
+
         KT key;
         VT val;
         khint_t itr;
-        while(itr < this.kh_end())
+        while (itr < this.kh_end())
         {
             move(this.keys[itr].key, key);
-            static if(kh_is_map) move(this.keys[itr].val, val);
+            static if (kh_is_map)
+                move(this.keys[itr].val, val);
             itr++;
         }
     }
-  
-    khint_t kh_getp(const(Bucket) * key) const
+
+    khint_t kh_getp(const(Bucket)* key) const
     {
-        khint_t i, last, n_buckets, mask; 
-		if (this.keys == []) return 0;
-		n_buckets = 1U << this.bits;
-		mask = n_buckets - 1U;
+        khint_t i, last, n_buckets, mask;
+        if (this.keys == [])
+            return 0;
+        n_buckets = 1U << this.bits;
+        mask = n_buckets - 1U;
 
         /// if using caching, don't rehash key
-        static if(cached) i = last = __kh_h2b((*key).hash, this.bits);
-		else i = last = __kh_h2b(__hash_func((*key).key), this.bits);
-        
-		while (__kh_used(this.used, i) && !__hash_equal!(Bucket)(this.keys[i], *key)) {
-			i = (i + 1U) & mask;
-			if (i == last) return n_buckets;
-		}
-		return !__kh_used(this.used, i)? n_buckets : i;
+        static if (cached)
+            i = last = __kh_h2b((*key).hash, this.bits);
+        else
+            i = last = __kh_h2b(__hash_func((*key).key), this.bits);
+
+        while (__kh_used(this.used, i) && !__hash_equal!(Bucket)(this.keys[i], *key))
+        {
+            i = (i + 1U) & mask;
+            if (i == last)
+                return n_buckets;
+        }
+        return !__kh_used(this.used, i) ? n_buckets : i;
     }
-	khint_t kh_get(const(Bucket) key) const { return this.kh_getp(&key); }
+
+    khint_t kh_get(const(Bucket) key) const
+    {
+        return this.kh_getp(&key);
+    }
 
     int kh_resize(khint_t new_n_buckets)
-	{
+    {
         khint32_t[] new_used;
-		khint_t j = 0, x = new_n_buckets, n_buckets, new_bits, new_mask;
-		while ((x >>= 1) != 0) ++j;
-		if (new_n_buckets & (new_n_buckets - 1)) ++j;
-		new_bits = j > 2? j : 2;
-		new_n_buckets = 1U << new_bits;
-		if (this.count > (new_n_buckets>>1) + (new_n_buckets>>2)) return 0; /* requested size is too small */
-		new_used = new khint32_t[__kh_fsize(new_n_buckets)];
-		// memset(new_used, 0, __kh_fsize(new_n_buckets) * khint32_t.sizeof);
-		if (!new_used.ptr) return -1; /* not enough memory */
-		n_buckets = this.keys.ptr? 1U<<this.bits : 0U;
-		if (n_buckets < new_n_buckets) { /* expand */
-			this.keys.length = new_n_buckets;
-			// if (!new_keys) { kfree(new_used); return -1; }
-			// this.keys = new_keys;
-		} /* otherwise shrink */
-		new_mask = new_n_buckets - 1;
-		for (j = 0; j != n_buckets; ++j) {
-			Bucket key;
-			if (!__kh_used(this.used, j)) continue;
-			key = this.keys[j];
-			__kh_set_unused(this.used, j);
-			while (1) { /* kick-out process; sort of like in Cuckoo hashing */
-				khint_t i;
+        khint_t j = 0, x = new_n_buckets, n_buckets, new_bits, new_mask;
+        while ((x >>= 1) != 0)
+            ++j;
+        if (new_n_buckets & (new_n_buckets - 1))
+            ++j;
+        new_bits = j > 2 ? j : 2;
+        new_n_buckets = 1U << new_bits;
+        if (this.count > (new_n_buckets >> 1) + (new_n_buckets >> 2))
+            return 0; /* requested size is too small */
+        new_used = new khint32_t[__kh_fsize(new_n_buckets)];
+        // memset(new_used, 0, __kh_fsize(new_n_buckets) * khint32_t.sizeof);
+        if (!new_used.ptr)
+            return -1; /* not enough memory */
+        n_buckets = this.keys.ptr ? 1U << this.bits : 0U;
+        if (n_buckets < new_n_buckets)
+        { /* expand */
+            this.keys.length = new_n_buckets;
+            // if (!new_keys) { kfree(new_used); return -1; }
+            // this.keys = new_keys;
+        } /* otherwise shrink */
+        new_mask = new_n_buckets - 1;
+        for (j = 0; j != n_buckets; ++j)
+        {
+            Bucket key;
+            if (!__kh_used(this.used, j))
+                continue;
+            key = this.keys[j];
+            __kh_set_unused(this.used, j);
+            while (1)
+            { /* kick-out process; sort of like in Cuckoo hashing */
+                khint_t i;
 
                 /// if using caching, don't rehash key
-                static if(cached) i = __kh_h2b(key.hash, new_bits);
-				else i = __kh_h2b(__hash_func(key.key), new_bits);
+                static if (cached)
+                    i = __kh_h2b(key.hash, new_bits);
+                else
+                    i = __kh_h2b(__hash_func(key.key), new_bits);
 
-				while (__kh_used(new_used, i)) i = (i + 1) & new_mask;
-				__kh_set_used(new_used, i);
-				if (i < n_buckets && __kh_used(this.used, i)) { /* kick out the existing element */
-					{ Bucket tmp = this.keys[i]; this.keys[i] = key; key = tmp; }
-					__kh_set_unused(this.used, i); /* mark it as deleted in the old hash table */
-				} else { /* write the element and jump out of the loop */
-					this.keys[i] = key;
-					break;
-				}
-			}
-		}
-		if (n_buckets > new_n_buckets) /* shrink the hash table */
-			this.keys.length = new_n_buckets;
-		// kfree(this.used); /* free the working space */
-		this.used = new_used, this.bits = new_bits;
-		return 0;
-	}
+                while (__kh_used(new_used, i))
+                    i = (i + 1) & new_mask;
+                __kh_set_used(new_used, i);
+                if (i < n_buckets && __kh_used(this.used, i))
+                { /* kick out the existing element */
+                    {
+                        Bucket tmp = this.keys[i];
+                        this.keys[i] = key;
+                        key = tmp;
+                    }
+                    __kh_set_unused(this.used, i); /* mark it as deleted in the old hash table */
+                }
+                else
+                { /* write the element and jump out of the loop */
+                    this.keys[i] = key;
+                    break;
+                }
+            }
+        }
+        if (n_buckets > new_n_buckets) /* shrink the hash table */
+            this.keys.length = new_n_buckets;
+        // kfree(this.used); /* free the working space */
+        this.used = new_used, this.bits = new_bits;
+        return 0;
+    }
 
-	khint_t kh_putp(const(Bucket) * key, int *absent)
-	{
-		khint_t n_buckets, i, last, mask;
-		n_buckets = this.keys.ptr? 1U<<this.bits : 0U;
-		*absent = -1;
-		if (this.count >= (n_buckets>>1) + (n_buckets>>2)) { /* rehashing */
-			if (this.kh_resize(n_buckets + 1U) < 0)
-				return n_buckets;
-			n_buckets = 1U<<this.bits;
-		} /* TODO: to implement automatically shrinking; resize() already support shrinking */
-		mask = n_buckets - 1;
+    khint_t kh_putp(const(Bucket)* key, int* absent)
+    {
+        khint_t n_buckets, i, last, mask;
+        n_buckets = this.keys.ptr ? 1U << this.bits : 0U;
+        *absent = -1;
+        if (this.count >= (n_buckets >> 1) + (n_buckets >> 2))
+        { /* rehashing */
+            if (this.kh_resize(n_buckets + 1U) < 0)
+                return n_buckets;
+            n_buckets = 1U << this.bits;
+        } /* TODO: to implement automatically shrinking; resize() already support shrinking */
+        mask = n_buckets - 1;
 
         /// if using caching, don't rehash key
-        static if(cached) i = last = __kh_h2b((*key).hash, this.bits);
-		else i = last = __kh_h2b(__hash_func((*key).key), this.bits);
+        static if (cached)
+            i = last = __kh_h2b((*key).hash, this.bits);
+        else
+            i = last = __kh_h2b(__hash_func((*key).key), this.bits);
 
+        while (__kh_used(this.used, i) && !__hash_equal(this.keys[i], *key))
+        {
+            i = (i + 1U) & mask;
+            if (i == last)
+                break;
+        }
+        if (!__kh_used(this.used, i))
+        { /* not present at all */
+            this.keys[i] = *(cast(Bucket*) key);
+            __kh_set_used(this.used, i);
+            ++this.count;
+            *absent = 1;
+        }
+        else
+            *absent = 0; /* Don't touch this.keys[i] if present */
+        return i;
+    }
 
-		while (__kh_used(this.used, i) && !__hash_equal(this.keys[i], *key)) {
-			i = (i + 1U) & mask;
-			if (i == last) break;
-		}
-		if (!__kh_used(this.used, i)) { /* not present at all */
-			this.keys[i] = *(cast(Bucket*)key);
-			__kh_set_used(this.used, i);
-			++this.count;
-			*absent = 1;
-		} else *absent = 0; /* Don't touch this.keys[i] if present */
-		return i;
-	}
-    khint_t kh_put(const(Bucket) key, int *absent) { return this.kh_putp(&key, absent); }
+    khint_t kh_put(const(Bucket) key, int* absent)
+    {
+        return this.kh_putp(&key, absent);
+    }
 
     int kh_del(khint_t i)
     {
         khint_t j = i, k, mask, n_buckets;
-		if (this.keys == null) return 0;
-		n_buckets = 1U<<this.bits;
-		mask = n_buckets - 1U;
-		while (1) {
-			j = (j + 1U) & mask;
-			if (j == i || !__kh_used(this.used, j)) break; /* j==i only when the table is completely full */
+        if (this.keys == null)
+            return 0;
+        n_buckets = 1U << this.bits;
+        mask = n_buckets - 1U;
+        while (1)
+        {
+            j = (j + 1U) & mask;
+            if (j == i || !__kh_used(this.used, j))
+                break; /* j==i only when the table is completely full */
 
             /// if using caching, don't rehash key
-            static if(cached) k = __kh_h2b(this.keys[j].hash, this.bits);
-			else k = __kh_h2b(__hash_func(this.keys[j].key), this.bits);
+            static if (cached)
+                k = __kh_h2b(this.keys[j].hash, this.bits);
+            else
+                k = __kh_h2b(__hash_func(this.keys[j].key), this.bits);
 
-			if ((j > i && (k <= i || k > j)) || (j < i && (k <= i && k > j)))
-				this.keys[i] = this.keys[j], i = j;
-		}
-		__kh_set_unused(this.used, i);
-		--this.count;
-		return 1;
+            if ((j > i && (k <= i || k > j)) || (j < i && (k <= i && k > j)))
+                this.keys[i] = this.keys[j], i = j;
+        }
+        __kh_set_unused(this.used, i);
+        --this.count;
+        return 1;
     }
 
     auto kh_bucket(khint_t x)
@@ -508,7 +589,8 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
         return this.keys[x].key;
     }
 
-    static if(kh_is_map) {
+    static if (kh_is_map)
+    {
         auto kh_val(khint_t x)
         {
             return this.keys[x].val;
@@ -527,7 +609,7 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
 
     auto kh_capacity() const
     {
-        return this.keys.ptr ? 1U<<this.bits : 0U;
+        return this.keys.ptr ? 1U << this.bits : 0U;
     }
 
 }
@@ -535,88 +617,88 @@ if(!isSigned!KT)       // @suppress(dscanner.style.phobos_naming_convention)
 /** --- BEGIN OF HASH FUNCTIONS --- */
 template kh_hash(T)
 {
-pragma(inline, true)
-{
-    auto kh_hash_func(T)(const(T) key)
-    if (is(T == uint) || is(T == uint32_t) || is(T == khint32_t))
+    pragma(inline, true)
     {
-        uint k = key;
-        k += ~(k << 15);
-        k ^=  (k >> 10);
-        k +=  (k << 3);
-        k ^=  (k >> 6);
-        k += ~(k << 11);
-        k ^=  (k >> 16);
-        return k;
-    }
+        auto kh_hash_func(T)(const(T) key)
+                if (is(T == uint) || is(T == uint32_t) || is(T == khint32_t))
+        {
+            uint k = key;
+            k += ~(k << 15);
+            k ^= (k >> 10);
+            k += (k << 3);
+            k ^= (k >> 6);
+            k += ~(k << 11);
+            k ^= (k >> 16);
+            return k;
+        }
 
-    auto kh_hash_func(T)(const(T) key)
-    if (is(T == ulong) || is(T == uint64_t) || is(T == khint64_t))
-    {
-        ulong k = key;
-        k = ~k + (k << 21);
-        k = k ^ k >> 24;
-        k = (k + (k << 3)) + (k << 8);
-        k = k ^ k >> 14;
-        k = (k + (k << 2)) + (k << 4);
-        k = k ^ k >> 28;
-        k = k + (k << 31);
-        return cast(khint_t) k;
-    }
+        auto kh_hash_func(T)(const(T) key)
+                if (is(T == ulong) || is(T == uint64_t) || is(T == khint64_t))
+        {
+            ulong k = key;
+            k = ~k + (k << 21);
+            k = k ^ k >> 24;
+            k = (k + (k << 3)) + (k << 8);
+            k = k ^ k >> 14;
+            k = (k + (k << 2)) + (k << 4);
+            k = k ^ k >> 28;
+            k = k + (k << 31);
+            return cast(khint_t) k;
+        }
 
-    auto kh_hash_func(T)(const(T) key)
-    if (is(T == uint128))
-    {
-        ulong k = key.toHash;
-        k = ~k + (k << 21);
-        k = k ^ k >> 24;
-        k = (k + (k << 3)) + (k << 8);
-        k = k ^ k >> 14;
-        k = (k + (k << 2)) + (k << 4);
-        k = k ^ k >> 28;
-        k = k + (k << 31);
-        return cast(khint_t) k;
-    }
+        auto kh_hash_func(T)(const(T) key) if (is(T == uint128))
+        {
+            ulong k = key.toHash;
+            k = ~k + (k << 21);
+            k = k ^ k >> 24;
+            k = (k + (k << 3)) + (k << 8);
+            k = k ^ k >> 14;
+            k = (k + (k << 2)) + (k << 4);
+            k = k ^ k >> 28;
+            k = k + (k << 31);
+            return cast(khint_t) k;
+        }
 
-    khint_t kh_hash_str(const(char)* s)
-    {
-        khint_t h = cast(khint_t)*s;
-        if (h) for  (++s; *s; ++s) h = (h << 5) - h + cast(khint_t)*s;
-        return h;
-    }
-    
-    auto kh_hash_func(T)(const(T)* key)
-    if(is(T == char) || is(T == const(char)) || is(T == immutable(char)))
-    {
-        return kh_hash_str(key);
-    }
+        khint_t kh_hash_str(const(char)* s)
+        {
+            khint_t h = cast(khint_t)*s;
+            if (h)
+                for (++s; *s; ++s)
+                    h = (h << 5) - h + cast(khint_t)*s;
+            return h;
+        }
 
-    auto kh_hash_func(T)(const(T) key)
-    if(isSomeString!T || isArray!T)
-    {
-        // rewrite __ac_X31_hash_string for D string/smart array
-        if (key.length == 0) return 0;
-        khint_t h = key[0];
-        for (int i=1; i<key.length; ++i)
-            h = (h << 5) - h + cast(khint_t) key[i];
-        return h;
-    }
+        auto kh_hash_func(T)(const(T)* key)
+                if (is(T == char) || is(T == const(char)) || is(T == immutable(char)))
+        {
+            return kh_hash_str(key);
+        }
 
-    auto kh_hash_func(T: Asdf)(const(T) key){
-        return kh_hash_func(key.data);
-    }
+        auto kh_hash_func(T)(const(T) key) if (isSomeString!T || isArray!T)
+        {
+            // rewrite __ac_X31_hash_string for D string/smart array
+            if (key.length == 0)
+                return 0;
+            khint_t h = key[0];
+            for (int i = 1; i < key.length; ++i)
+                h = (h << 5) - h + cast(khint_t) key[i];
+            return h;
+        }
 
-    auto kh_hash_func(T: JSONValue)(const(T) key)
-    {
-        return (key.val).match!(
-            (bool x) => kh_hash_func!uint(x),
-            (long x) => kh_hash_func!ulong(cast(ulong)x),
-            (double x) => kh_hash_func!ulong(cast(ulong)x),
-            (const(char)[] x) => kh_hash_func!(const(char)[])(x)
-        );
-    }
+        auto kh_hash_func(T : Asdf)(const(T) key)
+        {
+            return kh_hash_func(key.data);
+        }
 
-} // end pragma(inline, true)
+        auto kh_hash_func(T : JSONValue)(const(T) key)
+        {
+            return (key.val).match!((bool x) => kh_hash_func!uint(x),
+                    (long x) => kh_hash_func!ulong(cast(ulong) x),
+                    (double x) => kh_hash_func!ulong(cast(ulong) x),
+                    (const(char)[] x) => kh_hash_func!(const(char)[])(x));
+        }
+
+    } // end pragma(inline, true)
 } // end template kh_hash
 
 /// In order to take advantage of cached-hashes
@@ -624,66 +706,72 @@ pragma(inline, true)
 /// This allows it to access both the store hash and the key itself.
 template kh_equal(T, bool cached)
 {
-pragma(inline,true)
-{
-    /// Assert that we are using a bucket type with key member
-    static assert(hasMember!(T, "key"));
+    pragma(inline, true)
+    {
+        /// Assert that we are using a bucket type with key member
+        static assert(hasMember!(T, "key"));
 
-    /// Assert that we are using a bucket type with hash member if using hash-caching
-    static if(cached) static assert(hasMember!(T, "hash"));
+        /// Assert that we are using a bucket type with hash member if using hash-caching
+        static if (cached)
+            static assert(hasMember!(T, "hash"));
 
-    bool kh_hash_equal(T)(const(T) a, const(T) b)
-    if (isNumeric!(typeof(__traits(getMember,T,"key"))))
-    {
-        /// There is no benefit to caching hashes for integer keys (I think)
-        static assert (cached == false, "No reason to cache hash for integer keys");
-        return (a.key == b.key);
-    }
-    bool kh_hash_equal(T)(const(T) a, const(T) b)
-    if (is(typeof(__traits(getMember,T,"key")) == uint128))
-    {
-        /// There is no benefit to caching hashes for integer keys (I think)
-        static assert (cached == false, "No reason to cache hash for integer keys");
-        return (a.key == b.key);
-    }
-    
-    bool kh_hash_equal(T)(const(T)* a, const(T)* b)
-    if(
-        is(typeof(__traits(getMember,T,"key")) == char) || 
-        is(typeof(__traits(getMember,T,"key")) == const(char)) || 
-        is(typeof(__traits(getMember,T,"key")) == immutable(char)))
-    {
-        /// If using hash-caching we check equality of the hashes first 
-        /// before checking the equality of keys themselves 
-        static if(cached) return (a.hash == b.hash) && (strcmp(a, b) == 0);
-        else return (strcmp(a.key, b.key) == 0);
-    }
+        bool kh_hash_equal(T)(const(T) a, const(T) b)
+                if (isNumeric!(typeof(__traits(getMember, T, "key"))))
+        {
+            /// There is no benefit to caching hashes for integer keys (I think)
+            static assert(cached == false, "No reason to cache hash for integer keys");
+            return (a.key == b.key);
+        }
 
-    bool kh_hash_equal(T)(const(T) a, const(T) b)
-    if(isSomeString!(typeof(__traits(getMember,T,"key"))))
-    {
-        /// If using hash-caching we check equality of the hashes first 
-        /// before checking the equality of keys themselves 
-        static if(cached) return (a.hash == b.hash) && (a.key == b.key);
-        else return (a.key == b.key);
-    }
+        bool kh_hash_equal(T)(const(T) a, const(T) b)
+                if (is(typeof(__traits(getMember, T, "key")) == uint128))
+        {
+            /// There is no benefit to caching hashes for integer keys (I think)
+            static assert(cached == false, "No reason to cache hash for integer keys");
+            return (a.key == b.key);
+        }
 
-    auto kh_hash_equal(T)(const(T) a, const(T) b)
-    if(is(typeof(__traits(getMember,T,"key")) == Asdf))
-    {
-        return a.key.data == b.key.data;
-    }
+        bool kh_hash_equal(T)(const(T)* a, const(T)* b)
+                if (is(typeof(__traits(getMember, T, "key")) == char)
+                    || is(typeof(__traits(getMember, T, "key")) == const(char))
+                    || is(typeof(__traits(getMember, T, "key")) == immutable(char)))
+        {
+            /// If using hash-caching we check equality of the hashes first 
+            /// before checking the equality of keys themselves 
+            static if (cached)
+                return (a.hash == b.hash) && (strcmp(a, b) == 0);
+            else
+                return (strcmp(a.key, b.key) == 0);
+        }
 
-    bool kh_hash_equal(T)(const(T) a, const(T) b)
-    if(is(typeof(__traits(getMember,T,"key")) == JSONValue))
-    {
-        static if(cached) return (a.hash == b.hash) && (a.key == b.key);
-        else return a.key == b.key;
-    }    
-} // end pragma(inline, true)
+        bool kh_hash_equal(T)(const(T) a, const(T) b)
+                if (isSomeString!(typeof(__traits(getMember, T, "key"))))
+        {
+            /// If using hash-caching we check equality of the hashes first 
+            /// before checking the equality of keys themselves 
+            static if (cached)
+                return (a.hash == b.hash) && (a.key == b.key);
+            else
+                return (a.key == b.key);
+        }
+
+        auto kh_hash_equal(T)(const(T) a, const(T) b)
+                if (is(typeof(__traits(getMember, T, "key")) == Asdf))
+        {
+            return a.key.data == b.key.data;
+        }
+
+        bool kh_hash_equal(T)(const(T) a, const(T) b)
+                if (is(typeof(__traits(getMember, T, "key")) == JSONValue))
+        {
+            static if (cached)
+                return (a.hash == b.hash) && (a.key == b.key);
+            else
+                return a.key == b.key;
+        }
+    } // end pragma(inline, true)
 } // end template kh_equal
 /* --- END OF HASH FUNCTIONS --- */
-
 
 unittest
 {
@@ -693,19 +781,19 @@ unittest
 
     // test: numeric key type must be unsigned
     assert(__traits(compiles, khashl!(int, int)) is false);
-    assert(__traits(compiles, khashl!(uint,int)) is true);
+    assert(__traits(compiles, khashl!(uint, int)) is true);
 
-//    auto kh = khash!(uint, char).kh_init();
+    //    auto kh = khash!(uint, char).kh_init();
 
     //int absent;
     //auto k = khash!(uint, char).kh_put(kh, 5, &absent);
     ////khash!(uint, char).kh_value(kh, k) = 10;
     //kh.vals[k] = 'J';
 
-//    (*kh)[5] = 'J';
-//    writeln("Entry value:", (*kh)[5]);
-    
-//    khash!(uint, char).kh_destroy(kh);
+    //    (*kh)[5] = 'J';
+    //    writeln("Entry value:", (*kh)[5]);
+
+    //    khash!(uint, char).kh_destroy(kh);
 
     auto kh = khashl!(uint, char)();
     kh[5] = 'J';
@@ -718,6 +806,7 @@ unittest
     /*foreach(k; kh.byKey())
         writefln("Key: %s", k);*/
     import std.array : array;
+
     assert(kh.byKey().array == [1, 99, 5]);
 
     // test: byKey on Empty hash table
@@ -727,12 +816,12 @@ unittest
     // test: keytype string
     auto kh_string = khashl!(string, int)();
     kh_string["test"] = 5;
-    assert( kh_string["test"] == 5 );
+    assert(kh_string["test"] == 5);
 
     // test: valtype string
     auto kh_valstring = khashl!(uint, string)();
     kh_valstring[42] = "Adams";
-    assert( kh_valstring[42] == "Adams" );
+    assert(kh_valstring[42] == "Adams");
 
     // test: require
     const auto fw = kh_string.require("flammenwerfer", 21);

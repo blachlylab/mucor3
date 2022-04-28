@@ -7,18 +7,19 @@ public import libmucor.invertedindex.store.filecache;
 import libmucor.wideint;
 import libmucor.jsonlops.jsonvalue;
 import std.digest.md;
-import std.sumtype: match;
-import std.format: format;
+import std.sumtype : match;
+import std.format : format;
 import libmucor.spookyhash;
 import libmucor.hts_endian;
 import libmucor.invertedindex.metadata;
 import std.traits;
 
-uint128 getKeyHash(const(char)[] key) {
+uint128 getKeyHash(const(char)[] key)
+{
     uint128 ret;
     ret.hi = SEED2;
     ret.lo = SEED4;
-    SpookyHash.Hash128(key.ptr, key.length, &ret.hi,&ret.lo);
+    SpookyHash.Hash128(key.ptr, key.length, &ret.hi, &ret.lo);
     return ret;
 }
 
@@ -26,42 +27,39 @@ enum SEED1 = 0x48e9a84eeeb9f629;
 enum SEED2 = 0x2e1869d4e0b37fcb;
 enum SEED3 = 0xb5b35cb029261cef;
 enum SEED4 = 0x34095e180ababeec;
-uint128 getValueHash(JSONValue val) {
+uint128 getValueHash(JSONValue val)
+{
     SpookyHash h;
-    return (val.val).match!(
-        (bool x) {
-            uint128 ret;
-            auto v = cast(ulong)x;
-            ret.hi = SEED1;
-            ret.lo = SEED2;
-            SpookyHash.Hash128(&v, 8, &ret.hi,&ret.lo);
-            return ret;
-        },
-        (long x) {
-            uint128 ret;
-            ret.hi = SEED2;
-            ret.lo = SEED3;
-            SpookyHash.Hash128(&x, 8, &ret.hi,&ret.lo);
-            return ret;
-        },
-        (double x) {
-            uint128 ret;
-            ret.hi = SEED1;
-            ret.lo = SEED3;
-            SpookyHash.Hash128(&x, 8, &ret.hi,&ret.lo);
-            return ret;
-        },
-        (const(char)[] x) {
-            uint128 ret;
-            ret.hi = SEED1;
-            ret.lo = SEED4;
-            SpookyHash.Hash128(x.ptr, x.length, &ret.hi,&ret.lo);
-            return ret;
-        }
-    );
+    return (val.val).match!((bool x) {
+        uint128 ret;
+        auto v = cast(ulong) x;
+        ret.hi = SEED1;
+        ret.lo = SEED2;
+        SpookyHash.Hash128(&v, 8, &ret.hi, &ret.lo);
+        return ret;
+    }, (long x) {
+        uint128 ret;
+        ret.hi = SEED2;
+        ret.lo = SEED3;
+        SpookyHash.Hash128(&x, 8, &ret.hi, &ret.lo);
+        return ret;
+    }, (double x) {
+        uint128 ret;
+        ret.hi = SEED1;
+        ret.lo = SEED3;
+        SpookyHash.Hash128(&x, 8, &ret.hi, &ret.lo);
+        return ret;
+    }, (const(char)[] x) {
+        uint128 ret;
+        ret.hi = SEED1;
+        ret.lo = SEED4;
+        SpookyHash.Hash128(x.ptr, x.length, &ret.hi, &ret.lo);
+        return ret;
+    });
 }
 
-uint128 combineHash(uint128 a, uint128 b) {
+uint128 combineHash(uint128 a, uint128 b)
+{
     uint128 ret;
     uint256 v;
     v.hi = a;
@@ -72,53 +70,56 @@ uint128 combineHash(uint128 a, uint128 b) {
     return ret;
 }
 
-string getShortHash(uint128 v) {
-    return format("%x", v)[0..8];
+string getShortHash(uint128 v)
+{
+    return format("%x", v)[0 .. 8];
 }
 
-
-pragma(inline, true)
-auto sizeSerialized(T)(T item) 
-if(isIntegral!T || isFloatingPoint!T || is(T == uint128) || is(T == JsonKeyMetaData) || is(T == KeyMetaData))
+pragma(inline, true) auto sizeSerialized(T)(T item)
+        if (isIntegral!T || isFloatingPoint!T || is(T == uint128)
+            || is(T == JsonKeyMetaData) || is(T == KeyMetaData))
 {
     return T.sizeof;
 }
 
-pragma(inline, true)
-auto sizeSerialized(T)(T item) 
-if(isSomeString!T)
+pragma(inline, true) auto sizeSerialized(T)(T item) if (isSomeString!T)
 {
-    return (cast(ubyte[])item).length + 8;
+    return (cast(ubyte[]) item).length + 8;
 }
 
-pragma(inline, true)
-auto sizeSerialized(T)(T item) 
-if(is(T == SmallsIds))
+pragma(inline, true) auto sizeSerialized(T)(T item) if (is(T == SmallsIds))
 {
     return 16 + 8 + (item.ids.length * 8);
 }
 
-pragma(inline, true)
-void serialize(T)(T item, ref ubyte * p) 
-if(isIntegral!T || isFloatingPoint!T || is(T == uint128))
+pragma(inline, true) void serialize(T)(T item, ref ubyte* p)
+        if (isIntegral!T || isFloatingPoint!T || is(T == uint128))
 {
-    static if(is(T == ulong)){
+    static if (is(T == ulong))
+    {
         u64_to_le(item, p);
-    }else static if(is(T == long)){
+    }
+    else static if (is(T == long))
+    {
         i64_to_le(item, p);
-    }else static if(is(T == double)){
+    }
+    else static if (is(T == double))
+    {
         double_to_le(item, p);
-    } else static if(is(T == uint128)){
+    }
+    else static if (is(T == uint128))
+    {
         u64_to_le(item.hi, p);
-        u64_to_le(item.lo, p+8);
-    } else {
+        u64_to_le(item.lo, p + 8);
+    }
+    else
+    {
         static assert(0, "Not a valid store type!");
     }
     p += item.sizeSerialized;
 }
 
-pragma(inline, true)
-void serialize(T: JsonKeyMetaData)(T item, ref ubyte * p)
+pragma(inline, true) void serialize(T : JsonKeyMetaData)(T item, ref ubyte* p)
 {
     item.keyHash.serialize(p);
     item.type.serialize(p);
@@ -127,47 +128,50 @@ void serialize(T: JsonKeyMetaData)(T item, ref ubyte * p)
     item.keyLength.serialize(p);
 }
 
-pragma(inline, true)
-void serialize(T: KeyMetaData)(T item, ref ubyte * p)
+pragma(inline, true) void serialize(T : KeyMetaData)(T item, ref ubyte* p)
 {
     item.keyHash.serialize(p);
     item.keyOffset.serialize(p);
     item.keyLength.serialize(p);
 }
 
-pragma(inline, true)
-void serialize(T)(T item, ref ubyte * p)
-if(isSomeString!T)
+pragma(inline, true) void serialize(T)(T item, ref ubyte* p) if (isSomeString!T)
 {
     item.length.serialize(p);
-    auto buf = cast(ubyte[])item;
-    p[0..buf.length] = buf[];
+    auto buf = cast(ubyte[]) item;
+    p[0 .. buf.length] = buf[];
     p += buf.length;
 }
 
-pragma(inline, true)
-void serialize(T: SmallsIds)(T item, ref ubyte * p)
+pragma(inline, true) void serialize(T : SmallsIds)(T item, ref ubyte* p)
 {
     item.key.serialize(p);
     item.ids.length.serialize(p);
-    foreach(id; item.ids){
+    foreach (id; item.ids)
+    {
         u64_to_le(id, p);
         p += 8;
     }
 }
 
-pragma(inline, true)
-T deserialize(T)(ref ubyte * p)
-if(isIntegral!T || isFloatingPoint!T || is(T == uint128))
+pragma(inline, true) T deserialize(T)(ref ubyte* p)
+        if (isIntegral!T || isFloatingPoint!T || is(T == uint128))
 {
     T ret;
-    static if(is(T == ulong)){
+    static if (is(T == ulong))
+    {
         ret = le_to_u64(p);
-    }else static if(is(T == long)){
+    }
+    else static if (is(T == long))
+    {
         ret = le_to_i64(p);
-    }else static if(is(T == double)){
-        ret =  le_to_double(p);
-    } else static if(is(T == uint128)){
+    }
+    else static if (is(T == double))
+    {
+        ret = le_to_double(p);
+    }
+    else static if (is(T == uint128))
+    {
         ret.hi = le_to_u64(p);
         ret.lo = le_to_u64(p + 8);
     }
@@ -175,9 +179,7 @@ if(isIntegral!T || isFloatingPoint!T || is(T == uint128))
     return ret;
 }
 
-pragma(inline, true)
-T deserialize(T)(ref ubyte * p)
-if(is(T == JsonKeyMetaData))
+pragma(inline, true) T deserialize(T)(ref ubyte* p) if (is(T == JsonKeyMetaData))
 {
     T ret;
     ret.keyHash = deserialize!uint128(p);
@@ -188,9 +190,7 @@ if(is(T == JsonKeyMetaData))
     return ret;
 }
 
-pragma(inline, true)
-T deserialize(T)(ref ubyte * p)
-if(is(T == KeyMetaData))
+pragma(inline, true) T deserialize(T)(ref ubyte* p) if (is(T == KeyMetaData))
 {
     T ret;
     ret.keyHash = deserialize!uint128(p);
@@ -199,23 +199,19 @@ if(is(T == KeyMetaData))
     return ret;
 }
 
-pragma(inline, true)
-auto sizeDeserialized(T)(ubyte * p) 
-if(isIntegral!T || isFloatingPoint!T || is(T == uint128) || is(T == JsonKeyMetaData) || is(T == KeyMetaData))
+pragma(inline, true) auto sizeDeserialized(T)(ubyte* p)
+        if (isIntegral!T || isFloatingPoint!T || is(T == uint128)
+            || is(T == JsonKeyMetaData) || is(T == KeyMetaData))
 {
     return T.sizeof;
 }
 
-pragma(inline, true)
-auto sizeDeserialized(T)(ubyte * p) 
-if(isSomeString!T)
+pragma(inline, true) auto sizeDeserialized(T)(ubyte* p) if (isSomeString!T)
 {
     return le_to_u64(p);
 }
 
-pragma(inline, true)
-auto sizeDeserialized(T)(ubyte * p) 
-if(is(T == SmallsIds))
+pragma(inline, true) auto sizeDeserialized(T)(ubyte* p) if (is(T == SmallsIds))
 {
     auto len = le_to_u64(p + 16);
     return 16 + 8 + (len * 8);

@@ -6,7 +6,7 @@ import std.traits : EnumMembers;
 import std.typecons : Tuple, tuple;
 import std.string;
 import std.algorithm.searching;
-import std.conv: ConvException, parse;
+import std.conv : ConvException, parse;
 
 // import libmucor.query.primary;
 import libmucor.query.value;

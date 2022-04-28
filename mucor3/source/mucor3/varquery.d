@@ -1,9 +1,9 @@
 module mucor3.varquery;
 import std.stdio;
 import std.exception : enforce;
-import std.algorithm: map, joiner, filter;
+import std.algorithm : map, joiner, filter;
 import std.range;
-import std.conv:to;
+import std.conv : to;
 import libmucor.error;
 
 import std.datetime.stopwatch : StopWatch;
@@ -15,27 +15,28 @@ import asdf : deserializeAsdf = deserialize, parseJsonByLine, Asdf;
 import libmucor.wideint : uint128;
 import libmucor.khashl;
 import libmucor.error;
-import std.algorithm.searching: balancedParens;
+import std.algorithm.searching : balancedParens;
 
-auto query(R)(R range, InvertedIndex * idx, string queryStr)
-if (is(ElementType!R == Asdf))
+auto query(R)(R range, InvertedIndex* idx, string queryStr)
+        if (is(ElementType!R == Asdf))
 {
     StopWatch sw;
     sw.start;
-    if(!queryStr.balancedParens('(',')')) {
+    if (!queryStr.balancedParens('(', ')'))
+    {
         log_err(__FUNCTION__, "Parentheses aren't matched in query: %s", queryStr);
     }
     auto q = parseQuery(queryStr);
-    log_info(__FUNCTION__,"Time to parse query: %s usecs",sw.peek.total!"usecs");
+    log_info(__FUNCTION__, "Time to parse query: %s usecs", sw.peek.total!"usecs");
     sw.reset;
     auto idxs = evaluateQuery(q, idx);
     log_info(__FUNCTION__, "Time to evaluate query: %s seconds", sw.peek.total!"seconds");
     sw.stop;
-    log_info(__FUNCTION__, "%d records matched your query",idxs.count);
-    
+    log_info(__FUNCTION__, "%d records matched your query", idxs.count);
 
     khashlSet!(uint128) selectedSums;
-    foreach(key; idx.convertIds(idxs)){
+    foreach (key; idx.convertIds(idxs))
+    {
         selectedSums.insert(key);
     }
 
@@ -49,10 +50,9 @@ if (is(ElementType!R == Asdf))
     });
 }
 
-void index(R)(R range, string prefix)
-if (is(ElementType!R == Asdf))
+void index(R)(R range, string prefix) if (is(ElementType!R == Asdf))
 {
-    InvertedIndex * idx = new InvertedIndex(prefix, true);
+    InvertedIndex* idx = new InvertedIndex(prefix, true);
 
     StopWatch sw;
     sw.start;
@@ -66,36 +66,39 @@ if (is(ElementType!R == Asdf))
     idx.close;
 
     sw.stop;
-    log_info(__FUNCTION__, "Indexed %d records in %d secs",count,sw.peek.total!"seconds");
-    log_info(__FUNCTION__,"Avg time to index record: %f usecs",float(sw.peek.total!"usecs") / float(count));
+    log_info(__FUNCTION__, "Indexed %d records in %d secs", count, sw.peek.total!"seconds");
+    log_info(__FUNCTION__, "Avg time to index record: %f usecs",
+            float(sw.peek.total!"usecs") / float(count));
 }
 
-
-void query_main(string[] args){
+void query_main(string[] args)
+{
     StopWatch sw;
     sw.start;
- 
-    InvertedIndex * idx = new InvertedIndex(args[$-2], false);
+
+    InvertedIndex* idx = new InvertedIndex(args[$ - 2], false);
     // auto idxs = idx.fields[args[1]].filter(args[2..$]);
     // float[] range = [args[2].to!float,args[3].to!float];
-    log_info(__FUNCTION__, "Time to load index: %s",sw.peek.total!"seconds"," seconds");
-    log_info(__FUNCTION__, "%d records in index",idx.recordMd5s.length);
+    log_info(__FUNCTION__, "Time to load index: %s", sw.peek.total!"seconds", " seconds");
+    log_info(__FUNCTION__, "%d records in index", idx.recordMd5s.length);
     sw.stop;
     sw.reset;
     sw.start;
-    foreach(obj;args[0..$-1].map!(x => File(x).byChunk(4096).parseJsonByLine).joiner.query(idx, args[$-1])){
+    foreach (obj; args[0 .. $ - 1].map!(x => File(x).byChunk(4096)
+            .parseJsonByLine).joiner.query(idx, args[$ - 1]))
+    {
         writeln(obj);
     }
-    log_info(__FUNCTION__,"Time to query/filter records: ",sw.peek.total!"seconds"," seconds");
+    log_info(__FUNCTION__, "Time to query/filter records: ", sw.peek.total!"seconds", " seconds");
     // parseQuery("(key1:val1 AND key2:(val2 OR val3 OR val4) AND key3:1-2) OR key4:val4 OR key5:(val5 AND val6)",idx);
     // parseQuery("key1:val1 AND key2:(val2 OR val3) AND key4:val4 AND key5:(val5 OR val6)",idx);
 }
 
-void index_main(string[] args){
+void index_main(string[] args)
+{
 
     StopWatch sw;
-    
-    args[0..$-1].map!(x => File(x).byChunk(4096).parseJsonByLine).joiner.index(args[$-1]);
+
+    args[0 .. $ - 1].map!(x => File(x).byChunk(4096).parseJsonByLine).joiner.index(args[$ - 1]);
 
 }
-

@@ -21,18 +21,24 @@ import libmucor.query.util;
 /// key op value
 alias KeyValue = Tuple!(ValueOp, "op", string, "lhs", Value, "rhs");
 
-string keyValueToString(KeyValue kv) {
+string keyValueToString(KeyValue kv)
+{
     return kv.lhs ~ cast(string) kv.op ~ valueToString(kv.rhs);
 }
 
 /// Parse Key from string like "foo = bar" to return "foo"
 /// input string is expected to have whitespace trimmed from beginning
-auto parseKey(string query_str) {
+auto parseKey(string query_str)
+{
     auto q = query_str;
-    if(q.startsWith('"')) {
-        if(auto quoteSplit = q[1..$].findSplit("\"")) {
+    if (q.startsWith('"'))
+    {
+        if (auto quoteSplit = q[1 .. $].findSplit("\""))
+        {
             return quoteSplit[0];
-        } else {
+        }
+        else
+        {
             return query_str;
         }
     }
@@ -42,14 +48,16 @@ auto parseKey(string query_str) {
 /// key op
 alias UnaryKeyOp = Tuple!(KeyOp, "op", string, "lhs");
 
-string unaryKeyOpToString(UnaryKeyOp kv) {
+string unaryKeyOpToString(UnaryKeyOp kv)
+{
     return kv.lhs ~ ":" ~ cast(string) kv.op;
 }
 
-auto parseUnaryKeyOp(string v) {
+auto parseUnaryKeyOp(string v)
+{
     auto rest = v.findAmong(":");
     auto key = parseKey(v[0 .. $ - rest.length]);
-    rest = rest[1..$].strip;
+    rest = rest[1 .. $].strip;
     auto op = enumFromStr!KeyOp(rest);
     return UnaryKeyOp(op, key);
 }

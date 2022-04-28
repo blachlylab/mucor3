@@ -6,7 +6,7 @@ import std.traits : EnumMembers;
 import std.typecons : Tuple, tuple;
 import std.string;
 import std.algorithm.searching;
-import std.conv: ConvException, parse;
+import std.conv : ConvException, parse;
 
 // import libmucor.query.primary;
 import libmucor.query.value;
@@ -14,29 +14,29 @@ import libmucor.query.keyvalue;
 import libmucor.query.util;
 
 /// Operators that can be applied to ValueExprs
-enum ValueOp : string {
-    Equal  = "=",
-    GTE    = ">=",
-    LTE    = "<=",
-    GT     = ">",
-    LT     = "<",
+enum ValueOp : string
+{
+    Equal = "=",
+    GTE = ">=",
+    LTE = "<=",
+    GT = ">",
+    LT = "<",
     ApproxEqual = "~"
 }
 
 /// Operators that can be applied to a key with a list of values 
-enum LogicalOp: string
+enum LogicalOp : string
 {
-    And    = "&",
-    Or     = "|",
-    Not    = "!"
+    And = "&",
+    Or = "|",
+    Not = "!"
 }
 
 /// Operators that can be applied to a key 
-enum KeyOp: string
+enum KeyOp : string
 {
     Exists = "_exists_"
 }
-
 
 /**
 * Logic for parsing string query and filter results using inverted index.
@@ -52,128 +52,152 @@ enum KeyOp: string
 * Other specials: (, )
 **/
 
-alias Query = SumType!(
-    /// key op value
-    KeyValue,
-    /// key op
-    UnaryKeyOp,
-    /// Not value
-    NotValue,
-    Value,
-    /// key op query
-    Tuple!(ValueOp, "op", string, "lhs", This*, "rhs"),
-    /// Not query
-    Tuple!(This*, "rhs"),
-    /// query op query
-    Tuple!(LogicalOp, "op", This*, "lhs", This*, "rhs"),
-    /// ( subquery )
-    Tuple!(This*, "subquery")
-);
+alias Query = SumType!(/// key op value
+        KeyValue,/// key op
+        UnaryKeyOp,/// Not value
+        NotValue, Value,/// key op query
+        Tuple!(ValueOp,
+        "op", string, "lhs", This*, "rhs"),/// Not query
+        Tuple!(This*, "rhs"),
+        /// query op query
+        Tuple!(LogicalOp, "op", This*, "lhs", This*, "rhs"),/// ( subquery )
+        Tuple!(This*, "subquery"));
 
 alias ComplexKeyValue = Query.Types[4];
 
-string complexKeyValueToString(ComplexKeyValue kv) {
+string complexKeyValueToString(ComplexKeyValue kv)
+{
     return kv.lhs ~ cast(string) kv.op ~ queryToString(*kv.rhs);
 }
 
 alias NotQuery = Query.Types[5];
 
-string notQueryToString(NotQuery kv) {
+string notQueryToString(NotQuery kv)
+{
     return "!" ~ queryToString(*kv.rhs);
 }
 
-auto parseNotQuery(string query) {
+auto parseNotQuery(string query)
+{
     assert(query[0] == '!');
-    query = query[1..$];
-    if(query[0] == '(') {
+    query = query[1 .. $];
+    if (query[0] == '(')
+    {
         auto split = splitOnClosingParenthesis(query);
         auto rest = split[1].strip;
         import std.stdio;
+
         writeln(rest);
-        try {
+        try
+        {
             auto op = enumFromStr!LogicalOp(rest);
             /// !(foo | bar | baz) & lame
-            return new Query(ComplexQuery(op, new Query(NotQuery(new Query(Subquery(parseQuery(split[0].strip))))), parseQuery(rest.strip)));
-        } catch (Exception) {
+            return new Query(ComplexQuery(op,
+                    new Query(NotQuery(new Query(Subquery(parseQuery(split[0].strip))))),
+                    parseQuery(rest.strip)));
+        }
+        catch (Exception)
+        {
             /// !(foo | bar | baz)
             return new Query(NotQuery(parseQuery(query.strip)));
         }
-    } else {
+    }
+    else
+    {
         return new Query(NotValue(parseValue(query.strip)));
     }
 }
 
-auto parseSubQuery(string query) {
+auto parseSubQuery(string query)
+{
     auto split = splitOnClosingParenthesis(query);
     auto rest = split[1].strip;
-    try {
+    try
+    {
         auto op = enumFromStr!LogicalOp(rest);
         /// (some query) & other
-        return new Query(ComplexQuery(op, new Query(Subquery(parseQuery(split[0].strip))), parseQuery(rest.strip)));
-    } catch (Exception) {
+        return new Query(ComplexQuery(op,
+                new Query(Subquery(parseQuery(split[0].strip))), parseQuery(rest.strip)));
+    }
+    catch (Exception)
+    {
         /// (some query)
         return new Query(Subquery(parseQuery(split[0].strip)));
     }
 }
 
-auto parseKeyValue(string key, ValueOp op, string value) {
+auto parseKeyValue(string key, ValueOp op, string value)
+{
     auto k = parseKey(key);
-    if(value.strip[0] == '(') {
+    if (value.strip[0] == '(')
+    {
         return new Query(ComplexKeyValue(op, key.strip, parseQuery(value.strip)));
-    } else {
+    }
+    else
+    {
         return new Query(KeyValue(op, k.strip, parseValue(value.strip)));
     }
 }
 
 alias ComplexQuery = Query.Types[6];
 
-string complexQueryToString(ComplexQuery kv) {
+string complexQueryToString(ComplexQuery kv)
+{
     return queryToString(*kv.lhs) ~ cast(string) kv.op ~ queryToString(*kv.rhs);
 }
 
 alias Subquery = Query.Types[7];
 
-string subqueryToString(Subquery kv) {
+string subqueryToString(Subquery kv)
+{
     return "(" ~ queryToString(*kv.subquery) ~ ")";
 }
 
-
-Query * parseQuery(string query) {
+Query* parseQuery(string query)
+{
     query = query.strip;
     auto vop = splitOnValueOp(query);
     auto lop = splitOnLogicalOp(query);
     auto uop = query.findAmong(":");
-    if(query[0] == '!') {
+    if (query[0] == '!')
+    {
         return parseNotQuery(query);
-    } else if(query[0] == '(') {
+    }
+    else if (query[0] == '(')
+    {
         return parseSubQuery(query);
-    } else if(vop[0]) {
+    }
+    else if (vop[0])
+    {
         return parseKeyValue(vop[1].strip, vop[2], vop[3].strip);
-    } else if(lop[0]) {
+    }
+    else if (lop[0])
+    {
         return new Query(ComplexQuery(lop[2], parseQuery(lop[1].strip), parseQuery(lop[3].strip)));
-    } else if(!uop.empty) {
+    }
+    else if (!uop.empty)
+    {
         return new Query(parseUnaryKeyOp(query));
-    } else {
+    }
+    else
+    {
         return new Query(parseValue(query));
     }
 }
 
-string queryToString(Query q) {
-    return q.match!(
-        (KeyValue x) => keyValueToString(x),
-        (UnaryKeyOp x) => unaryKeyOpToString(x),
-        (NotValue x) => notValueToString(x),
-        (Value x) => valueToString(x),
-        (ComplexKeyValue x) => complexKeyValueToString(x),
-        (NotQuery x) => notQueryToString(x),
-        (ComplexQuery x) => complexQueryToString(x),
-        (Subquery x) => subqueryToString(x),
-    );
+string queryToString(Query q)
+{
+    return q.match!((KeyValue x) => keyValueToString(x),
+            (UnaryKeyOp x) => unaryKeyOpToString(x), (NotValue x) => notValueToString(x),
+            (Value x) => valueToString(x), (ComplexKeyValue x) => complexKeyValueToString(x),
+            (NotQuery x) => notQueryToString(x), (ComplexQuery x) => complexQueryToString(x),
+            (Subquery x) => subqueryToString(x),);
 }
 
 unittest
 {
     import std.stdio;
+
     auto q = parseQuery("1.0");
     assert(*q == Query(Value(1.0)));
 
@@ -205,14 +229,13 @@ unittest
 
     q = parseQuery("!(key = val) & (foo = bar)");
     writeln((*q).queryToString());
-    assert((*q).queryToString() =="!(key=val)&(foo=bar)");
+    assert((*q).queryToString() == "!(key=val)&(foo=bar)");
 
     q = parseQuery("(!(key = 1:2) & (foo = ( bar | 3 | (baz & test & v))))");
     writeln((*q).queryToString());
-    assert((*q).queryToString() =="(!(key=1:2)&(foo=(bar|3|(baz&test&v))))");
+    assert((*q).queryToString() == "(!(key=1:2)&(foo=(bar|3|(baz&test&v))))");
     // assert(*q == Query(UnaryKeyOp(KeyOp.Exists, "key")));
 }
-
 
 // enum QueryOp : string
 // {
@@ -252,7 +275,7 @@ unittest
 // {
 //     match!(
 //         (string a, ValueExpr b) {
-            
+
 //         },
 //         (Point3D _1, Point3D _2) => true,
 //         (_1, _2) => false
@@ -271,18 +294,16 @@ unittest
 // alias lteExpr = partial!(binOp, QueryOp.LTE);
 // alias RangeExpr = partial!(binOp, QueryOp.Range);
 
-
-
 // auto parseQuery(string query) {
 //     stripRight(query)
 // }
 
 // auto parseNumber(string query) {
-    
+
 // }
 
 // auto parseKey(string query) {
-    
+
 // }
 
 // auto checkForMatchingParentheses(string q){

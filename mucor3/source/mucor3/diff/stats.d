@@ -1,5 +1,5 @@
 module mucor3.diff.stats;
-import std.format: format;
+import std.format : format;
 
 struct VarStats
 {

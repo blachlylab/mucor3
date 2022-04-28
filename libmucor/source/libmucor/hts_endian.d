@@ -36,9 +36,11 @@ import core.stdc.config;
  * See https://sourceforge.net/p/predef/wiki/Endianness/
  */
 
-version(X86) enum HTS_x86 = true;
-version(X86_64) enum HTS_x86 = true;
-else enum HTS_x86 = false;
+version (X86) enum HTS_x86 = true;
+version (X86_64)
+    enum HTS_x86 = true;
+else
+    enum HTS_x86 = false;
 
 /* Save typing as both endian and unaligned tests want to know about x86 */ /* x86 and x86_64 platform */
 
@@ -46,22 +48,26 @@ else enum HTS_x86 = false;
  *  @brief Defined if platform is known to be little-endian
  */
 
-version(LittleEndian) enum HTS_LITTLE_ENDIAN = true;
-else enum HTS_LITTLE_ENDIAN = false;
+version (LittleEndian)
+    enum HTS_LITTLE_ENDIAN = true;
+else
+    enum HTS_LITTLE_ENDIAN = false;
 
 /** @def HTS_BIG_ENDIAN
  *  @brief Defined if platform is known to be big-endian
  */
 
-version(BigEndian) enum HTS_BIG_ENDIAN = true;
-else enum HTS_BIG_ENDIAN = false;
+version (BigEndian)
+    enum HTS_BIG_ENDIAN = true;
+else
+    enum HTS_BIG_ENDIAN = false;
 
 /** @def HTS_ENDIAN_NEUTRAL
  *  @brief Define this to disable any endian-specific optimizations
  */
 
 /* Disable all endian-specific code. */
-version(HTS_ENDIAN_NEUTRAL)
+version (HTS_ENDIAN_NEUTRAL)
 {
     enum HTS_LITTLE_ENDIAN = false;
     enum HTS_BIG_ENDIAN = false;
@@ -77,22 +83,27 @@ version(HTS_ENDIAN_NEUTRAL)
  * Defining HTS_ALLOW_UNALIGNED=0 forces shift-and-or.
  */
 
-static if(HTS_x86) enum HTS_ALLOW_UNALIGNED = true;
-else enum HTS_ALLOW_UNALIGNED = false;
+static if (HTS_x86)
+    enum HTS_ALLOW_UNALIGNED = true;
+else
+    enum HTS_ALLOW_UNALIGNED = false;
 
 // Consider using AX_CHECK_ALIGNED_ACCESS_REQUIRED in autoconf.
 
 // This prevents problems with gcc's vectoriser generating the wrong
 // instructions for unaligned data.
 
-static if(HTS_ALLOW_UNALIGNED){
+static if (HTS_ALLOW_UNALIGNED)
+{
     alias uint16_u = align(1) ushort;
     alias uint32_u = align(1) uint;
     alias uint64_u = align(1) c_ulong;
-}else{
+}
+else
+{
     alias uint16_u = ushort;
     alias uint32_u = uint;
-    alias uint64_u = c_ulong;    
+    alias uint64_u = c_ulong;
 }
 
 /// Basically just a byte
@@ -104,28 +115,24 @@ private struct int8_t
     byte _val;
     alias _val this;
 
-    pragma(inline, true)
-    this(byte x) @nogc
+    pragma(inline, true) this(byte x) @nogc
     {
         _val = x;
     }
 
-    pragma(inline, true)
-    int8_t opBinary(string op, T)(T other)
-        if ((is(T == int8_t) || is(T == byte) || is(T == ubyte)))
+    pragma(inline, true) int8_t opBinary(string op, T)(T other)
+            if ((is(T == int8_t) || is(T == byte) || is(T == ubyte)))
     {
         return mixin("int8_t(cast(byte)(_val " ~ op ~ " cast(byte)other))");
     }
 
-    pragma(inline, true)
-    int8_t opBinaryRight(string op, T)(T other)
-        if ((is(T == int8_t) || is(T == byte) || is(T == ubyte)))
+    pragma(inline, true) int8_t opBinaryRight(string op, T)(T other)
+            if ((is(T == int8_t) || is(T == byte) || is(T == ubyte)))
     {
         return mixin("int8_t(cast(byte)(_val " ~ op ~ " cast(byte)other))");
     }
 
-    pragma(inline, true)
-    int8_t opUnary(string op: "-")()
+    pragma(inline, true) int8_t opUnary(string op : "-")()
     {
         return (cast(int8_t) _val ^ cast(ubyte) 0xFF) + cast(ubyte) 1;
     }
@@ -133,7 +140,7 @@ private struct int8_t
 
 unittest
 {
-    assert(-int8_t(cast(byte) 8) == int8_t(cast(byte) -8));
+    assert(-int8_t(cast(byte) 8) == int8_t(cast(byte)-8));
 }
 
 /// Basically just a short
@@ -145,28 +152,24 @@ private struct int16_t
     short _val;
     alias _val this;
 
-    pragma(inline, true)
-    this(short x) @nogc
+    pragma(inline, true) this(short x) @nogc
     {
         _val = x;
     }
 
-    pragma(inline, true)
-    int16_t opBinary(string op, T)(T other)
-        if ((is(T == int16_t) || is(T == short) || is(T == ushort)))
+    pragma(inline, true) int16_t opBinary(string op, T)(T other)
+            if ((is(T == int16_t) || is(T == short) || is(T == ushort)))
     {
         return mixin("int16_t(cast(short)(_val " ~ op ~ " cast(short)other))");
     }
 
-    pragma(inline, true)
-    int16_t opBinaryRight(string op, T)(T other)
-        if ((is(T == int16_t) || is(T == short) || is(T == ushort)))
+    pragma(inline, true) int16_t opBinaryRight(string op, T)(T other)
+            if ((is(T == int16_t) || is(T == short) || is(T == ushort)))
     {
         return mixin("int16_t(cast(short)(_val " ~ op ~ " cast(short)other))");
     }
 
-    pragma(inline, true)
-    int16_t opUnary(string op: "-")()
+    pragma(inline, true) int16_t opUnary(string op : "-")()
     {
         return (cast(int16_t) _val ^ cast(ushort) 0xFFFF) + cast(ushort) 1;
     }
@@ -174,7 +177,7 @@ private struct int16_t
 
 unittest
 {
-    assert(-int16_t(cast(short) 8) == int16_t(cast(short) -8));
+    assert(-int16_t(cast(short) 8) == int16_t(cast(short)-8));
 }
 
 pragma(inline, true):
@@ -187,8 +190,8 @@ pragma(inline, true):
  */
 ushort le_to_u16(const(ubyte)* buf)
 {
-    static if(HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
-        return *(cast(uint16_u *) buf);
+    static if (HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
+        return *(cast(uint16_u*) buf);
     else
         return cast(ushort) buf[0] | (cast(ushort) buf[1] << 8);
 }
@@ -200,13 +203,11 @@ ushort le_to_u16(const(ubyte)* buf)
  */
 uint le_to_u32(const(ubyte)* buf)
 {
-    static if(HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
-        return *(cast(uint32_u *) buf);
+    static if (HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
+        return *(cast(uint32_u*) buf);
     else
-        return (cast(uint) buf[0] |
-            (cast(uint) buf[1] << 8) |
-            (cast(uint) buf[2] << 16) |
-            (cast(uint) buf[3] << 24));
+        return (cast(uint) buf[0] | (cast(uint) buf[1] << 8) | (
+                cast(uint) buf[2] << 16) | (cast(uint) buf[3] << 24));
 }
 
 /// Get a ulong value from an unsigned byte array
@@ -216,17 +217,13 @@ uint le_to_u32(const(ubyte)* buf)
  */
 ulong le_to_u64(const(ubyte)* buf)
 {
-    static if(HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
-        return *(cast(uint64_u *) buf);
+    static if (HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
+        return *(cast(uint64_u*) buf);
     else
-        return (cast(ulong) buf[0] |
-            (cast(ulong) buf[1] << 8) |
-            (cast(ulong) buf[2] << 16) |
-            (cast(ulong) buf[3] << 24) |
-            (cast(ulong) buf[4] << 32) |
-            (cast(ulong) buf[5] << 40) |
-            (cast(ulong) buf[6] << 48) |
-            (cast(ulong) buf[7] << 56));
+        return (cast(ulong) buf[0] | (cast(ulong) buf[1] << 8) | (
+                cast(ulong) buf[2] << 16) | (cast(ulong) buf[3] << 24) | (
+                cast(ulong) buf[4] << 32) | (cast(ulong) buf[5] << 40) | (
+                cast(ulong) buf[6] << 48) | (cast(ulong) buf[7] << 56));
 }
 
 /// Store a ushort value in little-endian byte order
@@ -235,9 +232,10 @@ ulong le_to_u64(const(ubyte)* buf)
  */
 void u16_to_le(ushort val, ubyte* buf)
 {
-    static if(HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
-        *(cast(uint16_u *) buf) = val;
-    else{
+    static if (HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
+        *(cast(uint16_u*) buf) = val;
+    else
+    {
         buf[0] = val & 0xff;
         buf[1] = (val >> 8) & 0xff;
     }
@@ -249,9 +247,10 @@ void u16_to_le(ushort val, ubyte* buf)
  */
 void u32_to_le(uint val, ubyte* buf)
 {
-    static if(HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
-        *(cast(uint32_u *) buf) = val;
-    else{
+    static if (HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
+        *(cast(uint32_u*) buf) = val;
+    else
+    {
         buf[0] = val & 0xff;
         buf[1] = (val >> 8) & 0xff;
         buf[2] = (val >> 16) & 0xff;
@@ -265,9 +264,10 @@ void u32_to_le(uint val, ubyte* buf)
  */
 void u64_to_le(ulong val, ubyte* buf)
 {
-    static if(HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
-        *(cast(uint64_u *) buf) = val;
-    else{
+    static if (HTS_LITTLE_ENDIAN && HTS_ALLOW_UNALIGNED)
+        *(cast(uint64_u*) buf) = val;
+    else
+    {
         buf[0] = val & 0xff;
         buf[1] = (val >> 8) & 0xff;
         buf[2] = (val >> 16) & 0xff;
@@ -291,7 +291,8 @@ void u64_to_le(ulong val, ubyte* buf)
  */
 byte le_to_i8(const(ubyte)* buf)
 {
-    return *buf < 0x80 ? cast(int8_t) *buf : -((int8_t(cast(byte)0xff) - cast(int8_t)*buf)) - int8_t(1);
+    return *buf < 0x80 ? cast(int8_t)*buf : -(
+            (int8_t(cast(byte) 0xff) - cast(int8_t)*buf)) - int8_t(1);
 }
 
 /// Get an short value from an unsigned byte array
@@ -303,7 +304,7 @@ byte le_to_i8(const(ubyte)* buf)
 short le_to_i16(const(ubyte)* buf)
 {
     ushort v = le_to_u16(buf);
-    return v < 0x8000 ? cast(int16_t) v : -((int16_t(cast(short)0xffff) - v)) - cast(int16_t)1;
+    return v < 0x8000 ? cast(int16_t) v : -((int16_t(cast(short) 0xffff) - v)) - cast(int16_t) 1;
 }
 
 /// Get an int value from an unsigned byte array
@@ -315,7 +316,7 @@ short le_to_i16(const(ubyte)* buf)
 int le_to_i32(const(ubyte)* buf)
 {
     uint v = le_to_u32(buf);
-    return v < 0x80000000U ? cast(int) v : -(cast(int) (0xffffffffU - v)) - 1;
+    return v < 0x80000000U ? cast(int) v : -(cast(int)(0xffffffffU - v)) - 1;
 }
 
 /// Get an long value from an unsigned byte array
@@ -327,8 +328,7 @@ int le_to_i32(const(ubyte)* buf)
 long le_to_i64(const(ubyte)* buf)
 {
     ulong v = le_to_u64(buf);
-    return (v < 0x8000000000000000UL
-            ? cast(long) v : -(cast(long) (0xffffffffffffffffUL - v)) - 1);
+    return (v < 0x8000000000000000UL ? cast(long) v : -(cast(long)(0xffffffffffffffffUL - v)) - 1);
 }
 
 // Converting the other way is easier as signed -> unsigned is well defined.
@@ -367,7 +367,7 @@ void i64_to_le(long val, ubyte* buf)
  *  Endian-ness is the same for both floating point and integer
  *  Type-punning via a union is allowed
  */
-union F2LE 
+union F2LE
 {
     uint u;
     float f;
@@ -386,7 +386,7 @@ float le_to_float(const(ubyte)* buf)
     return convert.f;
 }
 
-union D2LE 
+union D2LE
 {
     ulong u;
     double f;
@@ -410,7 +410,7 @@ double le_to_double(const(ubyte)* buf)
  */
 void float_to_le(float val, ubyte* buf)
 {
-    
+
     F2LE convert;
     convert.f = val;
     u32_to_le(convert.u, buf);
@@ -422,7 +422,7 @@ void float_to_le(float val, ubyte* buf)
  */
 void double_to_le(double val, ubyte* buf)
 {
-    
+
     D2LE convert;
     convert.f = val;
     u64_to_le(convert.u, buf);

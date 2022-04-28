@@ -1,13 +1,13 @@
 module mucor3.mucor;
 import std.getopt;
 import std.stdio;
-import std.format: format;
-import std.algorithm: map, sort, uniq;
-import std.array: array;
-import std.file: exists, isDir, mkdirRecurse;
-import std.path: isValidPath, buildPath, baseName;
+import std.format : format;
+import std.algorithm : map, sort, uniq;
+import std.array : array;
+import std.file : exists, isDir, mkdirRecurse;
+import std.path : isValidPath, buildPath, baseName;
 import htslib.hts_log;
-import core.stdc.stdlib: exit;
+import core.stdc.stdlib : exit;
 import std.parallelism;
 
 import mucor3.mucor.vcf;
@@ -26,40 +26,50 @@ string[] requiredCols = ["sample", "CHROM", "POS", "REF", "ALT"];
 
 string help_str = "mucor3 <options> [input vcfs]";
 
-void mucor_main(string[] args) {
+void mucor_main(string[] args)
+{
     hts_set_log_level(htsLogLevel.HTS_LOG_INFO);
-    auto res=getopt(args,config.bundling,
-	    "threads|t","threads for running mucor",&threads,
-        "bam-dir|b","folder of bam files",&bam_dir,
-        "extra-fields|e","extra fields from VCF to be displayed in pivot tables",&extra_fields,
-        "prefix|p", "output directory for files (can be directory or file prefix)",&prefix,
-        "config|c", "specify json config file", &config_file,
-        "query|q", "filter vcf data using varquery syntax", &query
-    );
+    auto res = getopt(args, config.bundling,
+            "threads|t", "threads for running mucor", &threads,
+            "bam-dir|b", "folder of bam files", &bam_dir, "extra-fields|e",
+            "extra fields from VCF to be displayed in pivot tables",
+            &extra_fields, "prefix|p",
+            "output directory for files (can be directory or file prefix)", &prefix, "config|c",
+            "specify json config file",
+            &config_file, "query|q", "filter vcf data using varquery syntax", &query);
 
-    if(res.helpWanted){
-        defaultGetoptPrinter(help_str,res.options);
+    if (res.helpWanted)
+    {
+        defaultGetoptPrinter(help_str, res.options);
         exit(0);
     }
-    if(args.length == 1) {
-        defaultGetoptPrinter(help_str,res.options);
+    if (args.length == 1)
+    {
+        defaultGetoptPrinter(help_str, res.options);
         log_err(__FUNCTION__, "Please specify input vcfs");
         exit(1);
     }
 
-    if(threads == 0) {
+    if (threads == 0)
+    {
         defaultPoolThreads(totalCPUs);
-    } else {
+    }
+    else
+    {
         defaultPoolThreads(threads);
     }
 
     /// create prefix folder
-    if(prefix.exists) {
-        if(!prefix.isDir) {
+    if (prefix.exists)
+    {
+        if (!prefix.isDir)
+        {
             log_err(__FUNCTION__, "Specified prefix is not a folder");
             exit(1);
         }
-    } else {
+    }
+    else
+    {
         mkdirRecurse(prefix);
     }
 
@@ -69,19 +79,22 @@ void mucor_main(string[] args) {
 
     string[] vcfFiles;
 
-    foreach(f; args[1..$]) {
-        if(!f.exists) {
+    foreach (f; args[1 .. $])
+    {
+        if (!f.exists)
+        {
             log_err(__FUNCTION__, format("VCF file: %s does not exist", f));
             exit(1);
         }
-        if(f.isDir) {
+        if (f.isDir)
+        {
             log_err(__FUNCTION__, format("Not a vcf_file: %s", f));
             exit(1);
         }
         vcfFiles ~= f;
     }
 
-    if(vcfFiles.map!(x => baseName(x)).array.sort.uniq.array.length != vcfFiles.length)
+    if (vcfFiles.map!(x => baseName(x)).array.sort.uniq.array.length != vcfFiles.length)
     {
         log_err(__FUNCTION__, "Overlapping base file names for input vcf files");
         exit(1);
@@ -90,13 +103,14 @@ void mucor_main(string[] args) {
     auto vcfJsonFiles = vcfFiles.map!(x => buildPath(vcf_json_dir, baseName(x))).array;
 
     atomizeVcfs(args[0], vcfFiles, vcf_json_dir);
-    
+
     auto index_dir = buildPath(prefix, "indexes");
     mkdirRecurse(index_dir);
-    
+
     string combined_json_file;
-    
-    if(query != "") {
+
+    if (query != "")
+    {
         auto indexFile = buildPath(prefix, "all.index");
 
         log_info(__FUNCTION__, "Indexing vcf data ...");
@@ -106,18 +120,21 @@ void mucor_main(string[] args) {
         combined_json_file = buildPath(prefix, "filtered.json");
 
         queryJsonFiles(vcfJsonFiles, indexFile, query, combined_json_file);
-    } else {
+    }
+    else
+    {
         combined_json_file = buildPath(prefix, "all.json");
         File output = File(combined_json_file, "w");
         log_info(__FUNCTION__, "Combining vcf data...");
-        foreach(f;vcfJsonFiles) {
-            foreach(line;File(f).byLine) {
+        foreach (f; vcfJsonFiles)
+        {
+            foreach (line; File(f).byLine)
+            {
                 output.writeln(line);
             }
         }
     }
 
-    
     auto pivReqCols = requiredCols ~= ["AF"];
 
     auto colData = validateDataAndCollectColumns(combined_json_file, pivReqCols, extra_fields);
@@ -127,8 +144,6 @@ void mucor_main(string[] args) {
 
     auto piv = buildPath(prefix, "AF.tsv");
     pivotAndMakeTable(piv, requiredCols, "sample", "AF", extra_fields, colData.samples, piv);
-
-    
 
     // #create EFFECT column
     // if("ANN_hgvs_p" in master):
@@ -218,4 +233,3 @@ void mucor_main(string[] args) {
     //                    os.path.join(args.prefix,"AF.tsv")
     // )
 }
-
