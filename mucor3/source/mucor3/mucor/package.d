@@ -13,6 +13,7 @@ import std.parallelism;
 import mucor3.mucor.vcf;
 import mucor3.mucor.query;
 import mucor3.mucor.table;
+import libmucor.error;
 
 int threads = 0;
 string bam_dir = "";
@@ -41,8 +42,8 @@ void mucor_main(string[] args) {
         exit(0);
     }
     if(args.length == 1) {
-        hts_log_error(__FUNCTION__, "Please specify input vcfs");
         defaultGetoptPrinter(help_str,res.options);
+        log_err(__FUNCTION__, "Please specify input vcfs");
         exit(1);
     }
 
@@ -55,7 +56,7 @@ void mucor_main(string[] args) {
     /// create prefix folder
     if(prefix.exists) {
         if(!prefix.isDir) {
-            hts_log_error(__FUNCTION__, "Specified prefix is not a folder");
+            log_err(__FUNCTION__, "Specified prefix is not a folder");
             exit(1);
         }
     } else {
@@ -70,11 +71,11 @@ void mucor_main(string[] args) {
 
     foreach(f; args[1..$]) {
         if(!f.exists) {
-            hts_log_error(__FUNCTION__, format("VCF file: %s does not exist", f));
+            log_err(__FUNCTION__, format("VCF file: %s does not exist", f));
             exit(1);
         }
         if(f.isDir) {
-            hts_log_error(__FUNCTION__, format("Not a vcf_file: %s", f));
+            log_err(__FUNCTION__, format("Not a vcf_file: %s", f));
             exit(1);
         }
         vcfFiles ~= f;
@@ -82,7 +83,7 @@ void mucor_main(string[] args) {
 
     if(vcfFiles.map!(x => baseName(x)).array.sort.uniq.array.length != vcfFiles.length)
     {
-        hts_log_error(__FUNCTION__, "Overlapping base file names for input vcf files");
+        log_err(__FUNCTION__, "Overlapping base file names for input vcf files");
         exit(1);
     }
 
@@ -98,17 +99,17 @@ void mucor_main(string[] args) {
     if(query != "") {
         auto indexFile = buildPath(prefix, "all.index");
 
-        hts_log_info(__FUNCTION__, "Indexing vcf data ...");
+        log_info(__FUNCTION__, "Indexing vcf data ...");
         indexJsonFiles(args[0], vcfJsonFiles, index_dir, indexFile);
 
-        hts_log_info(__FUNCTION__, "Filtering vcf data...");
+        log_info(__FUNCTION__, "Filtering vcf data...");
         combined_json_file = buildPath(prefix, "filtered.json");
 
         queryJsonFiles(vcfJsonFiles, indexFile, query, combined_json_file);
     } else {
         combined_json_file = buildPath(prefix, "all.json");
         File output = File(combined_json_file, "w");
-        hts_log_info(__FUNCTION__, "Combining vcf data...");
+        log_info(__FUNCTION__, "Combining vcf data...");
         foreach(f;vcfJsonFiles) {
             foreach(line;File(f).byLine) {
                 output.writeln(line);

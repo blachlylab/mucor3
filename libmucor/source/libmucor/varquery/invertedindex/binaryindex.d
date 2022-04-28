@@ -21,7 +21,7 @@ import libmucor.varquery.invertedindex.metadata;
 import libmucor.varquery.invertedindex.jsonvalue;
 import libmucor.varquery.invertedindex.store;
 import libmucor.khashl;
-import htslib.hts_log;
+import libmucor.error;
 import std.format: format;
 
 /** 
@@ -96,7 +96,7 @@ struct BinaryIndexWriter {
             // hts_log_info("IdCacheWriter", format("Files opened: %d", this.idCache.openedFiles.count));
             // stderr.writeln();
         // }
-        hts_log_debug(__FUNCTION__, format("inserting json value %s for key %s", item, key));
+        log_debug(__FUNCTION__, "inserting json value %s for key %s", item, key);
         auto keyhash = getKeyHash(key);
         auto p = keyhash in seenKeys;
         if(!p) {
@@ -146,7 +146,7 @@ struct BinaryIndexReader {
         auto md = new KeyMetaStore(prefix ~  ".keys.meta", "rb");
         this.metadata = md.getAll.array;
         md.close;
-        hts_log_debug(__FUNCTION__, format("loading key index %s with %d keys", prefix, this.metadata.length));
+        log_debug(__FUNCTION__, "loading key index %s with %d keys", prefix, this.metadata.length);
         this.sums = new MD5Store(prefix ~  ".record.sums", "rb").getAll.array;
         this.keys = new StringStore(prefix ~  ".keys", "rb");
         this.jsonStore = new JsonStoreReader(prefix);
@@ -176,7 +176,7 @@ struct BinaryIndexReader {
 unittest
 {
     import htslib.hts_log;
-    hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
+    set_log_level(LogLevel.Debug);
     {
         auto bidx = BinaryIndexWriter("/tmp/test_bidx");
         bidx.insert("testkey", JSONValue("testval"));

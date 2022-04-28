@@ -13,12 +13,13 @@ import std.array: array;
 import std.format: format;
 import libmucor.wideint;
 import libmucor.khashl;
+import libmucor.error;
 
 void indexJsonFiles(string binary, string[] files, string indexFolder, string outfile)
 {
     auto pid = spawnProcess([binary, "index"] ~ files ~ [outfile], stdin, stdout, stderr);
     if(wait(pid) != 0) {
-        throw new Exception("mucor index failed");
+        log_err(__FUNCTION__, "mucor index failed");
     }
 }
 
@@ -32,16 +33,16 @@ void queryJsonFiles(string[] files, string idxFile, string queryStr, string outf
     sw.start;
 
     InvertedIndex idx = InvertedIndex(idxFile, false);
-    stderr.writeln("Time to load index: ",sw.peek.total!"seconds"," seconds");
-    stderr.writefln("%d records in index",idx.recordMd5s.length);
+    log_info(__FUNCTION__, "Time to load index: ",sw.peek.total!"seconds"," seconds");
+    log_info(__FUNCTION__,"%d records in index",idx.recordMd5s.length);
 
     sw.reset;
     auto q = parseQuery(queryStr);
-    hts_log_info(__FUNCTION__, format("Time to parse query: %d usecs", sw.peek.total!"usecs"));
+    log_info(__FUNCTION__,"Time to parse query: %d usecs", sw.peek.total!"usecs");
 
     sw.reset;
     auto idxs = evaluateQuery(q, &idx);
-    hts_log_info(__FUNCTION__, format("Time to evaluate query: %d seconds", sw.peek.total!"seconds"));
+    log_info(__FUNCTION__,"Time to evaluate query: %d seconds", sw.peek.total!"seconds");
     
     sw.reset;
     
@@ -80,6 +81,6 @@ void queryJsonFiles(string[] files, string idxFile, string queryStr, string outf
         m.unlock;
     }
     b.finish;
-    hts_log_info(__FUNCTION__, format("Time to query/filter records: %d seconds",sw.peek.total!"seconds"));
-    hts_log_info(__FUNCTION__, format("%d / %d records matched your query",recordCount, matching));
+    log_info(__FUNCTION__,"Time to query/filter records: %d seconds",sw.peek.total!"seconds");
+    log_info(__FUNCTION__,"%d / %d records matched your query",recordCount, matching);
 }

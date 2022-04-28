@@ -11,51 +11,24 @@ public import libmucor.varquery.query;
 import asdf : deserializeAsdf = deserialize, parseJsonByLine, Asdf;
 import libmucor.wideint : uint128;
 import libmucor.khashl;
-
-auto queryRange(R)(R range, InvertedIndex * idx, string queryStr)
-if (is(ElementType!R == Asdf))
-{
-    auto idxs = evalQuery(queryStr, &idx);
-
-    bool[uint128] hashmap;
-    foreach(key;idx.convertIds(idx.allIds)){
-        hashmap[key] = false;
-    }
-
-    foreach (key; idxs)
-    {
-        hashmap[key] = true;
-    }
-
-    return range.enumerate.map!((x) {
-        auto i = x.index;
-        auto line = x.value;
-        uint128 a;
-        a.fromHexString(deserializeAsdf!string(line["md5"]));
-        assert(idx.recordMd5s[i] ==  a);
-        auto val = hashmap.get(a, false);
-        if(a in hashmap){
-            if(hashmap[a])
-                return line;
-            throw new Exception("Something odd happened");
-        }else{
-            throw new Exception("record not present in index");
-        }
-    });
-}
+import libmucor.error;
+import std.algorithm.searching: balancedParens;
 
 auto query(R)(R range, InvertedIndex * idx, string queryStr)
 if (is(ElementType!R == Asdf))
 {
     StopWatch sw;
     sw.start;
+    if(!queryStr.balancedParens('(',')')) {
+        log_err(__FUNCTION__, "Parentheses aren't matched in query: %s", queryStr);
+    }
     auto q = parseQuery(queryStr);
-    stderr.writeln("Time to parse query: ",sw.peek.total!"usecs"," usecs");
+    log_info(__FUNCTION__,"Time to parse query: %s usecs",sw.peek.total!"usecs");
     sw.reset;
     auto idxs = evaluateQuery(q, idx);
-    stderr.writeln("Time to evaluate query: ",sw.peek.total!"seconds"," seconds");
+    log_info(__FUNCTION__, "Time to evaluate query: %s seconds", sw.peek.total!"seconds");
     sw.stop;
-    stderr.writeln(idxs.count," records matched your query");
+    log_info(__FUNCTION__, "%d records matched your query",idxs.count);
     
 
     khashlSet!(uint128) selectedSums;
@@ -90,6 +63,6 @@ if (is(ElementType!R == Asdf))
     idx.close;
 
     sw.stop;
-    stderr.writefln("Indexed %d records in %d secs",count,sw.peek.total!"seconds");
-    stderr.writefln("Avg time to index record: %f usecs",float(sw.peek.total!"usecs") / float(count));
+    log_info(__FUNCTION__, "Indexed %d records in %d secs",count,sw.peek.total!"seconds");
+    log_info(__FUNCTION__,"Avg time to index record: %f usecs",float(sw.peek.total!"usecs") / float(count));
 }

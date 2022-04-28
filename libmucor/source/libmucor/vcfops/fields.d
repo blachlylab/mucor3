@@ -12,6 +12,7 @@ import dhtslib.vcf;
 import htslib.hts_log;
 import libmucor.vcfops;
 import libmucor.jsonlops;
+import libmucor.error;
 
 /// JSON types
 enum TYPES{
@@ -248,7 +249,7 @@ void parseFieldsMixin(T, V)(ref AsdfNode root, ref T item, string key, ref AsdfN
             break;
         case HeaderLengths.OnePerAltAllele:
             if((alleles.length - 1) != itemLen) {
-                hts_log_warning(__FUNCTION__,"Format field "~key~" doesn't have same number of values as header indicates! Skipping...");
+                log_warn(__FUNCTION__,"Format field %s doesn't have same number of values as header indicates! Skipping...", key);
                 break;
             }
             auto vals = item.to!vtype;

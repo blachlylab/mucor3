@@ -9,6 +9,7 @@ import std.getopt;
 import std.array: split;
 import std.algorithm: map, each;
 import std.array:array;
+import libmucor.error;
 
 
 void piv_main(string[] args){
@@ -22,7 +23,7 @@ void piv_main(string[] args){
         std.getopt.config.required,"v|value",&value,
         "e|extra",&extras);
     if(res.helpWanted){
-        stderr.writeln("Flattens JSON input via stdin, overlapping nested values are collected in arrays");
+        log_info(__FUNCTION__,"Flattens JSON input via stdin, overlapping nested values are collected in arrays");
         return;
     }
     foreach(obj;stdin.byChunk(4096).parseJsonByLine.groupby(indexes).pivot!"self"(on, value, extras))

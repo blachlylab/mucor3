@@ -8,6 +8,7 @@ import progress;
 import std.stdio;
 import dhtslib.vcf;
 import libmucor.vcfops;
+import libmucor.error;
 import std.format: format;
 import std.path: buildPath, baseName;
 import std.process;
@@ -17,7 +18,7 @@ static void defaultAtomize(string binary,string fn, string outfile) {
     auto nf = File("/dev/null", "w");
     auto pid = spawnProcess([binary, "atomize", fn], std.stdio.stdin, output, nf);
     if(wait(pid) != 0) {
-        throw new Exception("mucor atomize failed");
+        log_err(__FUNCTION__, "mucor atomize failed");
     }
 }
 

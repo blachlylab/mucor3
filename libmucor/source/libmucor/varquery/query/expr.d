@@ -138,13 +138,8 @@ string subqueryToString(Subquery kv) {
 }
 
 
-// if(!query.balancedParens('(',')')) {
-//     hts_log_error(__FUNCTION__, format("Parentheses aren't matched in query: %s", query));
-//     return new UnparsedQuery(null);
-// }
 Query * parseQuery(string query) {
     query = query.strip;
-    
     auto vop = splitOnValueOp(query);
     auto lop = splitOnLogicalOp(query);
     auto uop = query.findAmong(":");

@@ -16,6 +16,7 @@ import asdf;
 import libmucor.vcfops;
 import libmucor.khashl: khashl;
 import libmucor.jsonlops;
+import libmucor.error;
 import std.parallelism: parallel;
 
 auto norm(R)(R range, bool active)
@@ -54,11 +55,11 @@ void parseVCF(string fn, int threads, ubyte con, ref File output){
             &output_count, output); 
     }
     if(vcf_row_count > 0) {
-        stderr.writefln("Parsed %,3d records in %d seconds",vcf_row_count, sw.peek.total!"seconds");
-        stderr.writefln("Output %,3d json objects",output_count);
-        stderr.writeln("Avg. time per VCF record: ",sw.peek.total!"usecs"/vcf_row_count," usecs");
+        log_info(__FUNCTION__,"Parsed %,3d records in %d seconds",vcf_row_count, sw.peek.total!"seconds");
+        log_info(__FUNCTION__,"Output %,3d json objects",output_count);
+        log_info(__FUNCTION__,"Avg. time per VCF record: ",sw.peek.total!"usecs"/vcf_row_count," usecs");
     }else
-        stderr.writeln("No records in this file!");
+        log_info(__FUNCTION__, "No records in this file!");
 }
 
 struct FieldInfo 

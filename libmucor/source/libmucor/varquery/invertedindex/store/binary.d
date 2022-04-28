@@ -4,7 +4,7 @@ import dhtslib.file;
 import htslib.hts;
 import htslib.bgzf;
 import htslib.hfile;
-import htslib.hts_log;
+import libmucor.error;
 import libmucor.wideint;
 import libmucor.varquery.invertedindex.jsonvalue;
 import libmucor.varquery.invertedindex.metadata;
@@ -12,7 +12,6 @@ import libmucor.varquery.invertedindex.store.file;
 import libmucor.varquery.invertedindex.store: serialize, deserialize, sizeDeserialized, sizeSerialized;
 import std.traits;
 import std.stdio: File;
-import htslib.hts_log;
 import libmucor.hts_endian;
 import core.sync.mutex: Mutex;
 import core.atomic;
@@ -81,7 +80,7 @@ struct BinaryStore(T) {
         import std.format;
         
         if(isWrite && this.file.bgzf) {
-            hts_log_debug(__FUNCTION__, format("closing %s", this.file.fn.ptr));
+            log_debug(__FUNCTION__, "closing %s", this.file.fn);
             this.flush;
         }
         this.bufLen = 0;

@@ -8,7 +8,7 @@ import libmucor.wideint;
 import libmucor.khashl;
 import std.file: exists;
 import std.typecons: Tuple;
-import htslib.hts_log;
+import libmucor.error;
 import std.sumtype: match;
 import std.format: format;
 import std.algorithm : sort, uniq, map, std_filter = filter, canFind, joiner;
@@ -221,7 +221,7 @@ struct IdsStoreWriter {
     }
 
     void insert(ulong id) {
-        hts_log_debug(__FUNCTION__, format("inserting %d", id));
+        log_debug(__FUNCTION__, "inserting %d", id);
         ids.write(id);
     }
 }
@@ -246,7 +246,7 @@ unittest
 {
     import htslib.hts_log;
     import std.stdio;
-    hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
+    set_log_level(LogLevel.Debug);
     {
         auto jidx = JsonStoreWriter("/tmp/test_jidx");
         jidx.insert(JSONValue("testval"));

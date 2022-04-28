@@ -17,7 +17,7 @@ import libmucor.varquery.invertedindex.binaryindex;
 import libmucor.varquery.invertedindex.store;
 import libmucor.khashl;
 import std.digest.md : MD5Digest, toHexString;
-import htslib.hts_log;
+import libmucor.error;
 import libmucor.varquery.query;
 import std.sumtype;
 
@@ -47,7 +47,7 @@ struct InvertedIndex
 
     void addJsonObject(Asdf root, const(char)[] path = "", uint128 md5 = uint128(0)){
         if(path == ""){
-            if(root["md5"] == Asdf.init) hts_log_error(__FUNCTION__, "record with no md5");
+            if(root["md5"] == Asdf.init) log_err(__FUNCTION__, "record with no md5");
             auto m = root["md5"].deserializeAsdf!string;
             root["md5"].remove;
             md5.fromHexString(m);
@@ -117,17 +117,17 @@ struct InvertedIndex
             if(!(hash in this.bidxReader.seenKeys)) throw new Exception(" key "~key.idup~" is not found");
             ret = [hash];
             if(ret.length == 0){
-                hts_log_warning(__FUNCTION__,"Warning: Key"~ keycopy ~" was not found in index!");
+                log_warn(__FUNCTION__,"Warning: Key %s was not found in index!", keycopy);
             }
         }else{
             key = key.replace("*",".*");
             auto reg = regex("^" ~ key ~"$");
             ret = this.bidxReader.getKeysWithId.std_filter!(x => !(x[0].matchFirst(reg).empty)).map!(x=> x[1]).array;
             if(ret.length == 0){
-                hts_log_warning(__FUNCTION__,"Warning: Key wildcards sequence "~ keycopy ~" matched no keys in index!");
+                log_warn(__FUNCTION__,"Warning: Key wildcards sequence %s matched no keys in index!", keycopy);
             }
         }
-        debug hts_log_debug(__FUNCTION__, format("Key %s matched %d keys",keycopy,ret.length));
+        log_debug(__FUNCTION__, "Key %s matched %d keys",keycopy,ret.length);
         return ret;
     }
 
@@ -159,7 +159,8 @@ struct InvertedIndex
             case "<=":
                 return this.bidxReader.jsonStore.filterOp!("<=", T)(val);
             default:
-                throw new Exception(op ~ " operator is not valid here");
+                log_err(__FUNCTION__,"%s operator is not valid here", op);
+                throw new Exception("An error has occured");
         }
     }
 
@@ -246,11 +247,11 @@ khashlSet!(ulong) evaluateQuery(Query * query, InvertedIndex * idx, string lastK
             }
         },
         (NotValue x) {
-            if(lastKey == "") throw new Exception("Key cannot be null");
+            if(lastKey == "") log_err(__FUNCTION__, "Key cannot be null");
             return idx.queryNOT(queryValue(lastKey, x.value, idx));
         },
         (Value x) {
-            if(lastKey == "") throw new Exception("Key cannot be null");
+            if(lastKey == "") log_err(__FUNCTION__, "Key cannot be null");
             return queryValue(lastKey, x, idx);
         },
         (ComplexKeyValue x) {
@@ -258,7 +259,8 @@ khashlSet!(ulong) evaluateQuery(Query * query, InvertedIndex * idx, string lastK
                 case ValueOp.Equal:
                     return evaluateQuery(x.rhs, idx, x.lhs);
                 default:
-                    throw new Exception(cast(string)x.op ~ " operator not allowed here: " ~ queryToString(*query));
+                    log_err(__FUNCTION__, "%s operator not allowed here: %s",cast(string)x.op, queryToString(*query));
+                    return khashlSet!(ulong)();
             }
         },
         (NotQuery x) => idx.queryNOT(evaluateQuery(x.rhs, idx, lastKey)),
@@ -269,7 +271,8 @@ khashlSet!(ulong) evaluateQuery(Query * query, InvertedIndex * idx, string lastK
                 case LogicalOp.Or:
                     return evaluateQuery(x.rhs, idx, lastKey) | evaluateQuery(x.lhs, idx, lastKey);
                 default:
-                    throw new Exception(cast(string)x.op ~ " operator not allowed here: " ~ queryToString(*query));
+                    log_err(__FUNCTION__, "%s operator not allowed here: %s",cast(string)x.op, queryToString(*query));
+                    return khashlSet!(ulong)();
             }
         },
         (Subquery x) => evaluateQuery(x.subquery, idx, lastKey),

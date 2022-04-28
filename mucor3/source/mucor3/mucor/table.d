@@ -10,6 +10,7 @@ import std.array: array, split;
 import libmucor.jsonlops;
 import std.algorithm: map, count;
 import std.typecons: tuple, Tuple;
+import libmucor.error;
 
 auto validateDataAndCollectColumns(string fn, string[] required, string[] extra) {
     khashlSet!(string) set;
@@ -17,7 +18,7 @@ auto validateDataAndCollectColumns(string fn, string[] required, string[] extra)
     foreach(obj; File(fn).byChunk(4096).parseJsonByLine) {
         foreach(r; required){
             if(obj[r] == Asdf.init) {
-                hts_log_error(__FUNCTION__, format("%s column not found in some rows!", r));
+                log_err(__FUNCTION__,"%s column not found in some rows!", r);
                 exit(1);
             }
         }
@@ -28,7 +29,7 @@ auto validateDataAndCollectColumns(string fn, string[] required, string[] extra)
     }
     foreach(e; extra) {
         if(!(e in set)) {
-            hts_log_warning(__FUNCTION__, "Extra column %s not present in json data!");
+            log_warn(__FUNCTION__,"Extra column %s not present in json data!", e);
         }
     }
     Tuple!(string[], "cols", string[], "samples") ret;

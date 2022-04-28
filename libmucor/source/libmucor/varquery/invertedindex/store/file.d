@@ -2,7 +2,7 @@ module libmucor.varquery.invertedindex.store.file;
 import htslib.hfile;
 import htslib.hts;
 import htslib.bgzf;
-import htslib.hts_log;
+import libmucor.error;
 import dhtslib.memory;
 import core.stdc.stdio: SEEK_SET, SEEK_CUR, SEEK_END, fprintf, stderr;
 import core.stdc.stdlib: malloc, free;
@@ -32,7 +32,7 @@ struct StoreFile {
 
         auto hf = hopen(this.fn.ptr, this.mode.ptr);
         if(!hf){
-            throw new Exception(format("Either file not found or error opening: %s, %s", fromStringz(this.fn.ptr), fromStringz(strerror(errno))));
+            log_err(__FUNCTION__, "Either file not found or error opening: %s, %s",this.fn, fromStringz(strerror(errno)));
         }
         this.bgzf = bgzf_hopen(hf, this.mode.ptr);
         if(global_pool && this.bgzf.is_write){

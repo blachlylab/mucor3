@@ -6,12 +6,13 @@ import std.getopt;
 
 import asdf;
 import libmucor.jsonlops.basic;
+import libmucor.error;
 
 void norm_main(string[] args)
 {
     auto res = getopt(args);
     if(res.helpWanted){
-        stderr.writeln("Flattens JSON input via stdin, overlapping nested values are collected in arrays");
+        log_info(__FUNCTION__,"Flattens JSON input via stdin, overlapping nested values are collected in arrays");
         return;
     }
     foreach(obj;stdin.byChunk(4096).parseJsonByLine.map!normalize)

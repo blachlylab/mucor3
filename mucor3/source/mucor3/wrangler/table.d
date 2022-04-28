@@ -9,6 +9,7 @@ import std.array;
 import std.traits:ReturnType;
 import std.algorithm: sort, each;
 import std.range.interfaces:ForwardRange;
+import libmucor.error;
 
 void table_main(string[] args){
     string delimiter="\t";
@@ -52,7 +53,7 @@ string[] get_keys(Asdf[] json_stream, string[] indexes){
     string[] ret;
     foreach(idx; indexes){
         if(!(idx in fields)){
-            throw new Exception("Index "~ idx ~" not in values");
+            log_err(__FUNCTION__, "Index %s not in values", idx);
         }
         fields.remove(idx);
         ret ~= idx;

@@ -11,6 +11,7 @@ import std.meta;
 import asdf: deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
 import libmucor.khashl;
+import libmucor.error;
 import std.sumtype;
 import libmucor.hts_endian;
 import std.typecons: Tuple, tuple;
@@ -39,7 +40,7 @@ struct JSONValue
         final switch(json.kind){
             case Asdf.Kind.array:
             case Asdf.Kind.object:
-                throw new Exception("Cannot store objects or arrays in JSONValue types");
+                log_err(__FUNCTION__, "Cannot store objects or arrays in JSONValue types");
             case Asdf.Kind.number:
                 auto numStr = json.to!string;
                 if(isNumericStringInteger(numStr)){
@@ -52,7 +53,7 @@ struct JSONValue
                 val = deserialize!string(json);
                 break;
             case Asdf.Kind.null_:
-                throw new Exception("No nulls should reach this point");
+                log_err(__FUNCTION__, "No nulls should reach this point");
             case Asdf.Kind.false_:
                 val = false;
                 break;

@@ -5,7 +5,7 @@ import libmucor.khashl;
 import std.container: BinaryHeap;
 import core.stdc.stdlib: malloc, free;
 import std.format: format;
-import htslib.hts_log;
+import libmucor.error;
 import std.algorithm: filter, map, joiner;
 import std.array: array;
 
@@ -81,7 +81,7 @@ struct IdFileCacheWriter {
         auto p1 = key in openFiles;
         /// id file is currently open
         if(p1){
-            debug hts_log_trace(__FUNCTION__, format("id %x found in cache", key));
+            log_trace(__FUNCTION__, "id %x found in cache", key);
             (*p1).write(id);
             return;
         }
@@ -89,7 +89,7 @@ struct IdFileCacheWriter {
         /// id file has been opened before
         auto p2 = key in openedFiles;
         if(p2) {
-            debug hts_log_trace(__FUNCTION__, format("id %x has been opened prior", key));
+            log_trace(__FUNCTION__, "id %x has been opened prior", key);
             AccessedIdFile f;
             f.accessCount = *p2;
             f.openAppend(this.prefix, key);
@@ -103,10 +103,10 @@ struct IdFileCacheWriter {
         auto p3 = key in smalls;
         if(p3) {
             if(p3.length < this.smallsMax) {
-                debug hts_log_trace(__FUNCTION__, format("id %x already in smalls", key));
+                log_trace(__FUNCTION__, "id %x already in smalls", key);
                 (*p3) ~= id;
             } else {
-                debug hts_log_trace(__FUNCTION__, format("removing id %x from smalls", key));
+                log_trace(__FUNCTION__, "removing id %x from smalls", key);
                 AccessedIdFile f;
                 f.openWrite(this.prefix, key);
                 f.write(*p3);
@@ -116,7 +116,7 @@ struct IdFileCacheWriter {
                 this.openedFiles[key] = this.smallsMax;
             }
         } else {
-            debug hts_log_trace(__FUNCTION__, format("inserting id %x in smalls", key));
+            log_trace(__FUNCTION__, format("inserting id %x in smalls", key));
             ulong[] arr;
             arr.reserve(this.smallsMax);
             arr ~= id;
@@ -127,7 +127,7 @@ struct IdFileCacheWriter {
     bool insertToCache(AccessedIdFile f, uint128 key) {
         /// if cache is not full, insert
         if(this.cache.length < this.cacheSize) {
-            debug hts_log_trace(__FUNCTION__, format("inserting id %x in cache", key));
+            log_trace(__FUNCTION__, "inserting id %x in cache", key);
             ///
             AccessedIdFile * fp = cast(AccessedIdFile *)malloc(AccessedIdFile.sizeof);
             *fp = f;
@@ -141,7 +141,7 @@ struct IdFileCacheWriter {
             /// replace lowest open file
             auto old_file = cache.front;
             this.cache.replaceFront(fp);
-            debug hts_log_trace(__FUNCTION__, format("replaced id %x  with id %x in cache", old_file.id,  key));
+            log_trace(__FUNCTION__, "replaced id %x  with id %x in cache", old_file.id,  key);
             this.openFiles[key] = fp;
             this.openedFiles[old_file.id] = old_file.accessCount;
             old_file.close;

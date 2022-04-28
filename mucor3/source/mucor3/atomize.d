@@ -4,7 +4,7 @@ import std.getopt;
 import std.parallelism;
 
 import libmucor.vcfops.vcf : parseVCF;
-import htslib.hts_log;
+import libmucor.error;
 
 bool multiSample;
 bool multiAllelic;
@@ -41,7 +41,7 @@ void atomize(string[] args)
 		return;
 	}
 	if(splitAnnotations){
-		hts_log_warning(__FUNCTION__, "using -a also splits by allele");	
+		log_warn(__FUNCTION__, "using -a also splits by allele");	
 	}
 
 	ubyte con = 
