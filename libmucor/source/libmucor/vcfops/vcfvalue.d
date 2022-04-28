@@ -545,14 +545,14 @@ void applyOperations(Json obj, bool anno, bool allele, bool sam, bool norm,
         {
             range.map!(x => normalize(x))
                 .each!((x) {
-                    output.writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.spookyhashObject);
                     *output_count += 1;
                 });
         }
         else
         {
             range.each!((x) {
-                output.writeln(x.serializeToAsdf.md5sumObject);
+                output.writeln(x.serializeToAsdf.spookyhashObject);
                 *output_count += 1;
             });
         }
@@ -566,14 +566,14 @@ void applyOperations(Json obj, bool anno, bool allele, bool sam, bool norm,
         {
             range.map!(x => normalize(x))
                 .each!((x) {
-                    output.writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.spookyhashObject);
                     *output_count += 1;
                 });
         }
         else
         {
             range.each!((x) {
-                output.writeln(x.serializeToAsdf.md5sumObject);
+                output.writeln(x.serializeToAsdf.spookyhashObject);
                 *output_count += 1;
             });
         }
@@ -585,14 +585,14 @@ void applyOperations(Json obj, bool anno, bool allele, bool sam, bool norm,
         {
             range.map!(x => normalize(x))
                 .each!((x) {
-                    output.writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.spookyhashObject);
                     *output_count += 1;
                 });
         }
         else
         {
             range.each!((x) {
-                output.writeln(x.serializeToAsdf.md5sumObject);
+                output.writeln(x.serializeToAsdf.spookyhashObject);
                 *output_count += 1;
             });
         }
@@ -605,14 +605,14 @@ void applyOperations(Json obj, bool anno, bool allele, bool sam, bool norm,
         {
             range.map!(x => normalize(x))
                 .each!((x) {
-                    output.writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.spookyhashObject);
                     *output_count += 1;
                 });
         }
         else
         {
             range.each!((x) {
-                output.writeln(x.serializeToAsdf.md5sumObject);
+                output.writeln(x.serializeToAsdf.spookyhashObject);
                 *output_count += 1;
             });
         }
@@ -626,14 +626,14 @@ void applyOperations(Json obj, bool anno, bool allele, bool sam, bool norm,
         {
             range.map!(x => normalize(x))
                 .each!((x) {
-                    output.writeln(x.serializeToAsdf.md5sumObject);
+                    output.writeln(x.serializeToAsdf.spookyhashObject);
                     *output_count += 1;
                 });
         }
         else
         {
             range.each!((x) {
-                output.writeln(x.serializeToAsdf.md5sumObject);
+                output.writeln(x.serializeToAsdf.spookyhashObject);
                 *output_count += 1;
             });
         }
@@ -643,12 +643,12 @@ void applyOperations(Json obj, bool anno, bool allele, bool sam, bool norm,
         if (norm)
         {
             auto val = normalize(obj);
-            output.writeln(val.serializeToAsdf.md5sumObject);
+            output.writeln(val.serializeToAsdf.spookyhashObject);
             *output_count += 1;
         }
         else
         {
-            output.writeln(obj.serializeToAsdf.md5sumObject);
+            output.writeln(obj.serializeToAsdf.spookyhashObject);
             *output_count += 1;
         }
     }

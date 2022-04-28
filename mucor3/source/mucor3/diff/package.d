@@ -46,5 +46,5 @@ auto parseVCF(VCFReaderImpl!(CoordSystem.zbc, false) vcf, int threads)
             return expandMultiAllelicSites!true(obj, numAlts);
         })
         .joiner
-        .map!(x => x.serializeToAsdf.md5sumObject);
+        .map!(x => x.serializeToAsdf.spookyhashObject);
 }

@@ -369,16 +369,16 @@ khashlSet!(ulong) queryOpValue(const(char)[] key, Value value, InvertedIndex* id
 unittest
 {
     import asdf;
-    import libmucor.jsonlops.basic : md5sumObject;
+    import libmucor.jsonlops.basic : spookyhashObject;
     import std.array : array;
     import htslib.hts_log;
 
     hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
     {
         auto idx = new InvertedIndex("/tmp/test_idx", true);
-        idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.md5sumObject);
-        idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.md5sumObject);
-        idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.md5sumObject);
+        idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.spookyhashObject);
+        idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.spookyhashObject);
+        idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.spookyhashObject);
         idx.close;
     }
     {
@@ -394,7 +394,7 @@ unittest
 unittest
 {
     import asdf;
-    import libmucor.jsonlops.basic : md5sumObject;
+    import libmucor.jsonlops.basic : spookyhashObject;
     import std.array : array;
     import htslib.hts_log;
 
@@ -402,26 +402,26 @@ unittest
     {
         auto idx = new InvertedIndex("/tmp/test_idx", true);
         idx.addJsonObject(
-                `{"test":"hello", "test2":{"foo": "bar"}, "test3":1}`.parseJson.md5sumObject);
+                `{"test":"hello", "test2":{"foo": "bar"}, "test3":1}`.parseJson.spookyhashObject);
         idx.addJsonObject(
-                `{"test":"world", "test2":"baz",          "test3":2}`.parseJson.md5sumObject);
+                `{"test":"world", "test2":"baz",          "test3":2}`.parseJson.spookyhashObject);
         idx.addJsonObject(
                 `{"test":"worl",                          "test3":3, "test4":{"foo": "bar"}}`
-                .parseJson.md5sumObject);
+                .parseJson.spookyhashObject);
         idx.addJsonObject(
                 `{"test":"hi",                            "test3":4, "test4":"baz"}`
-                .parseJson.md5sumObject);
+                .parseJson.spookyhashObject);
         idx.addJsonObject(
                 `{"test":"bye",                           "test3":5, "test4":"bar"}`
-                .parseJson.md5sumObject);
+                .parseJson.spookyhashObject);
         idx.addJsonObject(
                 `{"test":"hello",                         "test3":6, "test4":{"foo": "baz"}}`
-                .parseJson.md5sumObject);
-        idx.addJsonObject(`{"test":"hello",                         "test3":7, "test4":{"foo": ["baz", "bar"]}}`
-                .parseJson.md5sumObject);
+                .parseJson.spookyhashObject);
+        idx.addJsonObject(`{"test":"hello",               "test3":7, "test4":{"foo": ["baz", "bar"]}}`
+                .parseJson.spookyhashObject);
         idx.addJsonObject(
                 `{"test":"hello world",                   "test3":8, "test4":{"foo": "?"}}`
-                .parseJson.md5sumObject);
+                .parseJson.spookyhashObject);
         idx.close;
     }
     {
