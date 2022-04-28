@@ -17,6 +17,7 @@ import libmucor.vcfops;
 import libmucor.khashl : khashl;
 import libmucor.jsonlops;
 import libmucor.error;
+import libmucor: setup_global_pool;
 import std.parallelism : parallel;
 
 auto norm(R)(R range, bool active)
@@ -32,8 +33,9 @@ auto norm(R)(R range, bool active)
 /// Parse VCF to JSONL
 void parseVCF(string fn, int threads, ubyte con, ref File output)
 {
+    setup_global_pool(threads);
     //open vcf
-    auto vcf = VCFReader(fn, threads, UnpackLevel.All);
+    auto vcf = VCFReader(fn, UnpackLevel.All);
 
     //get info needed from header 
     auto cfg = getHeaderConfig(vcf.vcfhdr);
@@ -55,8 +57,8 @@ void parseVCF(string fn, int threads, ubyte con, ref File output)
         log_info(__FUNCTION__, "Parsed %,3d records in %d seconds",
                 vcf_row_count, sw.peek.total!"seconds");
         log_info(__FUNCTION__, "Output %,3d json objects", output_count);
-        log_info(__FUNCTION__, "Avg. time per VCF record: ",
-                sw.peek.total!"usecs" / vcf_row_count, " usecs");
+        log_info(__FUNCTION__, "Avg. time per VCF record: %d usecs",
+                sw.peek.total!"usecs" / vcf_row_count);
     }
     else
         log_info(__FUNCTION__, "No records in this file!");

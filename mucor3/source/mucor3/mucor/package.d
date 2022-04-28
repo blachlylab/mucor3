@@ -111,15 +111,14 @@ void mucor_main(string[] args)
 
     if (query != "")
     {
-        auto indexFile = buildPath(prefix, "all.index");
 
         log_info(__FUNCTION__, "Indexing vcf data ...");
-        indexJsonFiles(args[0], vcfJsonFiles, index_dir, indexFile);
+        indexJsonFiles(args[0], vcfJsonFiles, index_dir);
 
         log_info(__FUNCTION__, "Filtering vcf data...");
         combined_json_file = buildPath(prefix, "filtered.json");
 
-        queryJsonFiles(vcfJsonFiles, indexFile, query, combined_json_file);
+        queryJsonFiles(vcfJsonFiles, index_dir, query, combined_json_file);
     }
     else
     {

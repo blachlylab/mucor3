@@ -15,16 +15,16 @@ import libmucor.wideint;
 import libmucor.khashl;
 import libmucor.error;
 
-void indexJsonFiles(string binary, string[] files, string indexFolder, string outfile)
+void indexJsonFiles(string binary, string[] files, string indexFolder)
 {
-    auto pid = spawnProcess([binary, "index"] ~ files ~ [outfile], stdin, stdout, stderr);
+    auto pid = spawnProcess([binary, "index"] ~ files ~ [indexFolder], stdin, stdout, stderr);
     if (wait(pid) != 0)
     {
         log_err(__FUNCTION__, "mucor index failed");
     }
 }
 
-void queryJsonFiles(string[] files, string idxFile, string queryStr, string outfile)
+void queryJsonFiles(string[] files, string indexFolder, string queryStr, string outfile)
 {
     import std.datetime.stopwatch : StopWatch;
 
@@ -33,7 +33,7 @@ void queryJsonFiles(string[] files, string idxFile, string queryStr, string outf
     StopWatch sw;
     sw.start;
 
-    InvertedIndex idx = InvertedIndex(idxFile, false);
+    InvertedIndex idx = InvertedIndex(indexFolder, false);
     log_info(__FUNCTION__, "Time to load index: ", sw.peek.total!"seconds", " seconds");
     log_info(__FUNCTION__, "%d records in index", idx.recordMd5s.length);
 

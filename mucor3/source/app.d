@@ -35,8 +35,6 @@ uniq			Uniqifies JSON arrays in JSON data.
 
 void main(string[] args)
 {
-    hts_set_log_level(htsLogLevel.HTS_LOG_INFO);
-    setup_global_pool();
     if (args.length == 1)
     {
         stderr.writeln(help);

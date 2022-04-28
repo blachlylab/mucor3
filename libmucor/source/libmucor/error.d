@@ -59,7 +59,7 @@ LogLevel get_log_level()
  * One of the * values. The default is Warn.
  * \note Avoid direct use of this variable. Use set_log_level and hts_get_log_level instead.
  */
-shared int verbose = 3;
+shared int verbose = 4;
 
 /*! Logs an event.
 * \param severity      Severity of the event:
