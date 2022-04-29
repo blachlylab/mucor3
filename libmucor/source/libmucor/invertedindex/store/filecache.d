@@ -78,7 +78,7 @@ struct IdFileCacheWriter
     ulong cacheSize;
     string prefix;
 
-    this(string prefix, ulong cacheSize = 4096, ulong smallsMax = 128)
+    this(string prefix, ulong cacheSize = 8192, ulong smallsMax = 128)
     {
         this.smallsMax = smallsMax;
         this.cacheSize = cacheSize;
@@ -166,6 +166,7 @@ struct IdFileCacheWriter
             this.cache.replaceFront(fp);
             log_trace(__FUNCTION__, "replaced id %x  with id %x in cache", old_file.id, key);
             this.openFiles[key] = fp;
+            this.openFiles.remove(old_file.id);
             this.openedFiles[old_file.id] = old_file.accessCount;
             old_file.close;
             free(old_file);
