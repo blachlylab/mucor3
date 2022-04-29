@@ -34,7 +34,7 @@ void queryJsonFiles(string[] files, string indexFolder, string queryStr, string 
     sw.start;
 
     InvertedIndex idx = InvertedIndex(indexFolder, false);
-    log_info(__FUNCTION__, "Time to load index: ", sw.peek.total!"seconds", " seconds");
+    log_info(__FUNCTION__, "Time to load index: %d seconds", sw.peek.total!"seconds");
     log_info(__FUNCTION__, "%d records in index", idx.recordMd5s.length);
 
     sw.reset;
