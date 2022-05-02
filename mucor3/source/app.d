@@ -2,6 +2,7 @@ import std.stdio;
 import mucor3;
 import htslib.hts_log;
 import libmucor;
+import std.getopt;
 
 string help = "
 depthgauge		Takes in an AF.tsv table, a directory path to a
@@ -49,10 +50,10 @@ void main(string[] args)
         atomize(args[1 .. $]);
         return;
     case "query":
-        query_main(args[2 .. $]);
+        query_main(args[1 .. $]);
         return;
     case "index":
-        index_main(args[2 .. $]);
+        index_main(args[1 .. $]);
         return;
     case "merge":
         merge_main(args[2 .. $]);

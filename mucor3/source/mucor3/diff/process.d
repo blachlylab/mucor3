@@ -34,12 +34,12 @@ InvertedIndex*[2] processVcfRaw(R)(R aRange, R bRange, string prefix)
         .tee!(x => aVar.insert(subset(x, varKeys)))
         .tee!(x => aSamVar.insert(subset(x, samVarKeys)))
         .tee!(x => aAFVar.insert(getAFValue(x, 0.01)))
-        .index(aname);
+        .index(aname, 8192, 128);
     bRange.tee!(x => stats.bCount++)
         .tee!(x => bVar.insert(subset(x, varKeys)))
         .tee!(x => bSamVar.insert(subset(x, samVarKeys)))
         .tee!(x => bAFVar.insert(getAFValue(x, 0.01)))
-        .index(bname);
+        .index(bname, 8192, 128);
 
     InvertedIndex* aIdx = new InvertedIndex(aname, false);
     InvertedIndex* bIdx = new InvertedIndex(bname, false);

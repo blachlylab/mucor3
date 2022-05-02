@@ -28,7 +28,7 @@ struct InvertedIndex
 {
     BinaryIndexReader* bidxReader;
     BinaryIndexWriter* bidxWriter;
-    this(string prefix, bool write)
+    this(string prefix, bool write, ulong cacheSize = 8192, ulong smallsMax = 128)
     {
         // read const sequence
         if (!write)
@@ -37,7 +37,7 @@ struct InvertedIndex
         }
         else
         {
-            this.bidxWriter = new BinaryIndexWriter(prefix);
+            this.bidxWriter = new BinaryIndexWriter(prefix, cacheSize, smallsMax);
         }
     }
 
@@ -445,6 +445,8 @@ unittest
         auto idx = new InvertedIndex("/tmp/test_idx", false);
 
         assert(idx.bidxReader.sums.length == 8);
+        assert(idx.bidxReader.idCache.smallsIds.getAll.array.length == 25);
+        assert(idx.bidxReader.idCache.smallsMeta.getAll.array.length == 21);
 
         assert(evaluateQuery(q1, idx).byKey.array == [0, 6, 5]);
         assert(evaluateQuery(q2, idx).byKey.array == [7]);

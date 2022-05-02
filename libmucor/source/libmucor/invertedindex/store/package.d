@@ -77,19 +77,14 @@ string getShortHash(uint128 v)
 
 pragma(inline, true) auto sizeSerialized(T)(T item)
         if (isIntegral!T || isFloatingPoint!T || is(T == uint128)
-            || is(T == JsonKeyMetaData) || is(T == KeyMetaData))
+            || is(T == JsonKeyMetaData) || is(T == KeyMetaData) || is(T == SmallsIdMetaData))
 {
     return T.sizeof;
 }
 
 pragma(inline, true) auto sizeSerialized(T)(T item) if (isSomeString!T)
 {
-    return (cast(ubyte[]) item).length + 8;
-}
-
-pragma(inline, true) auto sizeSerialized(T)(T item) if (is(T == SmallsIds))
-{
-    return 16 + 8 + (item.ids.length * 8);
+    return (cast(ubyte[]) item).length;
 }
 
 pragma(inline, true) void serialize(T)(T item, ref ubyte* p)
@@ -135,9 +130,15 @@ pragma(inline, true) void serialize(T : KeyMetaData)(T item, ref ubyte* p)
     item.keyLength.serialize(p);
 }
 
+pragma(inline, true) void serialize(T : SmallsIdMetaData)(T item, ref ubyte* p)
+{
+    item.key.serialize(p);
+    item.dataOffset.serialize(p);
+    item.dataLength.serialize(p);
+}
+
 pragma(inline, true) void serialize(T)(T item, ref ubyte* p) if (isSomeString!T)
 {
-    item.length.serialize(p);
     auto buf = cast(ubyte[]) item;
     p[0 .. buf.length] = buf[];
     p += buf.length;
@@ -199,9 +200,18 @@ pragma(inline, true) T deserialize(T)(ref ubyte* p) if (is(T == KeyMetaData))
     return ret;
 }
 
+pragma(inline, true) T deserialize(T)(ref ubyte* p) if (is(T == SmallsIdMetaData))
+{
+    T ret;
+    ret.key = deserialize!uint128(p);
+    ret.dataOffset = deserialize!ulong(p);
+    ret.dataLength = deserialize!ulong(p);
+    return ret;
+}
+
 pragma(inline, true) auto sizeDeserialized(T)(ubyte* p)
         if (isIntegral!T || isFloatingPoint!T || is(T == uint128)
-            || is(T == JsonKeyMetaData) || is(T == KeyMetaData))
+            || is(T == JsonKeyMetaData) || is(T == KeyMetaData) || is(T == SmallsIdMetaData))
 {
     return T.sizeof;
 }

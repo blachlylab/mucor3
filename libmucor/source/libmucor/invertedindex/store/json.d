@@ -34,14 +34,16 @@ struct JsonStoreWriter
     DoubleStore* doubles;
     /// store strings json values
     StringStore* strings;
+    ulong fileBufferSize;
 
     this(string prefix)
     {
+        this.fileBufferSize = fileBufferSize;
         this.prefix = prefix;
-        this.metadata = new JsonMetaStore(prefix ~ ".json.meta", "wbu");
-        this.longs = new LongStore(prefix ~ ".json.longs", "wbu");
-        this.doubles = new DoubleStore(prefix ~ ".json.doubles", "wbu");
-        this.strings = new StringStore(prefix ~ ".json.strings", "wbu");
+        this.metadata = new JsonMetaStore(prefix ~ ".json.meta", "wb");
+        this.longs = new LongStore(prefix ~ ".json.longs", "wb");
+        this.doubles = new DoubleStore(prefix ~ ".json.doubles", "wb");
+        this.strings = new StringStore(prefix ~ ".json.strings", "wb");
     }
 
     void close()
@@ -96,9 +98,11 @@ struct JsonStoreReader
     DoubleStore* doubles;
     /// store strings json values
     StringStore* strings;
+    ulong fileBufferSize;
 
     this(string prefix)
     {
+        this.fileBufferSize =fileBufferSize;
         this.longs = new LongStore(prefix ~ ".json.longs", "rb");
         this.doubles = new DoubleStore(prefix ~ ".json.doubles", "rb");
         this.strings = new StringStore(prefix ~ ".json.strings", "rb");
@@ -117,13 +121,54 @@ struct JsonStoreReader
         this.doubles.close;
         this.strings.close;
     }
+    
+    /// returns range of JsonKeyMetaData
+    auto getMetaForType(T)() {
+        static if (isBoolean!T)
+        {
+            return this.metadata.std_filter!( x => x.type == 0);
+        }
+        else static if (isIntegral!T)
+        {
+            return this.metadata.std_filter!( x => x.type == 1);
+        }
+        else static if (isFloatingPoint!T)
+        {
+            return this.metadata.std_filter!( x => x.type == 2);
+        }
+        else static if (isSomeString!T)
+        {
+            return this.metadata.std_filter!( x => x.type == 3);
+        }        
+    }
 
+    /// returns range of Tuple(JsonKeyMetaData, T)
+    auto getMetaWithValuesForType(T)() {
+        static if (isBoolean!T)
+        {
+            return this.getMetaForType!T.map!( x => tuple(meta, meta.padding == 1 ? false : true));
+        }
+        else static if (isIntegral!T)
+        {   
+            return zip(this.getMetaForType!T, this.longs.getAll);
+        }
+        else static if (isFloatingPoint!T)
+        {
+            return zip(this.getMetaForType!T, this.doubles.getAll);
+        }
+        else static if (isSomeString!T)
+        {   
+            return zip(this.getMetaForType!T, this.strings.getAll(this.getMetaForType!T.map!( x => meta.keyLength)));
+        }        
+    }
+
+    /// returns range of hashes
     auto filter(T)(T[] items)
     {
         return items.map!(x => getValueHash(JSONValue(x)))
             .std_filter!(x => x in valuesSeen);
     }
-
+    
     auto filterRange(T)(T[] range)
     {
         assert(range.length == 2);
@@ -149,7 +194,7 @@ struct JsonStoreReader
         }
         else static if (isSomeString!T)
         {
-            auto values = this.strings.getAll();
+            auto values = this.strings.getAll(this.getMetaForType!T.map!( x => meta.keyLength));
         }
 
         return zip(hashes, values).std_filter!(x => x[1] >= range[0])
@@ -180,7 +225,7 @@ struct JsonStoreReader
         }
         else static if (isSomeString!T)
         {
-            auto values = this.strings.getAll();
+            auto values = this.strings.getAll(this.getMetaForType!T.map!( x => meta.keyLength));
         }
         else
         {
@@ -196,7 +241,7 @@ struct JsonStoreReader
     {
         auto l = this.longs.getAll();
         auto d = this.doubles.getAll();
-        auto s = this.strings.getAll();
+        auto s = this.strings.getAll(this.getMetaForType!string.map!( x => x.keyLength));
         auto b = this.metadata
             .std_filter!(x => x.padding > 0)
             .map!(x => x.padding == 1 ? false : true);
@@ -221,49 +266,8 @@ struct JsonStoreReader
         }
         else static if (isSomeString!T)
         {
-            return this.strings.getAll();
+            return this.strings.getAll(this.getMetaForType!T.map!( x => x.keyLength));
         }
-    }
-}
-
-struct IdsStoreWriter
-{
-    UlongStore* ids;
-
-    this(string prefix)
-    {
-        this.ids = new UlongStore(prefix ~ ".ids", "wbu");
-    }
-
-    void close()
-    {
-        this.ids.close;
-    }
-
-    void insert(ulong id)
-    {
-        log_debug(__FUNCTION__, "inserting %d", id);
-        ids.write(id);
-    }
-}
-
-struct IdsStoreReader
-{
-    UlongStore* ids;
-
-    this(string prefix)
-    {
-        this.ids = new UlongStore(prefix ~ ".ids", "rb");
-    }
-
-    void close()
-    {
-        this.ids.close;
-    }
-
-    ulong[] getIds()
-    {
-        return this.ids.getAll.array;
     }
 }
 

@@ -69,7 +69,7 @@ struct BinaryIndexWriter
     /// store md5 sums
     StringStore* keys;
 
-    this(string prefix)
+    this(string prefix, ulong cacheSize = 8192, ulong smallsMax = 128)
     {
         this.prefix = prefix;
         this.hashes = new MD5Store(prefix ~ ".keys.md5", "wb");
@@ -77,7 +77,7 @@ struct BinaryIndexWriter
         this.sums = new MD5Store(prefix ~ ".record.sums", "wb");
         this.keys = new StringStore(prefix ~ ".keys", "wb");
         this.jsonStore = new JsonStoreWriter(prefix);
-        this.idCache = new IdFileCacheWriter(prefix);
+        this.idCache = new IdFileCacheWriter(prefix, cacheSize, smallsMax);
     }
 
     void close()
@@ -98,7 +98,7 @@ struct BinaryIndexWriter
         // hts_log_info("IdCacheWriter", format("Files opened: %d", this.idCache.openedFiles.count));
         // stderr.writeln();
         // }
-        log_debug(__FUNCTION__, "inserting json value %s for key %s", item, key);
+        // log_debug(__FUNCTION__, "inserting json value %s for key %s", item, key);
         auto keyhash = getKeyHash(key);
         auto p = keyhash in seenKeys;
         if (!p)
@@ -172,7 +172,7 @@ struct BinaryIndexReader
 
     auto getKeysWithId()
     {
-        auto strkeys = this.metadata.map!(meta => this.keys.readFromPosition(meta.keyOffset));
+        auto strkeys = this.metadata.map!(meta => this.keys.read(meta.keyLength, meta.keyOffset));
         auto hashes = this.metadata.map!(meta => meta.keyHash);
         return zip(strkeys, hashes);
     }

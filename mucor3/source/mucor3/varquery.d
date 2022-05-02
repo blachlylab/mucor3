@@ -15,7 +15,10 @@ import asdf : deserializeAsdf = deserialize, parseJsonByLine, Asdf;
 import libmucor.wideint : uint128;
 import libmucor.khashl;
 import libmucor.error;
+import libmucor: setup_global_pool;
 import std.algorithm.searching : balancedParens;
+import std.getopt;
+import core.stdc.stdlib: exit;
 
 auto query(R)(R range, InvertedIndex* idx, string queryStr)
         if (is(ElementType!R == Asdf))
@@ -50,9 +53,9 @@ auto query(R)(R range, InvertedIndex* idx, string queryStr)
     });
 }
 
-void index(R)(R range, string prefix) if (is(ElementType!R == Asdf))
+void index(R)(R range, string prefix, ulong fsize, ulong ssize) if (is(ElementType!R == Asdf))
 {
-    InvertedIndex* idx = new InvertedIndex(prefix, true);
+    InvertedIndex* idx = new InvertedIndex(prefix, true, fsize, ssize);
 
     StopWatch sw;
     sw.start;
@@ -71,12 +74,41 @@ void index(R)(R range, string prefix) if (is(ElementType!R == Asdf))
             float(sw.peek.total!"usecs") / float(count));
 }
 
+
+int threads = -1;
+ulong fileCacheSize = 8192;
+ulong smallsSize = 128;
+string prefix;
+string query_str;
+
 void query_main(string[] args)
 {
+
+    auto res = getopt(args, config.bundling,
+            "threads|t", "threads for running mucor", &threads,
+            config.required,
+            "prefix|p", "index output prefix", &prefix,
+            config.required,
+            "query|q", "filter vcf data using varquery syntax", &query_str);
+
+    setup_global_pool(threads);
+
+    if (res.helpWanted)
+    {
+        defaultGetoptPrinter("",res.options);
+        exit(0);
+    }
+    if (args.length == 1)
+    {
+        defaultGetoptPrinter("",res.options);
+        log_err(__FUNCTION__, "Please specify input json files");
+        exit(1);
+    }
+    // set_log_level(LogLevel.Debug);
     StopWatch sw;
     sw.start;
 
-    InvertedIndex* idx = new InvertedIndex(args[$ - 2], false);
+    InvertedIndex* idx = new InvertedIndex(prefix, false);
     // auto idxs = idx.fields[args[1]].filter(args[2..$]);
     // float[] range = [args[2].to!float,args[3].to!float];
     log_info(__FUNCTION__, "Time to load index: %s seconds", sw.peek.total!"seconds");
@@ -84,8 +116,8 @@ void query_main(string[] args)
     sw.stop;
     sw.reset;
     sw.start;
-    foreach (obj; args[0 .. $ - 1].map!(x => File(x).byChunk(4096)
-            .parseJsonByLine).joiner.query(idx, args[$ - 1]))
+    foreach (obj; args[1 .. $].map!(x => File(x).byChunk(4096)
+            .parseJsonByLine).joiner.query(idx, query_str))
     {
         writeln(obj);
     }
@@ -97,8 +129,30 @@ void query_main(string[] args)
 void index_main(string[] args)
 {
 
+    auto res = getopt(args, config.bundling,
+            "threads|t", "threads for running mucor", &threads,
+            config.required,
+            "prefix|p", "index output prefix", &prefix, 
+            "file-cache-size|f", "number of highly used files kept open", &fileCacheSize,
+            "ids-cache-size|i", "number of ids that can be stored per key before a file is opened", &smallsSize);
+
+    setup_global_pool(threads);
+
+    if (res.helpWanted)
+    {
+        defaultGetoptPrinter("",res.options);
+        exit(0);
+    }
+    if (args.length == 1)
+    {
+        defaultGetoptPrinter("",res.options);
+        log_err(__FUNCTION__, "Please specify json files");
+        exit(1);
+    }
     StopWatch sw;
 
-    args[0 .. $ - 1].map!(x => File(x).byChunk(4096).parseJsonByLine).joiner.index(args[$ - 1]);
+    // set_log_level(LogLevel.Debug);
+
+    args[1 .. $].map!(x => File(x).byChunk(4096).parseJsonByLine).joiner.index(prefix, fileCacheSize, smallsSize);
 
 }

@@ -63,41 +63,46 @@ struct StoreFile
         return bgzf_tell(this.bgzf);
     }
 
-    void seek(ulong pos)
+    bool checkIfEmpty() {
+        auto ret = bgzf_peek(this.bgzf);
+        if(ret == -1) return true;
+        else if(ret < -1) {
+            log_err(__FUNCTION__, "Error trying to peek data for file: %s, %s",
+                this.fn, fromStringz(strerror(errno)));
+        }
+        return false;
+    }
+
+    void seek(long pos)
     {
         auto err = bgzf_seek(this.bgzf, pos, SEEK_SET);
         if (err < 0)
-            fprintf(stderr, "Error seeking file %s\n", fn.ptr);
+            log_err(__FUNCTION__, "Error seeking file %s: %s", this.fn, fromStringz(strerror(errno)));
+        else
+            this.eof = false;
     }
 
-    void seekFromCur(ulong pos)
+    void seekToStart()
     {
-        auto err = bgzf_seek(this.bgzf, pos, SEEK_CUR);
-        if (err < 0)
-            fprintf(stderr, "Error seeking file %s\n", fn.ptr);
+        this.seek(0);
     }
 
-    void seekToEnd()
-    {
-        auto err = bgzf_seek(this.bgzf, 0, SEEK_END);
-        if (err < 0)
-            fprintf(stderr, "Error seeking file %s\n", fn.ptr);
-    }
-
-    void readRaw(ubyte[] buf)
+    ulong readRaw(ubyte[] buf)
     {
         long bytes = bgzf_read(this.bgzf, buf.ptr, buf.length);
         if (bytes < 0)
-            fprintf(stderr, "Error reading data for file %s\n", fn.ptr);
+            log_err(__FUNCTION__, "Error reading data for file %s: %s", this.fn, fromStringz(strerror(errno)));
         if (bytes == 0)
             this.eof = true;
+        
+        return cast(ulong) bytes;
     }
 
     void writeRaw(ubyte[] buf)
     {
         long bytes = bgzf_write(this.bgzf, buf.ptr, buf.length);
         if (bytes < 0)
-            fprintf(stderr, "Error writing data for file %s\n", fn.ptr);
+            log_err(__FUNCTION__, "Error writing data for file %s: %s", this.fn, fromStringz(strerror(errno)));
     }
 
 }

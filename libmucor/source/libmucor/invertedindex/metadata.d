@@ -17,11 +17,11 @@ import std.typecons : Tuple, tuple;
 import std.exception : enforce;
 
 /** 
- *  key_type: 1, 15 padd
+ *  key: 16
  *  key_offset: 8,
  *  key_length: 8,
  *
- * Total size: 48 bytes
+ * Total size: 32 bytes
  */
 struct KeyMetaData
 {
@@ -41,6 +41,7 @@ align:
 }
 
 /** 
+ *  key:       16
  *  key_type: 1, 15 padd
  *  key_offset: 8,
  *  key_length: 8,
@@ -102,4 +103,19 @@ unittest
     KeyMetaData c;
     p = data.ptr;
     assert(deserialize!KeyMetaData(p) == field);
+}
+
+
+struct SmallsIds
+{
+    uint128 key;
+    ulong[] ids;
+}
+
+struct SmallsIdMetaData
+{
+    align:
+    uint128 key;
+    ulong dataOffset;
+    ulong dataLength;
 }

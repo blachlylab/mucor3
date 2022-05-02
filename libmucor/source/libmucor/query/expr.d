@@ -87,7 +87,6 @@ auto parseNotQuery(string query)
         auto rest = split[1].strip;
         import std.stdio;
 
-        writeln(rest);
         try
         {
             auto op = enumFromStr!LogicalOp(rest);
@@ -208,31 +207,24 @@ unittest
     assert((*q).queryToString() == "val1|1|2.1");
 
     q = parseQuery("key = val");
-    writeln((*q).queryToString());
     assert((*q).queryToString() == "key=val");
 
     q = parseQuery("(key = val)");
-    writeln((*q).queryToString());
     assert((*q).queryToString() == "(key=val)");
 
     q = parseQuery("!val");
-    writeln((*q).queryToString());
     assert((*q).queryToString() == "!val");
 
     q = parseQuery("!(key = val)");
-    writeln((*q).queryToString());
     assert((*q).queryToString() == "!(key=val)");
 
     q = parseQuery("!(key = val)");
-    writeln((*q).queryToString());
     assert((*q).queryToString() == "!(key=val)");
 
     q = parseQuery("!(key = val) & (foo = bar)");
-    writeln((*q).queryToString());
     assert((*q).queryToString() == "!(key=val)&(foo=bar)");
 
     q = parseQuery("(!(key = 1:2) & (foo = ( bar | 3 | (baz & test & v))))");
-    writeln((*q).queryToString());
     assert((*q).queryToString() == "(!(key=1:2)&(foo=(bar|3|(baz&test&v))))");
     // assert(*q == Query(UnaryKeyOp(KeyOp.Exists, "key")));
 }

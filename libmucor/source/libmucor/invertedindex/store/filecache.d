@@ -1,5 +1,6 @@
 module libmucor.invertedindex.store.filecache;
 import libmucor.invertedindex.store.binary;
+import libmucor.invertedindex.metadata;
 import libmucor.wideint;
 import libmucor.khashl;
 import std.container : BinaryHeap;
@@ -77,9 +78,11 @@ struct IdFileCacheWriter
     BinaryHeap!(AccessedIdFile*[], "a.accessCount > b.accessCount") cache;
     ulong cacheSize;
     string prefix;
+    ulong fileBufferSize;
 
     this(string prefix, ulong cacheSize = 8192, ulong smallsMax = 128)
     {
+        this.fileBufferSize = fileBufferSize;
         this.smallsMax = smallsMax;
         this.cacheSize = cacheSize;
         this.prefix = prefix;
@@ -183,18 +186,26 @@ struct IdFileCacheWriter
     void close()
     {
 
-        auto f = BinaryStore!uint128(this.prefix ~ ".hashes", "wb");
+        auto f = new BinaryStore!uint128(this.prefix ~ ".hashes", "wb");
         foreach (kv; openFiles.byKeyValue)
         {
             (cast(AccessedIdFile*) kv.value).close();
             free(cast(AccessedIdFile*) kv.value);
         }
-        auto sf = BinaryStore!SmallsIds(this.prefix ~ ".smalls", "wb");
+        auto smeta = new BinaryStore!SmallsIdMetaData(this.prefix ~ ".smalls.meta", "wb");
+        auto sids = new BinaryStore!ulong(this.prefix ~ ".smalls.ids", "wb");
         foreach (kv; this.smalls.byKeyValue)
         {
-            sf.write(SmallsIds(kv[0], cast(ulong[]) kv[1]));
+            SmallsIdMetaData meta;
+            meta.key = kv[0];
+            meta.dataOffset = sids.tell;
+            foreach(k;kv[1])
+                sids.write(k);
+            meta.dataLength = kv[1].length;
+            smeta.write(meta);
         }
-        sf.close;
+        smeta.close;
+        sids.close;
 
         foreach (k; this.openedFiles.byKey)
         {
@@ -208,16 +219,20 @@ struct IdFileCacheReader
 {
 
     /// cache keys that have a single id
-    BinaryStore!SmallsIds* smalls;
+    BinaryStore!SmallsIdMetaData * smallsMeta;
+    BinaryStore!ulong * smallsIds;
 
     khashlSet!(uint128) hashes;
 
     string prefix;
+    ulong fileBufferSize;
 
     this(string prefix)
     {
+        this.fileBufferSize = fileBufferSize;
         this.prefix = prefix;
-        this.smalls = new BinaryStore!SmallsIds(this.prefix ~ ".smalls", "rb");
+        this.smallsMeta = new BinaryStore!SmallsIdMetaData(this.prefix ~ ".smalls.meta", "rb");
+        this.smallsIds = new BinaryStore!ulong(this.prefix ~ ".smalls.ids", "rb");
         auto f = BinaryStore!uint128(this.prefix ~ ".hashes", "rb");
         foreach (key; f.getAll)
         {
@@ -240,10 +255,12 @@ struct IdFileCacheReader
             }
             return ret;
         }
-
-        foreach (x; this.smalls.getAll.filter!(x => x.key == key))
+        auto smallsOffsets = this.smallsMeta.getAll
+            .filter!(x => x.key == key)
+            .map!(x => OffsetTuple(x.dataOffset, x.dataLength));
+        foreach (x; smallsIds.getArrayFromOffsets(smallsOffsets))
         {
-            foreach (k; x.ids)
+            foreach (k; x)
             {
                 ret.insert(k);
             }
@@ -253,7 +270,8 @@ struct IdFileCacheReader
 
     void close()
     {
-        this.smalls.close;
+        this.smallsIds.close;
+        this.smallsMeta.close;
     }
 }
 
@@ -308,6 +326,10 @@ unittest
         // assert(fcache.smalls.count == 0);
 
         fcache.insert(uint128(4), 11);
+        fcache.insert(uint128(4), 12);
+        fcache.insert(uint128(4), 13);
+        fcache.insert(uint128(4), 14);
+        fcache.insert(uint128(4), 15);
         // assert(fcache.smalls.count == 1);
         fcache.close;
     }
@@ -317,7 +339,8 @@ unittest
         assert(fcache.getIds(uint128(0)).byKey.array == [0, 8, 9, 10]);
         assert(fcache.getIds(uint128(1)).byKey.array == [2, 4, 1, 3]);
         assert(fcache.getIds(uint128(2)).byKey.array == [7, 6, 5]);
-        assert(fcache.getIds(uint128(4)).byKey.array == [11]);
+        writeln(fcache.getIds(uint128(4)).byKey.array);
+        assert(fcache.getIds(uint128(4)).byKey.array == [11, 12, 14, 13, 15]);
     }
 
 }
