@@ -23,6 +23,8 @@ import libmucor.invertedindex.store;
 import libmucor.khashl;
 import libmucor.error;
 import std.format : format;
+import std.path: buildPath;
+import std.datetime.stopwatch : StopWatch;
 
 /** 
  * Represent inverted index as it exists on disk:
@@ -69,13 +71,18 @@ struct BinaryIndexWriter
     /// store md5 sums
     StringStore* keys;
 
+    /// sw
+    StopWatch sw;
+    ulong lastSWCheck;
+
     this(string prefix, ulong cacheSize = 8192, ulong smallsMax = 128)
     {
+        sw.start;
         this.prefix = prefix;
-        this.hashes = new MD5Store(prefix ~ ".keys.md5", "wb");
-        this.metadata = new KeyMetaStore(prefix ~ ".keys.meta", "wb");
-        this.sums = new MD5Store(prefix ~ ".record.sums", "wb");
-        this.keys = new StringStore(prefix ~ ".keys", "wb");
+        this.hashes = new MD5Store(buildPath(prefix, "keys.md5"), "wb");
+        this.metadata = new KeyMetaStore(buildPath(prefix, "keys.meta"), "wb");
+        this.sums = new MD5Store(buildPath(prefix, "record.sums"), "wb");
+        this.keys = new StringStore(buildPath(prefix, "keys"), "wb");
         this.jsonStore = new JsonStoreWriter(prefix);
         this.idCache = new IdFileCacheWriter(prefix, cacheSize, smallsMax);
     }
@@ -92,12 +99,22 @@ struct BinaryIndexWriter
 
     void insert(T)(T key, JSONValue item) if (isSomeString!T)
     {
-        // if(this.numSums != 0 && this.numSums % 1000 == 0) {
-        // hts_log_info("IdCacheWriter", format("Cache size: %d", this.idCache.cache.length));
-        // hts_log_info("IdCacheWriter", format("Smalls size: %d", this.idCache.smalls.count));
-        // hts_log_info("IdCacheWriter", format("Files opened: %d", this.idCache.openedFiles.count));
+        if(sw.peek.total!"seconds" - lastSWCheck > 30) {
+            this.lastSWCheck = sw.peek.total!"seconds";
+            log_info("IdCacheWriter", 
+                "Time elaspsed: %s seconds, records parsed: %d, Avg time per record %d",
+                sw.peek.total!"seconds",
+                numSums,
+                sw.peek.total!"usecs" / numSums,
+            );
+            log_info("IdCacheWriter", 
+                "File cache size: %d, Smalls size: %d, Files opened: %d",
+                this.idCache.cache.length, 
+                this.idCache.smalls.count, 
+                this.idCache.openedFiles.count
+            ); 
         // stderr.writeln();
-        // }
+        }
         // log_debug(__FUNCTION__, "inserting json value %s for key %s", item, key);
         auto keyhash = getKeyHash(key);
         auto p = keyhash in seenKeys;
@@ -147,13 +164,13 @@ struct BinaryIndexReader
     this(string prefix)
     {
         this.prefix = prefix;
-        this.hashes = new MD5Store(prefix ~ ".keys.md5", "rb");
-        auto md = new KeyMetaStore(prefix ~ ".keys.meta", "rb");
+        this.hashes = new MD5Store(buildPath(prefix, "keys.md5"), "rb");
+        auto md = new KeyMetaStore(buildPath(prefix, "keys.meta"), "rb");
         this.metadata = md.getAll.array;
         md.close;
         log_debug(__FUNCTION__, "loading key index %s with %d keys", prefix, this.metadata.length);
-        this.sums = new MD5Store(prefix ~ ".record.sums", "rb").getAll.array;
-        this.keys = new StringStore(prefix ~ ".keys", "rb");
+        this.sums = new MD5Store(buildPath(prefix, "record.sums"), "rb").getAll.array;
+        this.keys = new StringStore(buildPath(prefix, "keys"), "rb");
         this.jsonStore = new JsonStoreReader(prefix);
         this.idCache = new IdFileCacheReader(prefix);
         foreach (KeyMetaData key; metadata)
@@ -181,9 +198,11 @@ struct BinaryIndexReader
 unittest
 {
     import htslib.hts_log;
+    import std.file: mkdirRecurse;
 
     set_log_level(LogLevel.Debug);
     {
+        mkdirRecurse("/tmp/test_bidx");
         auto bidx = BinaryIndexWriter("/tmp/test_bidx");
         bidx.insert("testkey", JSONValue("testval"));
         bidx.sums.write(uint128(0));

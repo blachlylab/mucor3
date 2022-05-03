@@ -21,6 +21,7 @@ import std.digest.md : MD5Digest, toHexString;
 import libmucor.error;
 import libmucor.query;
 import std.sumtype;
+import std.typecons: Tuple;
 
 char sep = '/';
 
@@ -38,6 +39,9 @@ struct InvertedIndex
         else
         {
             this.bidxWriter = new BinaryIndexWriter(prefix, cacheSize, smallsMax);
+            import std.file: mkdirRecurse, exists;
+            if(!prefix.exists)
+                mkdirRecurse(prefix);
         }
     }
 
@@ -54,74 +58,126 @@ struct InvertedIndex
         return this.bidxReader.sums;
     }
 
-    void addJsonObject(Asdf root, const(char)[] path = "", uint128 md5 = uint128(0))
-    {
-        if (path == "")
-        {
-            if (root["md5"] == Asdf.init)
-                log_err(__FUNCTION__, "record with no md5");
-            auto m = root["md5"].deserializeAsdf!string;
-            root["md5"].remove;
-            md5.fromHexString(m);
-        }
-        foreach (key, value; root.byKeyValue)
-        {
-            JSONValue valkey;
-            if (value.kind == Asdf.Kind.object)
-            {
-                addJsonObject(value, path ~ sep ~ key);
-                continue;
-            }
-            else if (value.kind == Asdf.Kind.array)
-            {
-                addJsonArray(value, path ~ sep ~ key);
-                continue;
-            }
-            else if (value.kind == Asdf.Kind.null_)
-            {
-                continue;
-            }
-            else
-            {
-                valkey = JSONValue(value);
-            }
-            this.bidxWriter.insert(path ~ sep ~ key, valkey);
-        }
-        if (path == "")
-        {
-            assert(md5 != uint128(0));
-            this.bidxWriter.sums.write(md5);
-            this.bidxWriter.numSums++;
-        }
-    }
+    // void addJsonObject(Asdf root, const(char)[] path = "", uint128 md5 = uint128(0))
+    // {
+    //     if (path == "")
+    //     {
+    //         if (root["md5"] == Asdf.init)
+    //             log_err(__FUNCTION__, "record with no md5");
+    //         auto m = root["md5"].deserializeAsdf!string;
+    //         root["md5"].remove;
+    //         md5.fromHexString(m);
+    //     }
+    //     foreach (key, value; root.byKeyValue)
+    //     {
+    //         JSONValue valkey;
+    //         if (value.kind == Asdf.Kind.object)
+    //         {
+    //             addJsonObject(value, path ~ sep ~ key);
+    //             continue;
+    //         }
+    //         else if (value.kind == Asdf.Kind.array)
+    //         {
+    //             addJsonArray(value, path ~ sep ~ key);
+    //             continue;
+    //         }
+    //         else if (value.kind == Asdf.Kind.null_)
+    //         {
+    //             continue;
+    //         }
+    //         else
+    //         {
+    //             valkey = JSONValue(value);
+    //         }
+    //         this.bidxWriter.insert(path ~ sep ~ key, valkey);
+    //     }
+    //     if (path == "")
+    //     {
+    //         assert(md5 != uint128(0));
+    //         this.bidxWriter.sums.write(md5);
+    //         this.bidxWriter.numSums++;
+    //     }
+    // }
 
-    void addJsonArray(Asdf root, const(char)[] path)
-    {
-        assert(path != "");
-        foreach (value; root.byElement)
-        {
-            JSONValue valkey;
-            if (value.kind == Asdf.Kind.object)
-            {
-                addJsonObject(value, path);
-                continue;
-            }
-            else if (value.kind == Asdf.Kind.array)
-            {
-                addJsonArray(value, path);
-                continue;
-            }
-            else if (value.kind == Asdf.Kind.null_)
-            {
-                continue;
-            }
-            else
-            {
-                valkey = JSONValue(value);
-            }
-            this.bidxWriter.insert(path, valkey);
-        }
+    // void addJsonArray(Asdf root, const(char)[] path)
+    // {
+    //     assert(path != "");
+    //     foreach (value; root.byElement)
+    //     {
+    //         JSONValue valkey;
+    //         if (value.kind == Asdf.Kind.object)
+    //         {
+    //             addJsonObject(value, path);
+    //             continue;
+    //         }
+    //         else if (value.kind == Asdf.Kind.array)
+    //         {
+    //             addJsonArray(value, path);
+    //             continue;
+    //         }
+    //         else if (value.kind == Asdf.Kind.null_)
+    //         {
+    //             continue;
+    //         }
+    //         else
+    //         {
+    //             valkey = JSONValue(value);
+    //         }
+    //         this.bidxWriter.insert(path, valkey);
+    //     }
 
+    // }
+    
+    void addJsonObject(Asdf root)
+    {
+        import std.container : DList;
+        import libmucor.invertedindex.queue;
+        alias AsdfKeyValue = Tuple!(const(char)[], Asdf);
+        Queue!(AsdfKeyValue) queue; 
+        uint128 md5;
+
+        if (root["md5"] == Asdf.init)
+            log_err(__FUNCTION__, "record with no md5");
+        auto m = root["md5"].deserializeAsdf!string;
+        root["md5"].remove;
+        md5.fromHexString(m);
+        
+        queue.push(AsdfKeyValue("",root));
+        while(!queue.empty) {
+            AsdfKeyValue val = queue.pop;
+            // writeln(val[0]," ", val[1]);
+            final switch(val[1].kind) {
+                case Asdf.Kind.object:
+                    foreach (kv; val[1].byKeyValue)
+                    {
+                        queue.push(AsdfKeyValue(val[0] ~ sep ~ kv.key,kv.value));
+                    }
+                    break;
+                case Asdf.Kind.array:
+                    foreach (e; val[1].byElement)
+                    {
+                        queue.push(AsdfKeyValue(val[0],e));
+                    }
+                    break;
+                case Asdf.Kind.string:
+                    this.bidxWriter.insert(val[0], JSONValue(val[1]));
+                    break;
+                case Asdf.Kind.number:
+                    this.bidxWriter.insert(val[0], JSONValue(val[1]));
+                    break;
+                case Asdf.Kind.null_:
+                    continue;
+                case Asdf.Kind.true_:
+                    this.bidxWriter.insert(val[0], JSONValue(true));
+                    break;
+                case Asdf.Kind.false_:
+                    this.bidxWriter.insert(val[0], JSONValue(false));
+                    break;
+            }
+        }
+        assert(md5 != uint128(0));
+        this.bidxWriter.sums.write(md5);
+        this.bidxWriter.numSums++;
     }
 
     khashlSet!(ulong) allIds()
@@ -372,9 +428,11 @@ unittest
     import libmucor.jsonlops.basic : spookyhashObject;
     import std.array : array;
     import htslib.hts_log;
+    import std.file: mkdirRecurse;
 
     hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
     {
+        mkdirRecurse("/tmp/test_idx");
         auto idx = new InvertedIndex("/tmp/test_idx", true);
         idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.spookyhashObject);
         idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.spookyhashObject);
@@ -384,6 +442,7 @@ unittest
     {
         auto idx = InvertedIndex("/tmp/test_idx", false);
         assert(idx.bidxReader.sums.length == 3);
+        writeln(idx.bidxReader.getKeysWithId.map!(x => x[0]));
         assert(idx.query("/test2", "foo").byKey.array == [0]);
         assert(idx.queryRange("/test3", 1, 3).byKey.array == [0, 1]);
         idx.close;

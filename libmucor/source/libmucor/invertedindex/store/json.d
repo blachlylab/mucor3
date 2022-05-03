@@ -16,6 +16,7 @@ import std.range : chain, zip;
 import std.traits;
 import std.array : array;
 import std.range : InputRange, inputRangeObject;
+import std.path: buildPath;
 
 /// Stores json data and ids
 /// for a given field
@@ -40,10 +41,10 @@ struct JsonStoreWriter
     {
         this.fileBufferSize = fileBufferSize;
         this.prefix = prefix;
-        this.metadata = new JsonMetaStore(prefix ~ ".json.meta", "wb");
-        this.longs = new LongStore(prefix ~ ".json.longs", "wb");
-        this.doubles = new DoubleStore(prefix ~ ".json.doubles", "wb");
-        this.strings = new StringStore(prefix ~ ".json.strings", "wb");
+        this.metadata = new JsonMetaStore(buildPath(prefix, "json.meta"), "wb");
+        this.longs = new LongStore(buildPath(prefix, "json.longs"), "wb");
+        this.doubles = new DoubleStore(buildPath(prefix, "json.doubles"), "wb");
+        this.strings = new StringStore(buildPath(prefix, "json.strings"), "wb");
     }
 
     void close()
@@ -103,10 +104,10 @@ struct JsonStoreReader
     this(string prefix)
     {
         this.fileBufferSize =fileBufferSize;
-        this.longs = new LongStore(prefix ~ ".json.longs", "rb");
-        this.doubles = new DoubleStore(prefix ~ ".json.doubles", "rb");
-        this.strings = new StringStore(prefix ~ ".json.strings", "rb");
-        auto md = new JsonMetaStore(prefix ~ ".json.meta", "rb");
+        this.longs = new LongStore(buildPath(prefix, "json.longs"), "rb");
+        this.doubles = new DoubleStore(buildPath(prefix, "json.doubles"), "rb");
+        this.strings = new StringStore(buildPath(prefix, "json.strings"), "rb");
+        auto md = new JsonMetaStore(buildPath(prefix, "json.meta"), "rb");
         this.metadata = md.getAll.array;
         md.close;
         foreach (JsonKeyMetaData key; metadata)
@@ -275,9 +276,11 @@ unittest
 {
     import htslib.hts_log;
     import std.stdio;
+    import std.file: mkdirRecurse;
 
     set_log_level(LogLevel.Debug);
     {
+        mkdirRecurse("/tmp/test_jidx");
         auto jidx = JsonStoreWriter("/tmp/test_jidx");
         jidx.insert(JSONValue("testval"));
         jidx.insert(JSONValue("testval2"));

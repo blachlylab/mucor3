@@ -13,6 +13,7 @@
 		},
 		"progress": "~>5.0.1"
 	},
+	"dflags-ldc": ["-mcpu=native"],
 	"targetPath": "../bin",
 	"configurations": [
 		{

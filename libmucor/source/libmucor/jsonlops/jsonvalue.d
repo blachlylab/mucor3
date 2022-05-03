@@ -40,9 +40,11 @@ struct JSONValue
         final switch (json.kind)
         {
         case Asdf.Kind.array:
+            goto case Asdf.Kind.object;
         case Asdf.Kind.object:
             log_err(__FUNCTION__,
                     "Cannot store objects or arrays in JSONValue types");
+            break;
         case Asdf.Kind.number:
             auto numStr = json.to!string;
             if (isNumericStringInteger(numStr))
@@ -59,6 +61,7 @@ struct JSONValue
             break;
         case Asdf.Kind.null_:
             log_err(__FUNCTION__, "No nulls should reach this point");
+            break;
         case Asdf.Kind.false_:
             val = false;
             break;

@@ -21,6 +21,8 @@ string[] extra_fields;
 string prefix = "";
 string config_file = "";
 string query = "";
+ulong fileCacheSize = 8192;
+ulong smallsSize = 128;
 
 string[] requiredCols = ["sample", "CHROM", "POS", "REF", "ALT"];
 
@@ -36,7 +38,9 @@ void mucor_main(string[] args)
             &extra_fields, "prefix|p",
             "output directory for files (can be directory or file prefix)", &prefix, "config|c",
             "specify json config file",
-            &config_file, "query|q", "filter vcf data using varquery syntax", &query);
+            &config_file, "query|q", "filter vcf data using varquery syntax", &query,
+            "file-cache-size|f", "number of highly used files kept open", &fileCacheSize,
+            "ids-cache-size|i", "number of ids that can be stored per key before a file is opened", &smallsSize);
 
     if (res.helpWanted)
     {
@@ -102,7 +106,7 @@ void mucor_main(string[] args)
 
     auto vcfJsonFiles = vcfFiles.map!(x => buildPath(vcf_json_dir, baseName(x))).array;
 
-    atomizeVcfs(args[0], vcfFiles, vcf_json_dir);
+    // atomizeVcfs(args[0], vcfFiles, vcf_json_dir);
 
     auto index_dir = buildPath(prefix, "indexes");
     mkdirRecurse(index_dir);
@@ -113,7 +117,7 @@ void mucor_main(string[] args)
     {
 
         log_info(__FUNCTION__, "Indexing vcf data ...");
-        indexJsonFiles(args[0], vcfJsonFiles, index_dir);
+        indexJsonFiles(vcfJsonFiles, index_dir, threads, fileCacheSize, smallsSize);
 
         log_info(__FUNCTION__, "Filtering vcf data...");
         combined_json_file = buildPath(prefix, "filtered.json");

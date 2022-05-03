@@ -9,6 +9,7 @@ import std.format : format;
 import libmucor.error;
 import std.algorithm : filter, map, joiner;
 import std.array : array;
+import std.path: buildPath;
 
 struct AccessedIdFile
 {
@@ -19,19 +20,19 @@ struct AccessedIdFile
     void openWrite(string prefix, uint128 id)
     {
         this.id = id;
-        this.file = BinaryStore!ulong(format("%s_%x.ids", prefix, id), "wb");
+        this.file = BinaryStore!ulong(buildPath(prefix, format("%x.ids", id)), "wb");
     }
 
     void openRead(string prefix, uint128 id)
     {
         this.id = id;
-        this.file = BinaryStore!ulong(format("%s_%x.ids", prefix, id), "rb");
+        this.file = BinaryStore!ulong(buildPath(prefix, format("%x.ids", id)), "rb");
     }
 
     void openAppend(string prefix, uint128 id)
     {
         this.id = id;
-        this.file = BinaryStore!ulong(format("%s_%x.ids", prefix, id), "ab");
+        this.file = BinaryStore!ulong(buildPath(prefix, format("%x.ids", id)), "ab");
     }
 
     void write(ulong id)
@@ -186,14 +187,14 @@ struct IdFileCacheWriter
     void close()
     {
 
-        auto f = new BinaryStore!uint128(this.prefix ~ ".hashes", "wb");
+        auto f = new BinaryStore!uint128(buildPath(this.prefix, "hashes"), "wb");
         foreach (kv; openFiles.byKeyValue)
         {
             (cast(AccessedIdFile*) kv.value).close();
             free(cast(AccessedIdFile*) kv.value);
         }
-        auto smeta = new BinaryStore!SmallsIdMetaData(this.prefix ~ ".smalls.meta", "wb");
-        auto sids = new BinaryStore!ulong(this.prefix ~ ".smalls.ids", "wb");
+        auto smeta = new BinaryStore!SmallsIdMetaData(buildPath(this.prefix, "smalls.meta"), "wb");
+        auto sids = new BinaryStore!ulong(buildPath(this.prefix, "smalls.ids"), "wb");
         foreach (kv; this.smalls.byKeyValue)
         {
             SmallsIdMetaData meta;
@@ -231,9 +232,9 @@ struct IdFileCacheReader
     {
         this.fileBufferSize = fileBufferSize;
         this.prefix = prefix;
-        this.smallsMeta = new BinaryStore!SmallsIdMetaData(this.prefix ~ ".smalls.meta", "rb");
-        this.smallsIds = new BinaryStore!ulong(this.prefix ~ ".smalls.ids", "rb");
-        auto f = BinaryStore!uint128(this.prefix ~ ".hashes", "rb");
+        this.smallsMeta = new BinaryStore!SmallsIdMetaData(buildPath(this.prefix, "smalls.meta"), "rb");
+        this.smallsIds = new BinaryStore!ulong(buildPath(this.prefix, "smalls.ids"), "rb");
+        auto f = BinaryStore!uint128(buildPath(this.prefix, "hashes"), "rb");
         foreach (key; f.getAll)
         {
             this.hashes.insert(key);
@@ -280,9 +281,11 @@ unittest
     import htslib.hts_log;
     import std.stdio;
     import std.array : array;
+    import std.file: mkdirRecurse;
 
     hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
     {
+        mkdirRecurse("/tmp/test_fcache");
         auto fcache = new IdFileCacheWriter("/tmp/test_fcache", 2, 2);
         fcache.insert(uint128(0), 0); // 0 enters smalls
 

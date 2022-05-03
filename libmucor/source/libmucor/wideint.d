@@ -18,6 +18,26 @@ module libmucor.wideint;
 import std.traits, std.ascii;
 import std.format : FormatSpec;
 
+const(ubyte)[256] hex2nibble = [
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, //    0-15: 0x0 - 0xF
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, //   16-31: 0x10 - 0x1F
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, //   32-47: special chars
+      0,   1,   2,   3,    4,   5,   6,   7,    8,   9, 255, 255,  255, 255, 255, 255, //   48-63: 0-9 and more special
+    255,  10,  11,  12,   13,  14,  15, 255,  255, 255, 255, 255,  255, 255, 255, 255, //   64-79: @, A-O
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, //   80-95: P-Z, other
+    255,  10,  11,  12,   13,  14,  15, 255,  255, 255, 255, 255,  255, 255, 255, 255, //  96-112: `, a-o
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, // 112-127: p-z, other
+
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255
+];
+
 /// Wide signed integer.
 /// Params:
 ///    bits = number of bits, must be a power of 2.
@@ -127,14 +147,33 @@ struct wideIntImpl(bool signed, int bits)
     {
         typeof(this) value;
         assert(str.length * 4 <= _bits);
-        foreach (d; str)
-        {
-            assert(isHexDigit(d));
-            value <<= 4;
-            if (isDigit(d))
-                value += d - '0';
-            else
-                value += 10 + toUpper(d) - 'A';
+        auto missing = 32 - str.length;
+        if(missing == 0) {
+            auto strIdx = 0;
+            for(auto i = 0; i < 16; i++) {
+                assert(hex2nibble[str[strIdx]] != 255);
+                value.hi = (value.hi << 4 ) | hex2nibble[str[strIdx++]];
+            }   
+            for(auto i = 0; i < 16; i++) {
+                assert(hex2nibble[str[strIdx]] != 255);
+                value.lo = (value.lo << 4 ) | hex2nibble[str[strIdx++]];
+            }
+        }
+        else if(missing < 16) {
+            auto strIdx = 0;
+            for(auto i = 0; i < 16 - missing; i++) {
+                assert(hex2nibble[str[strIdx]] != 255);
+                value.hi = (value.hi << 4 ) | hex2nibble[str[strIdx++]];
+            }   
+            for(auto i = 0; i < 16; i++) {
+                assert(hex2nibble[str[strIdx]] != 255);
+                value.lo = (value.lo << 4 ) | hex2nibble[str[strIdx++]];
+            }
+        } else {
+            for(auto i = 0; i < 32 - missing; i++) {
+                assert(hex2nibble[str[i]] != 255);
+                value.lo = (value.lo << 4 ) | hex2nibble[str[i]];
+            }
         }
         this = value;
     }
@@ -770,6 +809,19 @@ unittest
     x.lo = 0;
 
     x.fromHexString("FFFFFFFFFFFFFFFEEA71B9F6EC2FFFFF");
+    assert(format("%x", x) == "FFFFFFFFFFFFFFFEEA71B9F6EC2FFFFF");
+
+    x.hi = 0;
+    x.lo = 0;
+
+    x.fromHexString("1158e460913d00001");
+    assert(format("%x", x) == "1158E460913D00001");
+    assert(format("%x", x));
+
+    x.hi = 0;
+    x.lo = 0;
+
+    x.fromHexString("fffffffffffffffeea71b9f6ec2fffff");
     assert(format("%x", x) == "FFFFFFFFFFFFFFFEEA71B9F6EC2FFFFF");
 }
 
