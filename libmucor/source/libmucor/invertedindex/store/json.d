@@ -206,7 +206,6 @@ struct JsonStoreReader
     InputRange!uint128 filterOp(string op, T)(T val)
     {
         auto type = JSONValue(val).getType;
-        // JSONValue[2] r = [JSONValue(range[0]), JSONValue(range[1]];
         auto hashes = this.metadata
             .std_filter!(x => x.type == type)
             .map!(x => x.keyHash);

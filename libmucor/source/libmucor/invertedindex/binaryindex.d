@@ -182,7 +182,6 @@ struct BinaryIndexReader
     void close()
     {
         this.jsonStore.close;
-        this.idCache.close;
         this.hashes.close;
         this.keys.close;
     }

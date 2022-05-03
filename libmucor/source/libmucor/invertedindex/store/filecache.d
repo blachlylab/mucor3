@@ -220,8 +220,7 @@ struct IdFileCacheReader
 {
 
     /// cache keys that have a single id
-    BinaryStore!SmallsIdMetaData * smallsMeta;
-    BinaryStore!ulong * smallsIds;
+    SmallsIdMetaData[] smallsMeta;
 
     khashlSet!(uint128) hashes;
 
@@ -232,8 +231,12 @@ struct IdFileCacheReader
     {
         this.fileBufferSize = fileBufferSize;
         this.prefix = prefix;
-        this.smallsMeta = new BinaryStore!SmallsIdMetaData(buildPath(this.prefix, "smalls.meta"), "rb");
-        this.smallsIds = new BinaryStore!ulong(buildPath(this.prefix, "smalls.ids"), "rb");
+        auto md = new BinaryStore!SmallsIdMetaData(buildPath(this.prefix, "smalls.meta"), "rb");
+        foreach (key; md.getAll)
+        {
+            smallsMeta ~= key;   
+        }
+        md.close();
         auto f = BinaryStore!uint128(buildPath(this.prefix, "hashes"), "rb");
         foreach (key; f.getAll)
         {
@@ -254,11 +257,14 @@ struct IdFileCacheReader
             {
                 ret.insert(x);
             }
+            f.close;
             return ret;
         }
-        auto smallsOffsets = this.smallsMeta.getAll
+        auto smallsOffsets = this.smallsMeta
             .filter!(x => x.key == key)
-            .map!(x => OffsetTuple(x.dataOffset, x.dataLength));
+            .map!(x => OffsetTuple(x.dataOffset, x.dataLength)).array;
+        // log_info(__FUNCTION__, "%x metadata collected", key);
+        auto smallsIds = BinaryStore!ulong(buildPath(this.prefix, "smalls.ids"), "rb");
         foreach (x; smallsIds.getArrayFromOffsets(smallsOffsets))
         {
             foreach (k; x)
@@ -266,13 +272,9 @@ struct IdFileCacheReader
                 ret.insert(k);
             }
         }
+        smallsIds.close();
+        // log_info(__FUNCTION__, "%x ids collected", key);
         return ret;
-    }
-
-    void close()
-    {
-        this.smallsIds.close;
-        this.smallsMeta.close;
     }
 }
 

@@ -22,6 +22,7 @@ import libmucor.error;
 import libmucor.query;
 import std.sumtype;
 import std.typecons: Tuple;
+import std.parallelism;
 
 char sep = '/';
 
@@ -38,10 +39,10 @@ struct InvertedIndex
         }
         else
         {
-            this.bidxWriter = new BinaryIndexWriter(prefix, cacheSize, smallsMax);
             import std.file: mkdirRecurse, exists;
             if(!prefix.exists)
                 mkdirRecurse(prefix);
+            this.bidxWriter = new BinaryIndexWriter(prefix, cacheSize, smallsMax);
         }
     }
 
@@ -57,76 +58,6 @@ struct InvertedIndex
     {
         return this.bidxReader.sums;
     }
-
-    // void addJsonObject(Asdf root, const(char)[] path = "", uint128 md5 = uint128(0))
-    // {
-    //     if (path == "")
-    //     {
-    //         if (root["md5"] == Asdf.init)
-    //             log_err(__FUNCTION__, "record with no md5");
-    //         auto m = root["md5"].deserializeAsdf!string;
-    //         root["md5"].remove;
-    //         md5.fromHexString(m);
-    //     }
-    //     foreach (key, value; root.byKeyValue)
-    //     {
-    //         JSONValue valkey;
-    //         if (value.kind == Asdf.Kind.object)
-    //         {
-    //             addJsonObject(value, path ~ sep ~ key);
-    //             continue;
-    //         }
-    //         else if (value.kind == Asdf.Kind.array)
-    //         {
-    //             addJsonArray(value, path ~ sep ~ key);
-    //             continue;
-    //         }
-    //         else if (value.kind == Asdf.Kind.null_)
-    //         {
-    //             continue;
-    //         }
-    //         else
-    //         {
-    //             valkey = JSONValue(value);
-    //         }
-    //         this.bidxWriter.insert(path ~ sep ~ key, valkey);
-    //     }
-    //     if (path == "")
-    //     {
-    //         assert(md5 != uint128(0));
-    //         this.bidxWriter.sums.write(md5);
-    //         this.bidxWriter.numSums++;
-    //     }
-    // }
-
-    // void addJsonArray(Asdf root, const(char)[] path)
-    // {
-    //     assert(path != "");
-    //     foreach (value; root.byElement)
-    //     {
-    //         JSONValue valkey;
-    //         if (value.kind == Asdf.Kind.object)
-    //         {
-    //             addJsonObject(value, path);
-    //             continue;
-    //         }
-    //         else if (value.kind == Asdf.Kind.array)
-    //         {
-    //             addJsonArray(value, path);
-    //             continue;
-    //         }
-    //         else if (value.kind == Asdf.Kind.null_)
-    //         {
-    //             continue;
-    //         }
-    //         else
-    //         {
-    //             valkey = JSONValue(value);
-    //         }
-    //         this.bidxWriter.insert(path, valkey);
-    //     }
-
-    // }
     
     void addJsonObject(Asdf root)
     {
@@ -273,12 +204,19 @@ struct InvertedIndex
     {
         import std.traits : ReturnType;
 
-        auto matchingFields = getFields(key);
-        auto matchingValues = getMatchingValues(val, op);
-
-        return cartesianProduct(matchingFields, matchingValues).map!(x => combineHash(x[0], x[1]))
-            .map!(x => this.bidxReader.idCache.getIds(x))
-            .reduce!((a, b) => a | b);
+        log_info(__FUNCTION__, "fetching ids for query: %s %s %s", key, op, val.to!string);
+        auto matchingFields = getFields(key).array;
+        auto matchingValues = getMatchingValues(val, op).array;
+        auto combinations = cartesianProduct(matchingFields, matchingValues).array;
+        log_debug(__FUNCTION__, "fields (%d) and values (%d) collected: %d combinations", matchingFields.length, matchingValues.length, combinations.length);
+        
+        khashlSet!(ulong)[] ids = new khashlSet!(ulong)[combinations.length];
+        foreach (i,comb; parallel(combinations))
+        {
+            ids[i] = this.bidxReader.idCache.getIds(combineHash(comb[0], comb[1]));
+        }
+        
+        return taskPool.reduce!((a,b) => a | b)(ids);
     }
 
     ulong[] queryAND(T)(const(char)[] key, T[] values)
@@ -361,7 +299,8 @@ khashlSet!(ulong) evaluateQuery(Query* query, InvertedIndex* idx, string lastKey
         case ValueOp.ApproxEqual:
             return queryValue(x.lhs, x.rhs, idx);
         default:
-            return queryOpValue(x.lhs, x.rhs, idx, cast(string) x.op);
+            auto res = queryOpValue(x.lhs, x.rhs, idx, cast(string) x.op);
+            return res;
         }
     }, (UnaryKeyOp x) {
         final switch (x.op)

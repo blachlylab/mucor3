@@ -353,29 +353,6 @@ struct BinaryStore(T)
                 auto s = new char[length];
                 s[] = cast(char[])buf[];
                 return cast(T) s;
-            }
-            else static if (is(T == SmallsIds))
-            {
-                auto buf = this.readBytes(24);
-                SmallsIds ret;
-                ret.key.hi = le_to_u64(buf.ptr);
-                ret.key.lo = le_to_u64(buf.ptr + 8);
-                auto len = le_to_u64(buf.ptr + 16);
-                // import std.stdio;
-                // import core.bitop: bswap;
-                // writeln();
-                // writefln("%016x", bswap(ret.key.hi));
-                // writefln("%016x", bswap(ret.key.lo));
-                // writefln("%016x", bswap(length));
-                ret.ids = new ulong[len];
-                buf = this.readBytes(8*length);
-                auto p = buf.ptr;
-                foreach (ref id; ret.ids)
-                {
-                    id = le_to_u64(p);
-                    p += 8;
-                }
-                return ret;
             } else {
                 static assert(0);
             }
@@ -390,29 +367,6 @@ struct BinaryStore(T)
                 auto s = new char[length];
                 s[] = cast(char[])buf[];
                 return cast(T) s;
-            }
-            else static if (is(T == SmallsIds))
-            {
-                auto buf = this.readBytes(24, pos);
-                SmallsIds ret;
-                ret.key.hi = le_to_u64(buf.ptr);
-                ret.key.lo = le_to_u64(buf.ptr + 8);
-                auto len = le_to_u64(buf.ptr + 16);
-                // import std.stdio;
-                // import core.bitop: bswap;
-                // writeln();
-                // writefln("%016x", bswap(ret.key.hi));
-                // writefln("%016x", bswap(ret.key.lo));
-                // writefln("%016x", bswap(length));
-                ret.ids = new ulong[len];
-                buf = this.readBytes(8*length, pos);
-                auto p = buf.ptr;
-                foreach (ref id; ret.ids)
-                {
-                    id = le_to_u64(p);
-                    p += 8;
-                }
-                return ret;
             } else {
                 static assert(0);
             }
