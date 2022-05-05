@@ -16,7 +16,7 @@ import libmucor.hts_endian;
 import core.sync.mutex : Mutex;
 import core.atomic;
 import core.stdc.stdlib : malloc, free;
-import core.stdc.stdio : fprintf, stderr;
+import core.stdc.string : memset;
 import std.typecons: Tuple;
 import std.range;
 
@@ -103,9 +103,10 @@ struct BinaryStore(T)
     /// if reading, reports file tell - bufferCursor (when reading file tell is always ahead)
     auto tell() {
         if(isWrite) {
-            return (this.file.bgzf.block_address << 16) | (this.bufLen & 0xFFFF);
+            assert((this.file.tell & 0xFFFF) == 0);
+            return this.file.tell | (this.bufLen & 0xFFFF);
         } else {
-            return (this.lastBlockAddress << 16) | (this.bufferCursor & 0xFFFF);
+            return this.file.tell | (this.bufferCursor & 0xFFFF);
         }
     }
 
@@ -164,12 +165,14 @@ struct BinaryStore(T)
 
     /// load next block of data from position
     void loadToBuffer(ulong seekToPos){
-        log_debug(__FUNCTION__, "Loading next block from offset %x", seekToPos);
+        log_debug(__FUNCTION__, "Loading next block from offset %x", seekToPos & 0xFFFFFFFFFFFF0000);
         assert(!isWrite);
-
-        this.file.seek(seekToPos);
-        this.isLastBlock = false;
-        this.loadToBuffer;
+        if((this.file.tell & 0xFFFFFFFFFFFF0000) != (seekToPos & 0xFFFFFFFFFFFF0000)){
+            this.file.seek(seekToPos & 0xFFFFFFFFFFFF0000);
+            this.isLastBlock = false;
+            this.loadToBuffer;
+        }
+        this.bufferCursor = seekToPos & 0xFFFF;
     }
 
     /// read bytes from buffer or load next buffer
@@ -190,6 +193,7 @@ struct BinaryStore(T)
         /// data requested is partially buffered
         /// seek back to beginning and load buffer
         if(this.bufferCursor + numBytes > this.bufLen){
+            // log_err(__FUNCTION__, )
             auto newPosition = this.file.tell - (this.bufLen - this.bufferCursor);
             this.file.seek(newPosition);
             this.loadToBuffer;
@@ -209,13 +213,8 @@ struct BinaryStore(T)
         /// if reading from before or after buffer offsets
         /// seek forward/back and load
         /// else data is (atleast partially) in buffer
-        if(seekToPos < this.tellBufferStart || seekToPos > this.tellBufferEnd) {
-            this.loadToBuffer(seekToPos);
-            return this.readBytes(numBytes);
-        } else {
-            this.bufferCursor = this.tell - seekToPos;
-            return this.readBytes(numBytes);
-        }
+        this.loadToBuffer(seekToPos);
+        return this.readBytes(numBytes);
     }
 
     /// if T is statically sized we don't need to provide 
@@ -252,7 +251,7 @@ struct BinaryStore(T)
                 BinaryStore!T* store;
                 T front;
                 bool empty;
-                Range range;
+                R range;
                 this(BinaryStore!T* s, R range)
                 {
                     this.store = s;
@@ -304,8 +303,9 @@ struct BinaryStore(T)
                         log_debug(__FUNCTION__, "%d", this.range.front.length);
                         log_debug(__FUNCTION__, "%x", this.range.front.offset);
                         front = [];
-                        foreach(i; 0..this.range.front.length)
-                            front ~= this.store.read(this.range.front.offset + (i*T.sizeof));
+                        front ~= this.store.read(this.range.front.offset);
+                        foreach(i; 1..this.range.front.length)
+                            front ~= this.store.read();
                         this.range.popFront;
                     }
                 }
@@ -346,21 +346,8 @@ struct BinaryStore(T)
     } else {
 
         /// read type if size is variable
-        T read(ulong length) {
-            static if (isSomeString!T)
-            {
-                auto buf = this.readBytes(length);
-                auto s = new char[length];
-                s[] = cast(char[])buf[];
-                return cast(T) s;
-            } else {
-                static assert(0);
-            }
-        }
-
-        /// read type if size is variable
         /// with position offset
-        T read(ulong length, ulong pos) {
+        T read(ulong pos, ulong length) {
             static if (isSomeString!T)
             {
                 auto buf = this.readBytes(length, pos);
@@ -382,7 +369,7 @@ struct BinaryStore(T)
                 BinaryStore!T* store;
                 T front;
                 bool empty;
-                Range range;
+                R range;
                 this(BinaryStore!T* s, R range)
                 {
                     this.store = s;
@@ -405,42 +392,6 @@ struct BinaryStore(T)
             }
             return GetFromOffsetsVariable(&this, offsets);
         }
-
-        /// read types from file if variablely sized
-        /// with range of lengths
-        auto getAll(R)(R lengths)
-        if((isInputRange!R || isArray!R) && is(ElementType!R == ulong))
-        {
-            struct GetAll
-            {
-                BinaryStore!T* store;
-                T front;
-                bool empty;
-                R range;
-                this(BinaryStore!T* s, R range)
-                {
-                    this.store = s;
-                    this.store.file.seek(0);
-                    this.range = range;
-                    this.popFront;
-                }
-
-                void popFront()
-                {
-                    this.empty = this.store.isEOF || this.range.empty;
-                    if (this.empty)
-                    {
-                        this.store.reset();
-                    } else {
-                        front = this.store.read(this.range.front);
-                        this.range.popFront;
-                    }
-                    
-                }
-            }
-
-            return GetAll(&this, lengths);
-        }
     }
 
     ///// WRITE ONLY METHODS /////
@@ -459,70 +410,55 @@ struct BinaryStore(T)
         if (this.bufLen > 0)
             this.file.writeRaw(cast(ubyte[]) this.buffer[0 .. this.bufLen]);
         this.bufLen = 0;
-    }    
+    }
 
-    /// write value
-    void write(T val)
-    {
-        assert(isWrite);
-        auto valSize = val.sizeSerialized;
-        if (this.capacity < valSize)
+    static if(isSomeString!T) {
+        ulong writeString(T val)
         {
-            /// allocate tmp array
-            ubyte* tmp = cast(ubyte*) malloc(valSize);
-            auto p = tmp;
-            /// serialize
-            val.serialize(p);
-            /// flush existing buffer
-            this.flush;
+            auto valSize = val.sizeSerialized;
+            if (this.capacity < valSize) 
+                log_err(__FUNCTION__, "String was greater than 65280 bytes");
+            else if (this.vacancies < valSize) {
+                /// NUL fill rest of buffer to complete bgzf block
+                memset(this.buffer + this.bufLen, '\0', this.vacancies);
+                this.bufLen += this.vacancies;
+                assert(this.bufLen == this.capacity);
+                this.flush;
+                auto ret = this.tell;
+                auto p = this.buffer + this.bufLen;
+                /// serialize
+                val.serialize(p);
 
-            /// write to disk in bufsize chunks
-            p = tmp;
-            foreach (i; 0 .. (valSize / this.capacity))
-            {
-                this.file.writeRaw(p[0 .. this.capacity]);
-                p += this.capacity;
+                this.bufLen += valSize;
+                return ret;
+            } else {
+                auto p = this.buffer + this.bufLen;
+                auto ret = this.tell;
+                val.serialize(p);
+                this.bufLen += valSize;
+                return ret;
             }
-
-            /// buffer the extra
-            auto remaining = valSize % this.capacity;
-            this.buffer[0 .. remaining] = p[0 .. remaining];
-            this.bufLen = remaining;
-            free(tmp);
+            return 0;
         }
-        else if (this.vacancies < valSize)
+    } else {
+        /// write value
+        void write(T val)
         {
-            /// allocate tmp array
-            ubyte* tmp = cast(ubyte*) malloc(valSize);
-            auto p = tmp;
-            /// serialize
-            val.serialize(p);
-            auto part = this.vacancies;
-            /// fill buffer
-            this.buffer[this.bufLen .. this.capacity] = tmp[0 .. part];
-            this.bufLen = this.capacity;
-            /// flush
-            this.flush;
-            /// buffer the extra
-            this.buffer[0 .. valSize - part] = tmp[part .. valSize];
-            this.bufLen = valSize - part;
-            free(tmp);
-        }
-        else
-        {
+            if(this.bufLen == this.capacity) this.flush;
+            auto valSize = val.sizeSerialized;
             auto p = this.buffer + this.bufLen;
             val.serialize(p);
             this.bufLen += valSize;
         }
-    }
 
-    /// write values
-    void write(T[] vals)
-    {
-        assert(isWrite);
-        foreach (item; vals)
+        /// write values
+        void write(T[] vals)
         {
-            this.write(item);
+            assert(isWrite);
+            foreach (item; vals)
+            {
+                this.write(item);
+            }
         }
     }
 }
@@ -548,17 +484,17 @@ unittest
         writeln(store.getAll().array);
         assert(store.getAll().array == [1, 2, 3]);
     }
-
+    OffsetTuple[] offs;
     {
 
         auto store = new StringStore("/tmp/string.store", "wb");
-        store.write("HERES a bunch of text");
+        offs ~= OffsetTuple(store.writeString("HERES a bunch of text"), 21);
 
-        store.write("HERES a bunch of text plus some extra");
+        offs ~= OffsetTuple(store.writeString("HERES a bunch of text plus some extra"), 37);
 
-        store.write("addendum: some more text");
+        offs ~= OffsetTuple(store.writeString("addendum: some more text"), 24);
 
-        store.write("note: text");
+        offs ~= OffsetTuple(store.writeString("note: text"), 10);
         store.close;
 
     }
@@ -567,8 +503,9 @@ unittest
 
         import std.range;
         auto store = new StringStore("/tmp/string.store", "rb");
-        ulong[] lengths = [21, 37, 24, 10];
-        assert(store.getAll(lengths).array == [
+        writeln(offs);
+        writeln(store.getFromOffsets(offs).array);
+        assert(store.getFromOffsets(offs).array == [
                 "HERES a bunch of text", "HERES a bunch of text plus some extra",
                 "addendum: some more text", "note: text"
                 ]);
@@ -622,6 +559,7 @@ unittest {
     import htslib.bgzf;
     import libmucor.hts_endian;
     ulong off;
+    ulong[] offsets;
     {
 
         auto store = new UlongStore("/tmp/ulong_test.store", "wb");
@@ -636,15 +574,31 @@ unittest {
         //         writefln("Block changed with #%d, new block %d",i, block);
         //     }
         // }
-
-        foreach(i; 0..65_536) {
+        
+        foreach(i; 0..8160/2) {
+            offsets ~= store.tell;
             store.write(i);    
         }
-        foreach(i; 0..65_536) {
+        assert(store.tell == 4080 * 8);
+        foreach(i; 0..8160/2) {
+            offsets ~= store.tell;
             store.write(i);    
         }
+        assert(store.tell == 65280);
+        foreach(i; 0..8160) {
+            offsets ~= store.tell;
+            store.write(i);    
+        }
+        assert(store.tell != 65280);
+        assert((store.tell & 0xFFFF) == 65280);
+        foreach(i; 0..435) {
+            offsets ~= store.tell;
+            store.write(i);    
+        }
+        assert((store.tell & 0xFFFF) == 435*8);
         off = store.tell;
-        store.write(1);
+        offsets ~= store.tell;
+        store.write(435);
         store.close;
     }
     {
@@ -652,6 +606,37 @@ unittest {
         auto store = new UlongStore("/tmp/ulong_test.store", "rb");
         auto r = store.read(off);
         writeln(r);
-        assert(r == 1);
+        assert(r == 435);
+    }
+    {
+
+        auto store = new UlongStore("/tmp/ulong_test.store", "rb");
+        import std.range: iota;
+        import std.conv: to;
+        ulong[] res = (iota(0, 8160/2).array ~ iota(0, 8160/2).array ~ iota(0, 8160).array ~ iota(0, 436).array).to!(ulong[]);
+        assert(store.getAll().array == res);
+    }
+
+    {
+
+        auto store = new UlongStore("/tmp/ulong_test.store", "rb");
+        import std.range: iota;
+        import std.conv: to;
+        ulong[] res = (iota(0, 8160/2).array ~ iota(0, 8160/2).array ~ iota(0, 8160).array ~ iota(0, 436).array).to!(ulong[]);
+        assert(store.getFromOffsets(offsets).array == res);
+    }
+    {
+
+        auto store = new UlongStore("/tmp/ulong_test.store", "rb");
+        import std.range: iota;
+        import std.conv: to;
+        auto offs = [OffsetTuple(offsets[0], 8160), OffsetTuple(offsets[8160], 8000), OffsetTuple(offsets[8160+8000], 160+436)]; 
+        ulong[][] res = 
+            [
+                (iota(0, 8160/2).array ~ iota(0, 8160/2).array).to!(ulong[]), 
+                iota(0, 8000).array.to!(ulong[]),
+                (iota(8000, 8160).array ~ iota(0, 436).array).to!(ulong[]), 
+            ];
+        assert(store.getArrayFromOffsets(offs).array == res);
     }
 }

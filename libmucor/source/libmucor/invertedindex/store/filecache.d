@@ -4,7 +4,6 @@ import libmucor.invertedindex.metadata;
 import libmucor.wideint;
 import libmucor.khashl;
 import std.container : BinaryHeap;
-import core.stdc.stdlib : malloc, free;
 import std.format : format;
 import libmucor.error;
 import std.algorithm : filter, map, joiner;
@@ -13,40 +12,70 @@ import std.path: buildPath;
 
 struct AccessedIdFile
 {
-    uint128 id;
+    uint128 fid;
+    ulong[] buffer;
     ulong accessCount;
+    ulong bufferMax;
+    bool openedPrior;
+
     BinaryStore!ulong file;
+    bool closed;
+    string prefix;
 
-    void openWrite(string prefix, uint128 id)
+    this(string prefix, uint128 fid, ulong bufferMax)
     {
-        this.id = id;
-        this.file = BinaryStore!ulong(buildPath(prefix, format("%x.ids", id)), "wb");
+        this.fid = fid;
+        this.buffer = [];
+        this.accessCount = 0;
+        this.bufferMax = bufferMax;
+        this.openedPrior = false;
+        this.closed = true;
+        this.prefix = prefix;
     }
 
-    void openRead(string prefix, uint128 id)
+    void openRead()
     {
-        this.id = id;
-        this.file = BinaryStore!ulong(buildPath(prefix, format("%x.ids", id)), "rb");
+        assert(this.closed);
+        
+        this.file = BinaryStore!ulong(buildPath(prefix, format("%x.ids", fid)), "rb");
+        this.closed = false;
     }
 
-    void openAppend(string prefix, uint128 id)
+    private void openWrite()
     {
-        this.id = id;
-        this.file = BinaryStore!ulong(buildPath(prefix, format("%x.ids", id)), "ab");
+        assert(this.closed);
+        if(this.openedPrior){
+            this.openAppend;
+        } else {
+            this.file = BinaryStore!ulong(buildPath(prefix, format("%x.ids", fid)), "wb");
+            this.closed = false;
+            this.openedPrior = true;
+        }
+        
+    }
+
+    private void openAppend()
+    {
+        assert(this.closed);
+        
+        this.file = BinaryStore!ulong(buildPath(prefix, format("%x.ids", fid)), "ab");
+        this.closed = false;
     }
 
     void write(ulong id)
     {
         this.accessCount++;
-        this.file.write(id);
+        if(this.buffer.length > this.bufferMax){
+            this.flushBuffer;
+        }
+        this.buffer ~= id;
     }
 
-    void write(ulong[] ids)
+    void flushBuffer()
     {
-        foreach (key; ids)
-        {
-            this.write(key);
-        }
+        if(closed) this.openWrite;
+        this.file.write(this.buffer);
+        this.buffer = [];
     }
 
     auto getIds()
@@ -56,30 +85,27 @@ struct AccessedIdFile
 
     void close()
     {
+        assert(!closed);
         this.file.close;
+        this.closed = true;
     }
 }
 
 struct IdFileCacheWriter
 {
 
-    /// cache keys that have a single id
-    khashl!(uint128, ulong[]) smalls;
-
-    ulong smallsMax;
-
     /// ids with files that have been opened
     /// 
     /// value is accessCount
-    khashl!(uint128, ulong) openedFiles;
+    khashl!(uint128, AccessedIdFile*) allFiles;
 
-    /// ids with currently open files
-    khashl!(uint128, AccessedIdFile*) openFiles;
+    khashl!(uint128, AccessedIdFile*) cached;
 
     BinaryHeap!(AccessedIdFile*[], "a.accessCount > b.accessCount") cache;
     ulong cacheSize;
     string prefix;
     ulong fileBufferSize;
+    ulong smallsMax;
 
     this(string prefix, ulong cacheSize = 8192, ulong smallsMax = 128)
     {
@@ -93,125 +119,91 @@ struct IdFileCacheWriter
 
     void insert(uint128 key, ulong id)
     {
-        auto p1 = key in openFiles;
-        /// id file is currently open
-        if (p1)
-        {
-            log_trace(__FUNCTION__, "id %x found in cache", key);
-            (*p1).write(id);
-            return;
-        }
+        import std.algorithm : count;
+        auto p1 = key in cached;
+        auto cachedfile = p1 ? *p1 : null;
+        
 
-        /// id file has been opened before
-        auto p2 = key in openedFiles;
-        if (p2)
+        /// id file is currently open
+        if (cachedfile)
         {
-            log_trace(__FUNCTION__, "id %x has been opened prior", key);
-            AccessedIdFile f;
-            f.accessCount = *p2;
-            f.openAppend(this.prefix, key);
-            f.write(id);
-            *p2 += 1;
-            /// insert
-            this.insertToCache(f, key);
+            cachedfile.write(id);
             return;
-        }
-        /// id file has not been opened
-        auto p3 = key in smalls;
-        if (p3)
-        {
-            if (p3.length < this.smallsMax)
-            {
-                log_trace(__FUNCTION__, "id %x already in smalls", key);
-                (*p3) ~= id;
+        } else {
+            auto p2 = key in allFiles;
+            auto file = p2 ? *p2 : null;
+
+            /// id file has been opened before
+            if(file) {
+                
+                /// append file
+                file.write(id);
+
+                if(!file.closed) {
+                    auto inserted = this.insertToCache(file, key);
+                    if(!inserted)
+                        file.close;
+                }
+            } else {
+                AccessedIdFile *fp = new AccessedIdFile(prefix, key, smallsMax);
+                fp.write(id);
+                this.allFiles[key] = fp;
             }
-            else
-            {
-                log_trace(__FUNCTION__, "removing id %x from smalls", key);
-                AccessedIdFile f;
-                f.openWrite(this.prefix, key);
-                f.write(*p3);
-                f.write(id);
-                auto inserted = insertToCache(f, key);
-                this.smalls.remove(key);
-                this.openedFiles[key] = this.smallsMax;
-            }
-        }
-        else
-        {
-            log_trace(__FUNCTION__, format("inserting id %x in smalls", key));
-            ulong[] arr;
-            arr.reserve(this.smallsMax);
-            arr ~= id;
-            smalls[key] = arr;
         }
     }
 
-    bool insertToCache(AccessedIdFile f, uint128 key)
+    bool insertToCache(AccessedIdFile * f, uint128 key)
     {
         /// if cache is not full, insert
         if (this.cache.length < this.cacheSize)
         {
-            log_trace(__FUNCTION__, "inserting id %x in cache", key);
-            ///
-            AccessedIdFile* fp = cast(AccessedIdFile*) malloc(AccessedIdFile.sizeof);
-            *fp = f;
-            this.cache.insert(fp);
-            this.openFiles[key] = fp;
+            this.cache.insert(f);
+            this.cached[key] = f;
             return true;
-            /// if cache is full and this file is accessed more, replace lowest
         }
         else if (f.accessCount > this.cache.front.accessCount)
         {
-            AccessedIdFile* fp = cast(AccessedIdFile*) malloc(AccessedIdFile.sizeof);
-            *fp = f;
             /// replace lowest open file
             auto old_file = cache.front;
-            this.cache.replaceFront(fp);
-            log_trace(__FUNCTION__, "replaced id %x  with id %x in cache", old_file.id, key);
-            this.openFiles[key] = fp;
-            this.openFiles.remove(old_file.id);
-            this.openedFiles[old_file.id] = old_file.accessCount;
+            this.cache.replaceFront(f);
+            this.cached[key] = f;
+            this.cached.remove(old_file.fid);
             old_file.close;
-            free(old_file);
             return true;
-            /// if cache is full and this file is not accessed more, just close
         }
         else
-        {
-            f.close();
             return false;
-        }
     }
 
     void close()
     {
 
         auto f = new BinaryStore!uint128(buildPath(this.prefix, "hashes"), "wb");
-        foreach (kv; openFiles.byKeyValue)
+        foreach (kv; cached.byKeyValue)
         {
             (cast(AccessedIdFile*) kv.value).close();
-            free(cast(AccessedIdFile*) kv.value);
         }
         auto smeta = new BinaryStore!SmallsIdMetaData(buildPath(this.prefix, "smalls.meta"), "wb");
         auto sids = new BinaryStore!ulong(buildPath(this.prefix, "smalls.ids"), "wb");
-        foreach (kv; this.smalls.byKeyValue)
+        foreach (kv; this.allFiles.byKeyValue)
         {
-            SmallsIdMetaData meta;
-            meta.key = kv[0];
-            meta.dataOffset = sids.tell;
-            foreach(k;kv[1])
-                sids.write(k);
-            meta.dataLength = kv[1].length;
-            smeta.write(meta);
+            auto file = cast(AccessedIdFile *)kv[1];
+            if(file.openedPrior){
+                file.flushBuffer;
+                file.close();
+                f.write(kv[0]);
+            } else {
+                SmallsIdMetaData meta;
+                meta.key = kv[0];
+                meta.dataOffset = sids.tell;
+                foreach(k;file.buffer)
+                    sids.write(k);
+                meta.dataLength = file.buffer.length;
+                smeta.write(meta);
+            }
         }
         smeta.close;
         sids.close;
-
-        foreach (k; this.openedFiles.byKey)
-        {
-            f.write(k);
-        }
         f.close;
     }
 }
@@ -245,14 +237,14 @@ struct IdFileCacheReader
         f.close;
     }
 
-    khashlSet!(ulong) getIds(uint128 key)
+    khashlSet!(ulong) * getIds(uint128 key)
     {
-        khashlSet!(ulong) ret;
+        auto ret = new khashlSet!(ulong);
         /// id file is currently open
-        if (key in hashes)
+        if (key in this.hashes)
         {
-            AccessedIdFile f;
-            f.openRead(this.prefix, key);
+            auto f = AccessedIdFile(this.prefix, key, 0);
+            f.openRead();
             foreach (x; f.getIds)
             {
                 ret.insert(x);
@@ -263,7 +255,7 @@ struct IdFileCacheReader
         auto smallsOffsets = this.smallsMeta
             .filter!(x => x.key == key)
             .map!(x => OffsetTuple(x.dataOffset, x.dataLength)).array;
-        // log_info(__FUNCTION__, "%x metadata collected", key);
+        // log_info(__FUNCTION__, "%x metadata collected: %x", key, Thread.getThis.id);
         auto smallsIds = BinaryStore!ulong(buildPath(this.prefix, "smalls.ids"), "rb");
         foreach (x; smallsIds.getArrayFromOffsets(smallsOffsets))
         {
@@ -273,10 +265,12 @@ struct IdFileCacheReader
             }
         }
         smallsIds.close();
-        // log_info(__FUNCTION__, "%x ids collected", key);
+        // log_info(__FUNCTION__, "%d ids collected for %x ", ret.count, key);
         return ret;
     }
 }
+
+
 
 unittest
 {
@@ -291,11 +285,11 @@ unittest
         auto fcache = new IdFileCacheWriter("/tmp/test_fcache", 2, 2);
         fcache.insert(uint128(0), 0); // 0 enters smalls
 
-        assert(fcache.smalls.count == 1);
+        // assert(fcache.smalls.count == 1);
 
         fcache.insert(uint128(1), 1); // 1 enters smalls
         fcache.insert(uint128(1), 2);
-        assert(fcache.smalls.count == 2);
+        // assert(fcache.smalls.count == 2);
         fcache.insert(uint128(1), 3); // 1 enters opened
         // assert(fcache.smalls.count == 1);
         // assert(fcache.openedFiles[uint128(1)] == 3);

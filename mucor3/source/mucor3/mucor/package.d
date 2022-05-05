@@ -14,13 +14,14 @@ import mucor3.mucor.vcf;
 import mucor3.mucor.query;
 import mucor3.mucor.table;
 import libmucor.error;
+import libmucor: setup_global_pool;
 
-int threads = 0;
+int threads = -1;
 string bam_dir = "";
 string[] extra_fields;
 string prefix = "";
 string config_file = "";
-string query = "";
+string query_str = "";
 ulong fileCacheSize = 8192;
 ulong smallsSize = 128;
 
@@ -37,8 +38,8 @@ void mucor_main(string[] args)
             "extra fields from VCF to be displayed in pivot tables",
             &extra_fields, "prefix|p",
             "output directory for files (can be directory or file prefix)", &prefix, "config|c",
-            "specify json config file",
-            &config_file, "query|q", "filter vcf data using varquery syntax", &query,
+            "specify json config file (not yet working)",
+            &config_file, "query|q", "filter vcf data using varquery syntax", &query_str,
             "file-cache-size|f", "number of highly used files kept open", &fileCacheSize,
             "ids-cache-size|i", "number of ids that can be stored per key before a file is opened", &smallsSize);
 
@@ -54,14 +55,9 @@ void mucor_main(string[] args)
         exit(1);
     }
 
-    if (threads == 0)
-    {
-        defaultPoolThreads(totalCPUs);
-    }
-    else
-    {
-        defaultPoolThreads(threads);
-    }
+    setup_global_pool(threads);
+
+    log_info(__FUNCTION__, "Using %d threads", defaultPoolThreads);
 
     /// create prefix folder
     if (prefix.exists)
@@ -108,37 +104,31 @@ void mucor_main(string[] args)
 
     // atomizeVcfs(args[0], vcfFiles, vcf_json_dir);
 
-    auto index_dir = buildPath(prefix, "indexes");
+    auto index_dir = buildPath(prefix, "index");
     mkdirRecurse(index_dir);
 
     string combined_json_file;
 
-    if (query != "")
+    if (query_str != "")
     {
 
         log_info(__FUNCTION__, "Indexing vcf data ...");
-        indexJsonFiles(vcfJsonFiles, index_dir, threads, fileCacheSize, smallsSize);
+        // indexJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads, fileCacheSize, smallsSize);
 
         log_info(__FUNCTION__, "Filtering vcf data...");
         combined_json_file = buildPath(prefix, "filtered.json");
 
-        queryJsonFiles(vcfJsonFiles, index_dir, query, combined_json_file);
+        // queryJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads, combined_json_file);
     }
     else
     {
         combined_json_file = buildPath(prefix, "all.json");
-        File output = File(combined_json_file, "w");
+        // File output = File(combined_json_file, "w");
         log_info(__FUNCTION__, "Combining vcf data...");
-        foreach (f; vcfJsonFiles)
-        {
-            foreach (line; File(f).byLine)
-            {
-                output.writeln(line);
-            }
-        }
+        // combineJsonFiles(vcfJsonFiles, combined_json_file);
     }
 
-    auto pivReqCols = requiredCols ~= ["AF"];
+    auto pivReqCols = requiredCols ~= ["/FORMAT/AF"];
 
     auto colData = validateDataAndCollectColumns(combined_json_file, pivReqCols, extra_fields);
     auto master = buildPath(prefix, "master.tsv");

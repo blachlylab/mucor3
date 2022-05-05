@@ -3,6 +3,7 @@ import mucor3;
 import htslib.hts_log;
 import libmucor;
 import std.getopt;
+import libmucor.error;
 
 string help = "
 depthgauge		Takes in an AF.tsv table, a directory path to a
@@ -36,6 +37,7 @@ uniq			Uniqifies JSON arrays in JSON data.
 
 void main(string[] args)
 {
+    // set_log_level(LogLevel.Trace);
     if (args.length == 1)
     {
         stderr.writeln(help);

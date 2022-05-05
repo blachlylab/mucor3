@@ -16,80 +16,49 @@ import libmucor.khashl;
 import libmucor.error;
 import std.conv: to;
 
-void indexJsonFiles(string[] files, string indexFolder, ulong threads, ulong fileCacheSize, ulong smallsSize)
+void indexJsonFiles(string binary, string query_str, string[] files, string indexFolder, int threads, ulong fileCacheSize, ulong smallsSize)
 {
-    index_main([
+    auto cmdline = [
+        binary, 
         "index", 
         "-p", indexFolder, 
         "-t", threads.to!string, 
         "-f", fileCacheSize.to!string, 
-        "-i", smallsSize.to!string
-        ] ~ files);
+        "-i", smallsSize.to!string,
+        "-q", query_str, 
+    ] ~ files;
+    auto pid = spawnProcess(cmdline);
+    if (wait(pid) != 0)
+    {
+        log_err(__FUNCTION__, "mucor index failed");
+    }
     
 }
 
-void queryJsonFiles(string[] files, string indexFolder, string queryStr, string outfile)
+void queryJsonFiles(string binary, string query_str, string[] files, string indexFolder, int threads, string outfile)
 {
-    import std.datetime.stopwatch : StopWatch;
-
-    auto output = File(outfile, "w");
-
-    StopWatch sw;
-    sw.start;
-
-    auto idx = new InvertedIndex(indexFolder, false);
-    log_info(__FUNCTION__, "Time to load index: %d seconds", sw.peek.total!"seconds");
-    log_info(__FUNCTION__, "%d records in index", idx.recordMd5s.length);
-
-    sw.reset;
-    auto q = parseQuery(queryStr);
-    log_info(__FUNCTION__, "Time to parse query: %d usecs", sw.peek.total!"usecs");
-
-    sw.reset;
-    auto idxs = evaluateQuery(q, idx);
-    log_info(__FUNCTION__, "Time to evaluate query: %d seconds", sw.peek.total!"seconds");
-
-    sw.reset;
-
-    khashlSet!uint128 hashmap;
-    foreach (key; idx.convertIds(idx.allIds))
+    auto ofile = File(outfile, "w");
+    auto cmdline = [
+        binary, 
+        "query", 
+        "-p", indexFolder, 
+        "-t", threads.to!string,
+        "-q", query_str, 
+    ] ~ files;
+    auto pid = spawnProcess(cmdline, std.stdio.stdin, ofile);
+    if (wait(pid) != 0)
     {
-        hashmap.insert(key);
+        log_err(__FUNCTION__, "mucor query failed");
     }
+}
 
-    auto recordCount = 0;
-    auto matching = 0;
-
-    Bar b = new Bar();
-    b.message = { return "Filtering vcf data"; };
-    b.max = files.length;
-    b.fill = "#";
-    auto m = new Mutex();
-    foreach (f; parallel(files))
+void combineJsonFiles(string[] files, string outfile)
+{
+    auto ofile = File(outfile, "w");
+    auto cmdline = ["cat"] ~ files;
+    auto pid = spawnProcess(cmdline, std.stdio.stdin, ofile);
+    if (wait(pid) != 0)
     {
-        auto rc = 0;
-        auto mc = 0;
-        auto range = File(f).byChunk(4096).parseJsonByLine;
-        foreach (obj; range)
-        {
-            rc++;
-            uint128 a;
-            a.fromHexString(deserialize!string(obj["md5"]));
-            if (a in hashmap)
-            {
-                mc++;
-                m.lock;
-                output.writeln(obj);
-                m.unlock;
-            }
-        }
-        m.lock;
-        b.next;
-        recordCount += rc;
-        matching += mc;
-        m.unlock;
+        log_err(__FUNCTION__, "combine failed");
     }
-    b.finish;
-    log_info(__FUNCTION__, "Time to query/filter records: %d seconds", sw.peek.total!"seconds");
-    log_info(__FUNCTION__, "%d / %d records matched your query", recordCount, matching);
 }

@@ -16,10 +16,8 @@ import std.file : exists;
 
 import asdf : deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
-import libmucor.invertedindex.invertedindex;
-import libmucor.invertedindex.metadata;
+import libmucor.invertedindex;
 import libmucor.jsonlops.jsonvalue;
-import libmucor.invertedindex.store;
 import libmucor.khashl;
 import libmucor.error;
 import std.format : format;
@@ -75,6 +73,7 @@ struct BinaryIndexWriter
     StopWatch sw;
     ulong lastSWCheck;
 
+
     this(string prefix, ulong cacheSize = 8192, ulong smallsMax = 128)
     {
         sw.start;
@@ -108,10 +107,9 @@ struct BinaryIndexWriter
                 sw.peek.total!"usecs" / numSums,
             );
             log_info("IdCacheWriter", 
-                "File cache size: %d, Smalls size: %d, Files opened: %d",
+                "File cache size: %d, Files accessed: %d",
                 this.idCache.cache.length, 
-                this.idCache.smalls.count, 
-                this.idCache.openedFiles.count
+                this.idCache.allFiles.count
             ); 
         // stderr.writeln();
         }
@@ -124,14 +122,12 @@ struct BinaryIndexWriter
 
             KeyMetaData meta;
             meta.keyHash = keyhash;
-            meta.keyOffset = this.keys.tell;
-            this.keys.write(key);
-            meta.keyLength = this.keys.tell - meta.keyOffset;
+            meta.keyOffset = this.keys.writeString(key);
+            meta.keyLength = key.length;
             metadata.write(meta);
         }
 
         auto valHash = this.jsonStore.insert(item);
-
         auto newHash = combineHash(keyhash, valHash);
 
         this.idCache.insert(newHash, this.numSums);
@@ -188,7 +184,7 @@ struct BinaryIndexReader
 
     auto getKeysWithId()
     {
-        auto strkeys = this.metadata.map!(meta => this.keys.read(meta.keyLength, meta.keyOffset));
+        auto strkeys = this.metadata.map!(meta => this.keys.read(meta.keyOffset, meta.keyLength));
         auto hashes = this.metadata.map!(meta => meta.keyHash);
         return zip(strkeys, hashes);
     }

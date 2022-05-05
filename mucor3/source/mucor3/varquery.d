@@ -53,10 +53,11 @@ auto query(R)(R range, InvertedIndex* idx, string queryStr)
     });
 }
 
-void index(R)(R range, string prefix, ulong fsize, ulong ssize) if (is(ElementType!R == Asdf))
+void index(R)(R range, string prefix, ulong fsize, ulong ssize, string query_str) if (is(ElementType!R == Asdf))
 {
     InvertedIndex* idx = new InvertedIndex(prefix, true, fsize, ssize);
-
+    if(query_str != "")
+        idx.addQueryFilter(query_str);
     StopWatch sw;
     sw.start;
     auto count = 0;
@@ -92,6 +93,7 @@ void query_main(string[] args)
             "query|q", "filter vcf data using varquery syntax", &query_str);
 
     setup_global_pool(threads);
+    // set_log_level(LogLevel.Trace);
 
     if (res.helpWanted)
     {
@@ -134,8 +136,8 @@ void index_main(string[] args)
             config.required,
             "prefix|p", "index output prefix", &prefix, 
             "file-cache-size|f", "number of highly used files kept open", &fileCacheSize,
-            "ids-cache-size|i", "number of ids that can be stored per key before a file is opened", &smallsSize);
-
+            "ids-cache-size|i", "number of ids that can be stored per key before a file is opened", &smallsSize,
+            "query|q", "only index data that pertains to a specific query", &query_str);
     setup_global_pool(threads);
 
     if (res.helpWanted)
@@ -151,8 +153,11 @@ void index_main(string[] args)
     }
     StopWatch sw;
 
-    // set_log_level(LogLevel.Debug);
+    // set_log_level(LogLevel.Trace);
 
-    args[1 .. $].map!(x => File(x).byChunk(4096).parseJsonByLine).joiner.index(prefix, fileCacheSize, smallsSize);
+    args[1 .. $]
+        .map!(x => File(x).byChunk(4096).parseJsonByLine.map!(x => Asdf(x.data.dup)))
+        .joiner
+        .index(prefix, fileCacheSize, smallsSize, query_str);
 
 }

@@ -73,9 +73,8 @@ struct JsonStoreWriter
                 this.doubles.write(x);
                 meta.keyLength = this.doubles.tell - meta.keyOffset;
             }, (const(char)[] x) {
-                meta.keyOffset = this.strings.tell;
-                this.strings.write(x);
-                meta.keyLength = this.strings.tell - meta.keyOffset;
+                meta.keyOffset = this.strings.writeString(x);
+                meta.keyLength = x.length;
             });
             metadata.write(meta);
             valuesSeen.insert(keyhash);
@@ -241,7 +240,7 @@ struct JsonStoreReader
     {
         auto l = this.longs.getAll();
         auto d = this.doubles.getAll();
-        auto s = this.strings.getAll(this.getMetaForType!string.map!( x => x.keyLength));
+        auto s = this.strings.getFromOffsets(this.getMetaForType!string.map!( x => OffsetTuple(x.keyOffset, x.keyLength)));
         auto b = this.metadata
             .std_filter!(x => x.padding > 0)
             .map!(x => x.padding == 1 ? false : true);
@@ -266,7 +265,7 @@ struct JsonStoreReader
         }
         else static if (isSomeString!T)
         {
-            return this.strings.getAll(this.getMetaForType!T.map!( x => x.keyLength));
+            return this.strings.getFromOffsets(this.getMetaForType!string.map!( x => OffsetTuple(x.keyOffset, x.keyLength)));
         }
     }
 }

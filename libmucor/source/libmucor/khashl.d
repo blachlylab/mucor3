@@ -278,7 +278,7 @@ pragma(inline, true):
     }
     else
     {
-
+        pragma(inline, true)
         void insert(const(KT) key)
         {
             int absent;
@@ -289,6 +289,7 @@ pragma(inline, true):
             auto x = this.kh_put(ins, &absent);
         }
 
+        pragma(inline, true)
         kh_t intersection(const(kh_t) other) const
         {
             kh_t ret;
@@ -300,6 +301,7 @@ pragma(inline, true):
             return ret;
         }
 
+        pragma(inline, true)
         kh_t difference(const(kh_t) other) const
         {
             kh_t ret;
@@ -311,6 +313,7 @@ pragma(inline, true):
             return ret;
         }
 
+        pragma(inline, true)
         kh_t set_union(const(kh_t) other) const
         {
             kh_t ret;
@@ -334,6 +337,37 @@ pragma(inline, true):
             else static if (op == "|")
             {
                 return this.set_union(other);
+            }
+            else
+            {
+                static assert(0, "op not implemented");
+            }
+        }
+
+        void opOpAssign(string op)(ref const(kh_t) other)
+        {
+            import std.array: array;
+            static if (op == "&")
+            {
+                foreach (k; this.byKey.array)
+                {
+                    if (!(k in other))
+                        this.remove(k);
+                }
+                
+            }
+            else static if (op == "-")
+            {
+                foreach (k; this.byKey.array)
+                {
+                    if (k in other)
+                        this.remove(k);
+                }
+            }
+            else static if (op == "|")
+            {
+                foreach (k; other.byKey)
+                    this.insert(k);
             }
             else
             {

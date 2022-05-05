@@ -11,16 +11,20 @@ import libmucor.jsonlops;
 import std.algorithm : map, count;
 import std.typecons : tuple, Tuple;
 import libmucor.error;
+import std.array : split;
+import libmucor.invertedindex : sep;
 
 auto validateDataAndCollectColumns(string fn, string[] required, string[] extra)
 {
-    khashlSet!(string) set;
-    khashlSet!(string) sampleSet;
+    khashlSet!(string, true) set;
+    khashlSet!(string, true) sampleSet;
     foreach (obj; File(fn).byChunk(4096).parseJsonByLine)
     {
         foreach (r; required)
         {
-            if (obj[r] == Asdf.init)
+            auto v = r.split(sep);
+            if(v.length != 1) v = v[1..$];
+            if (obj[v] == Asdf.init)
             {
                 log_err(__FUNCTION__, "%s column not found in some rows!", r);
                 exit(1);
