@@ -16,16 +16,8 @@ import std.sumtype;
 import libmucor.hts_endian;
 import std.typecons : Tuple, tuple;
 import std.exception : enforce;
+import libmucor.query.value : isNumericStringAnInteger;
 
-pragma(inline, true) bool isNumericStringInteger(const(char)[] val)
-{
-    foreach (c; val)
-    {
-        if (c < '0' || c > '9')
-            return false;
-    }
-    return true;
-}
 
 alias JsonValueTypes = SumType!(const(char)[], double, long, bool);
 
@@ -47,7 +39,7 @@ struct JSONValue
             break;
         case Asdf.Kind.number:
             auto numStr = json.to!string;
-            if (isNumericStringInteger(numStr))
+            if (isNumericStringAnInteger(numStr))
             {
                 val = deserialize!long(json);
             }

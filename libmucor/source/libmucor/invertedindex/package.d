@@ -18,6 +18,7 @@ import std.exception : enforce;
 import asdf : deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.wideint : uint128;
 import libmucor.jsonlops.jsonvalue;
+import libmucor.query.eval;
 
 import libmucor.khashl;
 import std.digest.md : MD5Digest, toHexString;
@@ -53,22 +54,20 @@ struct InvertedIndex
     auto addQueryFilter(string queryStr) {
         import std.array: split;
         assert(this.bidxWriter);
-        auto q = parseQuery(queryStr);
-        this.fields = getQueryFields(q, null);
+        auto q = Query(queryStr);
+        this.fields = getQueryFields(q.expr, null);
         log_info(__FUNCTION__, "Indexing only fields specified in query: %s", (*this.fields).byKey.array);
         foreach (key; this.fields.byKey.array)
         {
             auto arr = key.split(sep);
-            if(arr.length == 1) log_err(__FUNCTION__, "Query fields must have a leading '/' ");
-            const(char)[] field = "/";
-            foreach(v; arr[1..$]){
+            const(char)[] field;
+            foreach(v; arr){
                 field ~= v;
                 this.fields.insert(field);
-                field ~= "/";
+                field ~= sep;
             }
         }
-        this.fields.insert("/");
-        this.fields.insert("");
+        log_info(__FUNCTION__, "Indexing only fields specified in query: %s", (*this.fields).byKey.array);
     }
 
     void close()
@@ -104,7 +103,11 @@ struct InvertedIndex
         root["md5"].remove;
         md5.fromHexString(m);
         
-        queue.push(AsdfKeyValue("",root));
+        if(root.kind != Asdf.Kind.object) log_err(__FUNCTION__,  "Expected JSON Object not: %s", root.kind);
+        foreach (kv; root.byKeyValue)
+        {
+            queue.push(AsdfKeyValue(kv.key, kv.value));
+        }
         while(!queue.empty) {
             AsdfKeyValue val = queue.pop;
             // writeln(val[0]," ", val[1]);
@@ -155,8 +158,11 @@ struct InvertedIndex
         auto m = root["md5"].deserializeAsdf!string;
         root["md5"].remove;
         md5.fromHexString(m);
-        
-        queue.push(AsdfKeyValue("",root));
+        if(root.kind != Asdf.Kind.object) log_err(__FUNCTION__,  "Expected JSON Object not: %s", root.kind);
+        foreach (kv; root.byKeyValue)
+        {
+            queue.push(AsdfKeyValue(kv.key, kv.value));
+        }
         while(!queue.empty) {
             AsdfKeyValue val = queue.pop;
             // writeln(val[0]," ", val[1]);
@@ -211,8 +217,6 @@ struct InvertedIndex
         import std.regex : matchFirst, regex;
 
         auto keycopy = key.idup;
-        if (key[0] != '/')
-            log_err(__FUNCTION__,"key is missing leading /");
         uint128[] ret;
         auto wildcard = key.indexOf('*');
         if (wildcard == -1)
@@ -250,9 +254,11 @@ struct InvertedIndex
     {
         auto matchingFields = getFields(key);
         auto matchingValues = this.bidxReader.jsonStore.filter([value]);
-        return cartesianProduct(matchingFields, matchingValues).map!(x => combineHash(x[0], x[1]))
-            .map!(x => this.bidxReader.idCache.getIds(x))
-            .reduce!unionIds;
+        return reduce!unionIds(
+                new khashlSet!ulong,
+                cartesianProduct(matchingFields, matchingValues).map!(x => combineHash(x[0], x[1]))
+                    .map!(x => this.bidxReader.idCache.getIds(x))
+            );
     }
 
     khashlSet!(ulong) * queryRange(T)(const(char)[] key, T first, T second)
@@ -261,9 +267,11 @@ struct InvertedIndex
         auto matchingValues = this.bidxReader.jsonStore.filterRange([
             first, second
         ]);
-        return cartesianProduct(matchingFields, matchingValues).map!(x => combineHash(x[0], x[1]))
-            .map!(x => this.bidxReader.idCache.getIds(x))
-            .reduce!unionIds;
+        return reduce!unionIds(
+                new khashlSet!ulong,
+                cartesianProduct(matchingFields, matchingValues).map!(x => combineHash(x[0], x[1]))
+                .map!(x => this.bidxReader.idCache.getIds(x))
+            );
     }
 
     auto getMatchingValues(T)(T val, string op)
@@ -354,121 +362,6 @@ struct InvertedIndex
     }
 }
 
-khashlSet!(ulong) * evaluateQuery(Query* query, InvertedIndex* idx, string lastKey = "")
-{
-    return (*query).match!((KeyValue x) {
-        switch (x.op)
-        {
-        case ValueOp.Equal:
-            return queryValue(x.lhs, x.rhs, idx);
-        case ValueOp.ApproxEqual:
-            return queryValue(x.lhs, x.rhs, idx);
-        default:
-            auto res = queryOpValue(x.lhs, x.rhs, idx, cast(string) x.op);
-            return res;
-        }
-    }, (UnaryKeyOp x) {
-        final switch (x.op)
-        {
-        case KeyOp.Exists:
-            return new khashlSet!(ulong)(); /// TODO: complete
-        }
-    }, (NotValue x) {
-        if (lastKey == "")
-            log_err(__FUNCTION__, "Key cannot be null");
-        return idx.queryNOT(queryValue(lastKey, x.value, idx));
-    }, (Value x) {
-        if (lastKey == "")
-            log_err(__FUNCTION__, "Key cannot be null");
-        return queryValue(lastKey, x, idx);
-    }, (ComplexKeyValue x) {
-        switch (x.op)
-        {
-        case ValueOp.Equal:
-            return evaluateQuery(x.rhs, idx, x.lhs);
-        default:
-            log_err(__FUNCTION__, "%s operator not allowed here: %s",
-                cast(string) x.op, queryToString(*query));
-            return new khashlSet!(ulong)();
-        }
-    }, (NotQuery x) => idx.queryNOT(evaluateQuery(x.rhs, idx, lastKey)), (ComplexQuery x) {
-        switch (x.op)
-        {
-        case LogicalOp.And:
-            auto a = evaluateQuery(x.rhs, idx, lastKey);
-            auto b = evaluateQuery(x.lhs, idx, lastKey);
-            return intersectIds(a, b);
-        case LogicalOp.Or:
-            auto a = evaluateQuery(x.rhs, idx, lastKey);
-            auto b = evaluateQuery(x.lhs, idx, lastKey);
-            return unionIds(a, b);
-        default:
-            log_err(__FUNCTION__, "%s operator not allowed here: %s",
-                cast(string) x.op, queryToString(*query));
-            return new khashlSet!(ulong)();
-        }
-    }, (Subquery x) => evaluateQuery(x.subquery, idx, lastKey),);
-}
-
-khashlSet!(const(char)[]) * getQueryFields(Query* query, khashlSet!(const(char)[]) * keys)
-{
-    if(!keys) keys = new khashlSet!(const(char)[]);
-    return (*query).match!((KeyValue x) {
-        keys.insert(x.lhs);
-        return keys;
-    }, (UnaryKeyOp x) {
-        keys.insert(x.lhs);
-        return keys;
-    }, (NotValue x) {
-        return keys;
-    }, (Value x) {
-        return keys;
-    }, (ComplexKeyValue x) {
-        keys.insert(x.lhs);
-        return keys;
-    }, (NotQuery x) {
-        getQueryFields(x.rhs, keys);
-        return keys;
-    }, (ComplexQuery x) {
-        getQueryFields(x.rhs,keys);
-        getQueryFields(x.lhs,keys);
-        return keys;
-    }, (Subquery x) => getQueryFields(x.subquery,keys));
-}
-
-khashlSet!(ulong) * queryValue(const(char)[] key, Value value, InvertedIndex* idx)
-{
-
-    return (*value.expr).match!((bool x) => idx.query(key, x),
-            (long x) => idx.query(key, x), (double x) => idx.query(key, x),
-            (string x) => idx.query(key, x),
-            (DoubleRange x) => idx.queryRange(key, x[0], x[1]),
-            (LongRange x) => idx.queryRange(key, x[0], x[1]),);
-}
-
-khashlSet!(ulong) * queryOpValue(const(char)[] key, Value value, InvertedIndex* idx, string op)
-{
-    alias f = tryMatch!((long x) { return idx.queryOp!long(key, x, op); }, (double x) {
-        return idx.queryOp!double(key, x, op);
-    });
-    return f(*value.expr);
-}
-
-khashlSet!(ulong) * unionIds(khashlSet!(ulong) * a, khashlSet!(ulong) * b){
-    (*a) |= (*b);
-    return a;
-}
-
-khashlSet!(ulong) * intersectIds(khashlSet!(ulong) * a, khashlSet!(ulong) * b){
-    (*a) &= (*b);
-    return a;
-}
-
-khashlSet!(ulong) * negateIds(khashlSet!(ulong) * a, khashlSet!(ulong) * b){
-    (*a) |= (*b);
-    return a;
-}
-
 unittest
 {
     import asdf;
@@ -490,8 +383,8 @@ unittest
         auto idx = InvertedIndex("/tmp/test_idx", false);
         assert(idx.bidxReader.sums.length == 3);
         // writeln(idx.bidxReader.getKeysWithId.map!(x => x[0]));
-        assert(idx.query("/test2", "foo").byKey.array == [0]);
-        assert(idx.queryRange("/test3", 1, 3).byKey.array == [0, 1]);
+        assert(idx.query("test2", "foo").byKey.array == [0]);
+        assert(idx.queryRange("test3", 1, 3).byKey.array == [0, 1]);
         idx.close;
     }
 
@@ -505,6 +398,7 @@ unittest
     import htslib.hts_log;
 
     hts_set_log_level(htsLogLevel.HTS_LOG_INFO);
+    set_log_level(LogLevel.Info);
     {
         auto idx = new InvertedIndex("/tmp/test_idx", true);
         idx.addJsonObject(
@@ -531,48 +425,106 @@ unittest
         idx.close;
     }
     {
-        auto q1 = parseQuery("/test = hello");
-        auto q2 = parseQuery("/test = \"hello world\"");
-        auto q3 = parseQuery("/test = (world | worl | hi | bye)");
-        auto q4 = parseQuery("/test3 > 3");
-        auto q5 = parseQuery("/test3 >= 3");
-        auto q6 = parseQuery("/test3 <= 3");
-        auto q7 = parseQuery("/test3 < 3");
-        auto q8 = parseQuery("/test3 = 3:6");
-        auto q9 = parseQuery("/test4/foo = (bar | baz)");
-        auto q10 = parseQuery("/test4/foo = (bar & baz)");
-        auto q11 = parseQuery("/test4* = bar");
-        auto q12 = parseQuery("/test4* = baz");
-        auto q13 = parseQuery("/test* = bar");
-        auto q14 = parseQuery("(/test* = baz) & (/test3 = 6:7)");
-        auto q15 = parseQuery("(/test = (world | worl | hi | bye)) & (/test4/foo = (bar & baz))");
-        auto q16 = parseQuery("(/test = hello) & (/test4/foo = (bar & baz))");
+        auto q1 = Query("test = hello");
+        auto q2 = Query("test = \"hello world\"");
+        auto q3 = Query("test = (world | worl | hi | bye)");
+        auto q4 = Query("test3 > 3");
+        auto q5 = Query("test3 >= 3");
+        auto q6 = Query("test3 <= 3");
+        auto q7 = Query("test3 < 3");
+        auto q8 = Query("test3 = 3..6");
+        auto q9 = Query("test4/foo = (bar | baz)");
+        auto q10 = Query("test4/foo = (bar & baz)");
+        auto q11 = Query("test4* = bar");
+        auto q12 = Query("test4* = baz");
+        auto q13 = Query("test* = bar");
+        auto q14 = Query("(test* = baz) & (test3 = 6..7)");
+        auto q15 = Query("(test = (world | worl | hi | bye)) & (test4/foo = (bar & baz))");
+        auto q16 = Query("(test = hello) & (test4/foo = (bar & baz))");
 
         auto idx = new InvertedIndex("/tmp/test_idx", false);
 
         assert(idx.bidxReader.sums.length == 8);
-        // assert(idx.bidxReader.idCache.smallsIds.getAll.array.length == 25);
-        // assert(idx.bidxReader.idCache.smallsMeta.getAll.array.length == 21);
 
-        assert(evaluateQuery(q1, idx).byKey.array == [0, 6, 5]);
-        assert(evaluateQuery(q2, idx).byKey.array == [7]);
-        assert(evaluateQuery(q3, idx).byKey.array == [2, 4, 1, 3]);
-        assert(evaluateQuery(q4, idx).byKey.array == [3, 4, 6, 5, 7]);
-        assert(evaluateQuery(q5, idx).byKey.array == [3, 4, 2, 6, 5, 7]);
-        assert(evaluateQuery(q6, idx).byKey.array == [2, 0, 1]);
-        assert(evaluateQuery(q7, idx).byKey.array == [0, 1]);
-        assert(evaluateQuery(q8, idx).byKey.array == [4, 2, 3]);
-        assert(evaluateQuery(q9, idx).byKey.array == [2, 6, 5]);
-        assert(evaluateQuery(q10, idx).byKey.array == [6]);
-        assert(evaluateQuery(q11, idx).byKey.array == [4, 2, 6]);
-        assert(evaluateQuery(q12, idx).byKey.array == [5, 6, 3]);
-        assert(evaluateQuery(q13, idx).byKey.array == [0, 4, 2, 6]);
-        assert(evaluateQuery(q14, idx).byKey.array == [5]);
-        assert(evaluateQuery(q15, idx).byKey.array == []);
-        assert(evaluateQuery(q16, idx).byKey.array == [6]);
+        assert(q1.evaluate(idx).byKey.array == [0, 6, 5]);
+        assert(q2.evaluate(idx).byKey.array == [7]);
+        assert(q3.evaluate(idx).byKey.array == [4, 2, 1, 3]);
+        assert(q4.evaluate(idx).byKey.array == [7, 4, 6, 5, 3]);
+        assert(q5.evaluate(idx).byKey.array == [7, 2, 4, 6, 5, 3]);
+        assert(q6.evaluate(idx).byKey.array == [0, 2, 1]);
+        assert(q7.evaluate(idx).byKey.array == [0, 1]);
+        assert(q8.evaluate(idx).byKey.array == [2, 4, 3]);
+        assert(q9.evaluate(idx).byKey.array == [2, 6, 5]);
+        assert(q10.evaluate(idx).byKey.array == [6]);
+        assert(q11.evaluate(idx).byKey.array == [2, 6, 4]);
+        assert(q12.evaluate(idx).byKey.array == [3, 6, 5]);
+        assert(q13.evaluate(idx).byKey.array == [0, 2, 4, 6]);
+        assert(q14.evaluate(idx).byKey.array == [5]);
+        assert(q15.evaluate(idx).byKey.array == []);
+        assert(q16.evaluate(idx).byKey.array == [6]);
+        idx.close;
+    }
 
-        // assert(idx.query("/test2","foo").byKey.array == [0]);
-        // assert(idx.queryRange("/test3", 1, 3).byKey.array == [0, 1]);
+}
+
+
+unittest
+{
+    import asdf;
+    import libmucor.jsonlops.basic : spookyhashObject;
+    import std.array : array;
+    import htslib.hts_log;
+
+    hts_set_log_level(htsLogLevel.HTS_LOG_INFO);
+    set_log_level(LogLevel.Info);
+    {
+        auto idx = new InvertedIndex("/tmp/test_idx", true);
+        idx.addJsonObject(`{"test1":0.4,      "test2":-1e-2, "test3":1}`.parseJson.spookyhashObject);
+        idx.addJsonObject(`{"test1":0.1,      "test2":-1e-3, "test3":10}`.parseJson.spookyhashObject);
+        idx.addJsonObject(`{"test1":0.8,      "test2":-1e-4, "test3":10000}`.parseJson.spookyhashObject);
+        idx.addJsonObject(`{"test1":1.2,      "test2":-1e-5, "test3":2}`.parseJson.spookyhashObject);
+        idx.addJsonObject(`{"test1":0.2,      "test2":-1e-6, "test3":40.0}`.parseJson.spookyhashObject);
+        idx.addJsonObject(`{"test1":0.001,    "test2":-1e-7, "test3":42}`.parseJson.spookyhashObject);
+        idx.addJsonObject(`{"test1":0.000001, "test2":-1e-8, "test3":50}`.parseJson.spookyhashObject);
+        idx.addJsonObject(`{"test1":-0.2,     "test2":-1e-9, "test3":97}`.parseJson.spookyhashObject);
+        idx.close;
+    }
+    {
+        auto q1 = Query("test1 = 0.4");
+        auto q2 = Query("test1 > 0.1");
+        auto q3 = Query("test1 < 0.1");
+        auto q4 = Query("test1 >= 0.1");
+        auto q5 = Query("test1 <= 0.1");
+        auto q6 = Query("test2 < -1e-2");
+        auto q7 = Query("test2 > -1e-2");
+        auto q8 = Query("test3 > 10");
+        auto q9 = Query("test3 > 10.0");
+        auto q10 = Query("test3 >= 10");
+        auto q11 = Query("test3 >= 10.0");
+        auto q12 = Query("test3 < 10");
+        auto q13 = Query("test3 < 10.0");
+        auto q14 = Query("test3 <= 10");
+        auto q15 = Query("test3 <= 10.0");
+
+        auto idx = new InvertedIndex("/tmp/test_idx", false);
+
+        assert(idx.bidxReader.sums.length == 8);
+
+        assert(q1.evaluate(idx).byKey.array == [0]);
+        assert(q2.evaluate(idx).byKey.array == [0, 2, 4, 3]);
+        assert(q3.evaluate(idx).byKey.array == [7, 6, 5]);
+        assert(q4.evaluate(idx).byKey.array == [0, 2, 4, 1, 3]);
+        assert(q5.evaluate(idx).byKey.array == [6, 1, 5, 7]);
+        assert(q6.evaluate(idx).byKey.array == []);
+        assert(q7.evaluate(idx).byKey.array == [2, 4, 6, 1, 5, 3, 7]);
+        assert(q8.evaluate(idx).byKey.array == [2, 4, 6, 5, 7]);
+        assert(q9.evaluate(idx).byKey.array == [2, 4, 6, 5, 7]);
+        assert(q10.evaluate(idx).byKey.array == [2, 4, 6, 1, 5, 7]);
+        assert(q11.evaluate(idx).byKey.array == [2, 4, 6, 1, 5, 7]);
+        assert(q12.evaluate(idx).byKey.array == [0, 3]);
+        assert(q13.evaluate(idx).byKey.array == [0, 3]);
+        assert(q14.evaluate(idx).byKey.array == [0, 1, 3]);
+        assert(q15.evaluate(idx).byKey.array == [0, 1, 3]);
         idx.close;
     }
 

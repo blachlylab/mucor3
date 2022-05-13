@@ -195,7 +195,7 @@ unittest
     import htslib.hts_log;
     import std.file: mkdirRecurse;
 
-    set_log_level(LogLevel.Debug);
+    // set_log_level(LogLevel.Debug);
     {
         mkdirRecurse("/tmp/test_bidx");
         auto bidx = BinaryIndexWriter("/tmp/test_bidx");

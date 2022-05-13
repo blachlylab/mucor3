@@ -30,6 +30,7 @@ SOFTWARE.
 
 import std.format;
 import std.stdio;
+import core.stdc.stdlib : exit;
 
 /// Log levels.
 enum LogLevel // @suppress(dscanner.style.phobos_naming_convention)
@@ -104,9 +105,25 @@ void log_err(Args...)(string ctx, string fmt, Args args)
     {
         string open_err_color = "\x1b[0;31m";
         string close_color = "\x1b[0m";
-        fmt = format("[Warn::%s]: ", ctx) ~ fmt;
+        fmt = format("[Err::%s]: ", ctx) ~ fmt;
         stderr.writeln(open_err_color, format(fmt, args), close_color);
-        throw new Exception("An error occured");
+        debug throw new Exception("An error occured");
+        else exit(1);
+    }
+
+}
+
+// pragma(inline, true):
+/**! Logs an event with severity Err and default context. Parameters: format, ... */
+//#define log_err(...) log(Err, __func__, __VA_ARGS__)
+void log_err_no_exit(Args...)(string ctx, string fmt, Args args)
+{
+    if (get_log_level >= LogLevel.Err)
+    {
+        string open_err_color = "\x1b[0;31m";
+        string close_color = "\x1b[0m";
+        fmt = format("[Err::%s]: ", ctx) ~ fmt;
+        stderr.writeln(open_err_color, format(fmt, args), close_color);
     }
 
 }

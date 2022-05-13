@@ -481,7 +481,6 @@ unittest
 
     {
         auto store = new UlongStore("/tmp/ulong.store", "rb");
-        writeln(store.getAll().array);
         assert(store.getAll().array == [1, 2, 3]);
     }
     OffsetTuple[] offs;
@@ -503,8 +502,6 @@ unittest
 
         import std.range;
         auto store = new StringStore("/tmp/string.store", "rb");
-        writeln(offs);
-        writeln(store.getFromOffsets(offs).array);
         assert(store.getFromOffsets(offs).array == [
                 "HERES a bunch of text", "HERES a bunch of text plus some extra",
                 "addendum: some more text", "note: text"
@@ -563,17 +560,6 @@ unittest {
     {
 
         auto store = new UlongStore("/tmp/ulong_test.store", "wb");
-        // auto block = store.file.bgzf.block_address;
-        // writefln("First block %d",block);
-        // foreach(i; 0..65_536) {
-        //     ubyte[8] arr;
-        //     u64_to_le(i, arr.ptr);
-        //     store.file.writeRaw(arr);
-        //     if(store.file.bgzf.block_address != block){
-        //         block = store.file.bgzf.block_address;
-        //         writefln("Block changed with #%d, new block %d",i, block);
-        //     }
-        // }
         
         foreach(i; 0..8160/2) {
             offsets ~= store.tell;
@@ -605,7 +591,6 @@ unittest {
 
         auto store = new UlongStore("/tmp/ulong_test.store", "rb");
         auto r = store.read(off);
-        writeln(r);
         assert(r == 435);
     }
     {

@@ -18,7 +18,7 @@ import libmucor: setup_global_pool;
 
 int threads = -1;
 string bam_dir = "";
-string[] extra_fields;
+string[] extraFields;
 string prefix = "";
 string config_file = "";
 string query_str = "";
@@ -36,7 +36,7 @@ void mucor_main(string[] args)
             "threads|t", "threads for running mucor", &threads,
             "bam-dir|b", "folder of bam files", &bam_dir, "extra-fields|e",
             "extra fields from VCF to be displayed in pivot tables",
-            &extra_fields, "prefix|p",
+            &extraFields, "prefix|p",
             "output directory for files (can be directory or file prefix)", &prefix, "config|c",
             "specify json config file (not yet working)",
             &config_file, "query|q", "filter vcf data using varquery syntax", &query_str,
@@ -102,7 +102,10 @@ void mucor_main(string[] args)
 
     auto vcfJsonFiles = vcfFiles.map!(x => buildPath(vcf_json_dir, baseName(x))).array;
 
-    // atomizeVcfs(args[0], vcfFiles, vcf_json_dir);
+    atomizeVcfs(args[0], vcfFiles, vcf_json_dir);
+
+    auto pivReqCols = requiredCols ~= ["FORMAT/AF"];
+    auto colData = validateVcfData(vcfJsonFiles, pivReqCols, extraFields);
 
     auto index_dir = buildPath(prefix, "index");
     mkdirRecurse(index_dir);
@@ -113,30 +116,27 @@ void mucor_main(string[] args)
     {
 
         log_info(__FUNCTION__, "Indexing vcf data ...");
-        // indexJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads, fileCacheSize, smallsSize);
+        indexJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads, fileCacheSize, smallsSize);
 
         log_info(__FUNCTION__, "Filtering vcf data...");
         combined_json_file = buildPath(prefix, "filtered.json");
 
-        // queryJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads, combined_json_file);
+        queryJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads, combined_json_file);
     }
     else
     {
         combined_json_file = buildPath(prefix, "all.json");
-        // File output = File(combined_json_file, "w");
+        File output = File(combined_json_file, "w");
         log_info(__FUNCTION__, "Combining vcf data...");
-        // combineJsonFiles(vcfJsonFiles, combined_json_file);
+        combineJsonFiles(vcfJsonFiles, combined_json_file);
     }
 
-    auto pivReqCols = requiredCols ~= ["/FORMAT/AF"];
-
-    auto colData = validateDataAndCollectColumns(combined_json_file, pivReqCols, extra_fields);
     auto master = buildPath(prefix, "master.tsv");
 
-    flattenAndMakeMaster(combined_json_file, requiredCols, extra_fields, master);
+    flattenAndMakeMaster(combined_json_file, requiredCols, extraFields, master);
 
     auto piv = buildPath(prefix, "AF.tsv");
-    pivotAndMakeTable(piv, requiredCols, "sample", "AF", extra_fields, colData.samples, piv);
+    pivotAndMakeTable(piv, requiredCols, "sample", "AF", extraFields, cast(string[])colData.samples.byKey.array, piv);
 
     // #create EFFECT column
     // if("ANN_hgvs_p" in master):
@@ -148,18 +148,18 @@ void mucor_main(string[] args)
     //     master["Total_depth"]=master["Ref_Depth"]+master["Alt_depths"].apply(sum)
     // samples=set(master["sample"])
 
-    // extra_fields=[]
+    // extraFields=[]
     // if args.extra is not None:
     //     missing_fields = set(args.extra.split(",")) - set(master.columns)
     //     if(len(missing_fields)!=0):
     //         print("Warning: missing column(s) ",missing_fields)
 
-    //     extra_fields=[x for x in args.extra.split(",") if x in list(master)]
+    //     extraFields=[x for x in args.extra.split(",") if x in list(master)]
 
     // print("sorting")
     // master.set_index(required_fields, inplace=True)
     // cols = list(master)
-    // for x in extra_fields[::-1]:
+    // for x in extraFields[::-1]:
     //     cols.insert(0, cols.pop(cols.index(x)))
     // master = master.loc[:, cols]
     // master.sort_index(inplace=True)
@@ -204,20 +204,20 @@ void mucor_main(string[] args)
     //     print(x)
     // if args.merge:
     //     pivot=aggregate.join_columns(condensed,pivot,["CHROM", "POS", "REF", "ALT"],
-    //                                  extra_fields)
+    //                                  extraFields)
     // else:
     //     pivot=aggregate.join_columns_unmerged(master,pivot,
     //                                           ["CHROM", "POS", "REF", "ALT"],
-    //                                             extra_fields)
+    //                                             extraFields)
     // pivot.set_index(["CHROM", "POS", "REF", "ALT"],inplace=True)
 
     // cols = list(pivot)
-    // for x in extra_fields[::-1]:
+    // for x in extraFields[::-1]:
     //     cols.insert(0, cols.pop(cols.index(x)))
     // pivot = pivot.loc[:, cols]
 
     // pivot.reset_index(inplace=True)
-    // pivot=aggregate.add_result_metrics(pivot,["CHROM", "POS", "REF", "ALT"]+extra_fields)
+    // pivot=aggregate.add_result_metrics(pivot,["CHROM", "POS", "REF", "ALT"]+extraFields)
     // pivot = pivot.applymap(fix_cells)
 
     // #write AF pivot table

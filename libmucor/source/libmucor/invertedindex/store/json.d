@@ -67,11 +67,11 @@ struct JsonStoreWriter
             (item.val).match!((bool x) { meta.padding = (cast(ulong) x) + 1; }, (long x) {
                 meta.keyOffset = this.longs.tell;
                 this.longs.write(x);
-                meta.keyLength = this.longs.tell - meta.keyOffset;
+                meta.keyLength = 8;
             }, (double x) {
                 meta.keyOffset = this.doubles.tell;
                 this.doubles.write(x);
-                meta.keyLength = this.doubles.tell - meta.keyOffset;
+                meta.keyLength = 8;
             }, (const(char)[] x) {
                 meta.keyOffset = this.strings.writeString(x);
                 meta.keyLength = x.length;
@@ -203,37 +203,26 @@ struct JsonStoreReader
     }
 
     InputRange!uint128 filterOp(string op, T)(T val)
+    if(isFloatingPoint!T || isIntegral!T)
     {
-        auto type = JSONValue(val).getType;
-        auto hashes = this.metadata
-            .std_filter!(x => x.type == type)
+        auto lhashes = this.metadata
+            .std_filter!(x => x.type == 1)
+            .map!(x => x.keyHash);
+        
+        auto dhashes = this.metadata
+            .std_filter!(x => x.type == 2)
             .map!(x => x.keyHash);
 
-        static if (isIntegral!T)
-        {
-            auto values = this.longs.getAll();
-        }
-        else static if (isBoolean!T)
-        {
-            auto values = this.metadata.getAll().filter!(x => x.padding > 0)
-                .map!(x => x.padding == 1 ? false : true);
-        }
-        else static if (isFloatingPoint!T)
-        {
-            auto values = this.doubles.getAll();
-        }
-        else static if (isSomeString!T)
-        {
-            auto values = this.strings.getAll(this.getMetaForType!T.map!( x => meta.keyLength));
-        }
-        else
-        {
-            static assert(0);
-        }
-        mixin("auto func = (" ~ T.stringof ~ " a) => a " ~ op ~ " val;");
-        return zip(hashes, values).std_filter!(x => func(x[1]))
-            .map!(x => x[0])
-            .inputRangeObject;
+        auto lvalues = this.longs.getAll();
+        auto dvalues = this.doubles.getAll();
+        mixin("auto lfunc = (long a) => a " ~ op ~ " val;");
+        mixin("auto dfunc = (double a) => a " ~ op ~ " val;");
+        
+        auto lret = zip(lhashes, lvalues).std_filter!(x => lfunc(x[1]))
+            .map!(x => x[0]);
+        auto dret = zip(dhashes, dvalues).std_filter!(x => dfunc(x[1]))
+            .map!(x => x[0]);
+        return chain(lret, dret).inputRangeObject;
     }
 
     auto getJsonValues()
@@ -276,7 +265,7 @@ unittest
     import std.stdio;
     import std.file: mkdirRecurse;
 
-    set_log_level(LogLevel.Debug);
+    // set_log_level(LogLevel.Debug);
     {
         mkdirRecurse("/tmp/test_jidx");
         auto jidx = JsonStoreWriter("/tmp/test_jidx");
@@ -303,7 +292,6 @@ unittest
                 ]);
         assert(jidx.getJsonValuesByType!(long).array == [0, 2, 3, 5]);
         assert(jidx.getJsonValuesByType!(double).array == [1.2]);
-        writeln(jidx.filter(["testval", "testval2"]).map!(x => format("%x", x)).array);
         assert(jidx.filter(["testval", "testval2"]).map!(x => format("%x", x))
                 .array == [
                     "593B6F8099E807BA705B5CAF4AFFB497",

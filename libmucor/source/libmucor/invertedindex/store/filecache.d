@@ -279,7 +279,7 @@ unittest
     import std.array : array;
     import std.file: mkdirRecurse;
 
-    hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
+    // hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
     {
         mkdirRecurse("/tmp/test_fcache");
         auto fcache = new IdFileCacheWriter("/tmp/test_fcache", 2, 2);
@@ -338,7 +338,6 @@ unittest
         assert(fcache.getIds(uint128(0)).byKey.array == [0, 8, 9, 10]);
         assert(fcache.getIds(uint128(1)).byKey.array == [2, 4, 1, 3]);
         assert(fcache.getIds(uint128(2)).byKey.array == [7, 6, 5]);
-        writeln(fcache.getIds(uint128(4)).byKey.array);
         assert(fcache.getIds(uint128(4)).byKey.array == [11, 12, 14, 13, 15]);
     }
 

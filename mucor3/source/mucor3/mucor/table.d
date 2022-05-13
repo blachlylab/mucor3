@@ -14,41 +14,6 @@ import libmucor.error;
 import std.array : split;
 import libmucor.invertedindex : sep;
 
-auto validateDataAndCollectColumns(string fn, string[] required, string[] extra)
-{
-    khashlSet!(string, true) set;
-    khashlSet!(string, true) sampleSet;
-    foreach (obj; File(fn).byChunk(4096).parseJsonByLine)
-    {
-        foreach (r; required)
-        {
-            auto v = r.split(sep);
-            if(v.length != 1) v = v[1..$];
-            if (obj[v] == Asdf.init)
-            {
-                log_err(__FUNCTION__, "%s column not found in some rows!", r);
-                exit(1);
-            }
-        }
-        foreach (kv; obj.byKeyValue)
-        {
-            set.insert(kv.key.idup);
-        }
-        sampleSet.insert(obj["sample"].deserialize!string);
-    }
-    foreach (e; extra)
-    {
-        if (!(e in set))
-        {
-            log_warn(__FUNCTION__, "Extra column %s not present in json data!", e);
-        }
-    }
-    Tuple!(string[], "cols", string[], "samples") ret;
-    ret.cols = cast(string[]) set.byKey.array;
-    ret.samples = cast(string[]) sampleSet.byKey.array;
-    return ret;
-}
-
 // auto calulateTotalDepth(Asdf val) {
 //     auto lenIdx = 0;
 //     foreach(c; ["FORMAT/DP", "FORMAT/AD"]){

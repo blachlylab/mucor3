@@ -19,6 +19,7 @@ import libmucor: setup_global_pool;
 import std.algorithm.searching : balancedParens;
 import std.getopt;
 import core.stdc.stdlib: exit;
+import libmucor.query;
 
 auto query(R)(R range, InvertedIndex* idx, string queryStr)
         if (is(ElementType!R == Asdf))
@@ -29,10 +30,10 @@ auto query(R)(R range, InvertedIndex* idx, string queryStr)
     {
         log_err(__FUNCTION__, "Parentheses aren't matched in query: %s", queryStr);
     }
-    auto q = parseQuery(queryStr);
+    auto q = Query(queryStr);
     log_info(__FUNCTION__, "Time to parse query: %s usecs", sw.peek.total!"usecs");
     sw.reset;
-    auto idxs = evaluateQuery(q, idx);
+    auto idxs = q.evaluate(idx);
     log_info(__FUNCTION__, "Time to evaluate query: %s seconds", sw.peek.total!"seconds");
     sw.stop;
     log_info(__FUNCTION__, "%d records matched your query", idxs.count);
