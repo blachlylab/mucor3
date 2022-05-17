@@ -105,7 +105,7 @@ void mucor_main(string[] args)
 
     auto vcfJsonFiles = vcfFiles.map!(x => buildPath(vcf_json_dir, baseName(x))).array;
 
-    // atomizeVcfs(args[0], vcfFiles, vcf_json_dir);
+    atomizeVcfs(args[0], vcfFiles, vcf_json_dir);
 
     auto pivReqCols = pivotOn ~ requiredCols ~ ["FORMAT/AF"];
     auto allsamples = validateVcfData(vcfJsonFiles, pivReqCols);
@@ -119,12 +119,12 @@ void mucor_main(string[] args)
     {
 
         log_info(__FUNCTION__, "Indexing vcf data ...");
-        // indexJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads, fileCacheSize, smallsSize);
+        indexJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads, fileCacheSize, smallsSize);
 
         log_info(__FUNCTION__, "Filtering vcf data...");
         combined_json_file = buildPath(prefix, "filtered.json");
 
-        // queryJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads, combined_json_file);
+        queryJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads, combined_json_file);
     }
     else
     {
@@ -152,92 +152,4 @@ void mucor_main(string[] args)
     auto samples = allsamples.byKey.map!(x => cast(string)x).array.sort.array;
 
     pivotAndMakeTable(master, requiredCols, pivotOn, pivotValue, extraFields, samples, prefix);
-
-    // #create EFFECT column
-    // if("ANN_hgvs_p" in master):
-    //     master["EFFECT"]=master["ANN_hgvs_p"]
-    //     master["EFFECT"].fillna(master["ANN_effect"],inplace=True)
-
-    // #create Total Depth column
-    // if(("Ref_Depth" in master) and ("Alt_depths" in master)):
-    //     master["Total_depth"]=master["Ref_Depth"]+master["Alt_depths"].apply(sum)
-    // samples=set(master["sample"])
-
-    // extraFields=[]
-    // if args.extra is not None:
-    //     missing_fields = set(args.extra.split(",")) - set(master.columns)
-    //     if(len(missing_fields)!=0):
-    //         print("Warning: missing column(s) ",missing_fields)
-
-    //     extraFields=[x for x in args.extra.split(",") if x in list(master)]
-
-    // print("sorting")
-    // master.set_index(required_fields, inplace=True)
-    // cols = list(master)
-    // for x in extraFields[::-1]:
-    //     cols.insert(0, cols.pop(cols.index(x)))
-    // master = master.loc[:, cols]
-    // master.sort_index(inplace=True)
-    // master.reset_index(inplace=True)
-
-    // merged = master
-    // condensed = master
-    // if args.merge:
-    //     print("merging")
-    //     #write the merged datasets - merged on CHROM POS REF ALT sample to remove duplicate entrys related to alternate annotations
-    //     write_jsonl(merge.merge_rows(master,required_fields),os.path.join(args.prefix,"__merge_sample.jsonl"))
-    //     write_jsonl(merge.merge_rows_unique(master,required_fields),os.path.join(args.prefix,"__merge_sample_u.jsonl"))
-
-    //     #import merged dataset
-    //     merged=pd.read_json(os.path.join(args.prefix,"__merge_sample.jsonl"),orient="records",lines=True)
-
-    // #write master tsv
-    // jsonlcsv.jsonl2tsv(
-    //     merged,
-    //     required_fields,
-    //     os.path.join(args.prefix,"master.tsv")
-    // )
-    // condensed=merge.merge_rows_unique(merged,["CHROM","POS","REF","ALT"])
-    // #write Variants tsv
-    // jsonlcsv.jsonl2tsv(
-    //     condensed,
-    //     required_fields,
-    //     os.path.join(args.prefix,"Variants.tsv")
-    // )
-
-    // #load uniquely merged dataset
-    // #merged=pd.read_json(os.path.join(args.prefix,"__merge_sample_u.jsonl"),orient="records",lines=True)
-
-    // #pivot AF
-    // pivot=aggregate.pivot(merged,
-    //                 ["CHROM", "POS", "REF", "ALT"],#["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"],
-    //                 ["sample"],[args.value],"string_agg",".")
-
-    // #if any samples removed add them back
-    // for x in (samples-set(pivot.columns)):
-    //     pivot[x]="."
-    //     print(x)
-    // if args.merge:
-    //     pivot=aggregate.join_columns(condensed,pivot,["CHROM", "POS", "REF", "ALT"],
-    //                                  extraFields)
-    // else:
-    //     pivot=aggregate.join_columns_unmerged(master,pivot,
-    //                                           ["CHROM", "POS", "REF", "ALT"],
-    //                                             extraFields)
-    // pivot.set_index(["CHROM", "POS", "REF", "ALT"],inplace=True)
-
-    // cols = list(pivot)
-    // for x in extraFields[::-1]:
-    //     cols.insert(0, cols.pop(cols.index(x)))
-    // pivot = pivot.loc[:, cols]
-
-    // pivot.reset_index(inplace=True)
-    // pivot=aggregate.add_result_metrics(pivot,["CHROM", "POS", "REF", "ALT"]+extraFields)
-    // pivot = pivot.applymap(fix_cells)
-
-    // #write AF pivot table
-    // jsonlcsv.jsonl2tsv(pivot,
-    //                    ["CHROM", "POS", "REF", "ALT"],
-    //                    os.path.join(args.prefix,"AF.tsv")
-    // )
 }
