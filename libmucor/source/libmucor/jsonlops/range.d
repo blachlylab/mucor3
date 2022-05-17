@@ -9,6 +9,7 @@ import std.functional : unaryFun, binaryFun;
 
 import asdf;
 import libmucor.jsonlops.basic;
+import libmucor.error;
 
 struct GroupByObject
 {
@@ -144,48 +145,72 @@ unittest
     assert(res == exp);
 }
 
-/// apply reducing function (folding function) to any groupby range 
 template pivot(fun...)
 {
     static if (fun[0] == "self")
     {
-        auto pivot(Range)(Range range, string on, string val, string[] extraCols = [
-                ]) if (is(ElementType!Range == GroupByObject))
+        auto pivot(Range)(Range range, string on, string val, string[] extraCols = []) 
+        if (is(ElementType!Range == GroupByObject))
         {
             return range.map!((x) {
-                return x.objs
-                    .map!((y) {
-                        auto ret = AsdfNode(`{}`.parseJson);
-                        foreach (i, idx; x.index)
-                        {
-                            ret[x.keys[i]] = AsdfNode(idx);
-                        }
-                        assert(y[on] != Asdf.init, "pivot on value must be in groupby index");
-                        auto onFields = on.split("/");
-                        auto onVal = y[on];
-                        string onStr;
-                        foreach (col; extraCols)
-                        {
-                            auto colFields = col.split("/");
-                            if (y[colFields] != Asdf.init)
-                                ret[col] = AsdfNode(y[colFields]);
-                        }
-                        switch (onVal.kind)
-                        {
+                auto ret = AsdfNode(`{}`.parseJson);
+                foreach (i, idx; x.index)
+                {
+                    ret[x.keys[i]] = AsdfNode(idx);
+                }
+                foreach (col; extraCols)
+                {
+                    ret[col] = AsdfNode(parseJson(`[]`));
+                }
+                foreach (Asdf obj; x.objs)
+                {
+                    Asdf onVal;   
+                    if(obj[on] != Asdf.init)
+                        onVal = obj[on];
+                    else if(obj[on.split("/")] != Asdf.init)
+                        onVal = obj[on.split("/")];
+                    else
+                        log_err(__FUNCTION__, "Record doesn't have on val: %s, %s", on, obj);
+
+                    string onStr;
+                    
+                    switch (onVal.kind)
+                    {
                         case Asdf.Kind.array:
                         case Asdf.Kind.object:
                             onStr = onVal.to!string;
                             break;
                         default:
                             onStr = deserialize!string(onVal);
+                    }
+                    foreach (col; extraCols)
+                    {
+
+                        auto colFields = col.split("/");
+                        if (obj[col] != Asdf.init)
+                            ret[col] = AsdfNode(combineAsdfArray(cast(Asdf)ret[col], obj[col]));
+                        else if (obj[colFields] != Asdf.init)
+                            ret[col] = AsdfNode(combineAsdfArray(cast(Asdf)ret[col], obj[colFields]));
+                    }
+                    if (obj[val] != Asdf.init)
+                        ret[onStr] = AsdfNode(obj[val]);
+                    else if (obj[val.split("/")] != Asdf.init)
+                        ret[onStr] = AsdfNode(obj[val.split("/")]);
+                }
+                foreach (col; extraCols)
+                {
+                    if((cast(Asdf)ret[col]) == parseJson(`[]`))
+                        ret.children.remove(col);
+                    else {
+                        string[] res;
+                        foreach (e; unique(cast(Asdf)ret[col]).byElement)
+                        {
+                            res ~= e.to!string;
                         }
-                        auto valFields = val.split("/");
-                        if (y[valFields] != Asdf.init)
-                            ret[onStr] = AsdfNode(y[valFields]);
-                        return cast(Asdf) ret;
-                    })
-                    .fold!merge
-                    .unique;
+                        ret[col] = AsdfNode(parseJson(res.join(";")));
+                    }
+                }
+                return cast(Asdf)ret;
             });
         }
     }
@@ -193,11 +218,14 @@ template pivot(fun...)
     {
 
     }
-    auto aggregate(Range)(Range range) if (is(ElementType!Range == GroupByObject))
-    {
-        alias f = binaryFun!(fun);
-        return range.map!(x => x.objs.fold!f);
-    }
+}
+
+/// apply reducing function (folding function) to any groupby range 
+auto aggregate(Range)(Range range) 
+if (is(ElementType!Range == GroupByObject))
+{
+    alias f = binaryFun!(fun);
+    return range.map!(x => x.objs.fold!f);
 }
 
 unittest
@@ -336,6 +364,8 @@ auto to_table(R)(R json_stream, string[] fields, string delimiter = "\t", string
     struct Result
     {
         R json_stream;
+        bool first;
+        string[] fields;
 
         @property bool empty()
         {
@@ -344,6 +374,10 @@ auto to_table(R)(R json_stream, string[] fields, string delimiter = "\t", string
 
         string front()
         {
+            if(first) {
+                first = false;
+                return fields.join(delimiter);
+            }
             string[] to_write;
             auto val = json_stream.front;
             foreach (key; fields)
@@ -362,5 +396,5 @@ auto to_table(R)(R json_stream, string[] fields, string delimiter = "\t", string
         }
     }
     //auto json_stream=stdin.byChunk(4096).parseJsonByLine;
-    return Result(json_stream);
+    return Result(json_stream, true, fields);
 }

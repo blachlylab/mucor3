@@ -7,6 +7,7 @@ import progress;
 import std.stdio;
 import dhtslib.vcf;
 import libmucor.vcfops;
+import libmucor.jsonlops.basic : getAllKeys;
 import libmucor.error;
 import libmucor.khashl;
 import libmucor.invertedindex : sep;
@@ -46,26 +47,17 @@ void atomizeVcfs(string bin, string[] vcf_files, string vcf_json_dir)
     b.finish();
 }
 
-alias ColData = Tuple!(khashlSet!(string, true), "cols", khashlSet!(string, true), "samples");
+alias ColData = Tuple!(StringSet, "cols", StringSet, "samples");
 
-auto validateDataAndCollectColumns(string fn, string[] required, string[] extra)
+auto collectColumns(string fn, string[] extra)
 {
-    khashlSet!(string, true) set;
-    khashlSet!(string, true) sampleSet;
+    StringSet set;
+    StringSet sampleSet;
     foreach (obj; File(fn).byChunk(4096).parseJsonByLine)
     {
-        foreach (r; required)
+        foreach (k; obj.getAllKeys.byKey)
         {
-            auto v = r.split(sep);
-            if (obj[v] == Asdf.init)
-            {
-                log_err(__FUNCTION__, "%s column not found in some rows!", r);
-                exit(1);
-            }
-        }
-        foreach (kv; obj.byKeyValue)
-        {
-            set.insert(kv.key.idup);
+            set.insert(k);
         }
         sampleSet.insert(obj["sample"].deserialize!string);
     }
@@ -79,24 +71,43 @@ auto validateDataAndCollectColumns(string fn, string[] required, string[] extra)
     return ColData(set, sampleSet);
 }
 
-auto validateVcfData(string[] json_files, string[] required, string[] extra)
+auto validateData(string fn, string[] required)
+{
+    StringSet sampleSet;
+    foreach (obj; File(fn).byChunk(4096).parseJsonByLine)
+    {
+        foreach (r; required)
+        {
+            auto v = r.split(sep);
+            if (obj[v] == Asdf.init)
+            {
+                log_err(__FUNCTION__, "%s column not found in some rows!", r);
+            }
+        }
+        sampleSet.insert(obj["sample"].deserialize!string);
+    }
+    return sampleSet;
+}
+
+
+auto validateVcfData(string[] json_files, string[] required)
 {
     Bar b = new Bar();
     b.message = { return "Validating vcf data"; };
     b.max = json_files.length;
     b.fill = "#";
     auto m = new Mutex();
-    auto coldatas = new ColData[json_files.length];
+    auto coldatas = new StringSet[json_files.length];
     foreach (i, f; parallel(json_files, 1))
     {
-        coldatas[i] = validateDataAndCollectColumns(f, required, extra);
+        coldatas[i] = validateData(f, required);
         m.lock;
         b.next;
         m.unlock;
     }
     b.finish();
 
-    auto combined = coldatas.reduce!combineColData;
+    auto combined = coldatas.reduce!"a | b";
     return combined;
 }
 

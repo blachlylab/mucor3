@@ -102,6 +102,8 @@ template khashlSet(KT, bool cached = false)
     alias khashlSet = khashl!(KT, ubyte, false, cached);
 }
 
+alias StringSet = khashlSet!(string, true);
+
 struct khashl(KT, VT, bool kh_is_map = true, bool cached = false) if (!isSigned!KT) // @suppress(dscanner.style.phobos_naming_convention)
 {
     static assert(kh_is_map || is(VT == ubyte));
@@ -244,7 +246,7 @@ pragma(inline, true):
                     if (this.itr == kh.kh_end())
                         return true;
                     // Handle the case of deleted keys
-    else if (__kh_used(this.kh.used, this.itr) == 0)
+                    else if (__kh_used(this.kh.used, this.itr) == 0)
                     {
                         while (__kh_used(this.kh.used, this.itr) == 0)
                         {
@@ -305,9 +307,9 @@ pragma(inline, true):
         kh_t difference(const(kh_t) other) const
         {
             kh_t ret;
-            foreach (k; this.byKey)
+            foreach (k; other.byKey)
             {
-                if (!(k in other))
+                if (!(k in this))
                     ret.insert(k);
             }
             return ret;
@@ -860,4 +862,26 @@ unittest
     // test: require
     const auto fw = kh_string.require("flammenwerfer", 21);
     assert(*fw == 21);
+}
+
+unittest {
+    import std.array : array;
+
+    khashlSet!(string) a;
+    khashlSet!(string) b;
+
+    a.insert("test1");
+    a.insert("test2");
+    a.insert("test2");
+    a.insert("test3");
+
+    b.insert("test1");
+    b.insert("test3");
+    b.insert("test4");
+    b.insert("test4");
+
+    assert((a & b).byKey.array == ["test1", "test3"]);
+    assert((a | b).byKey.array == ["test4", "test1", "test3", "test2"]);
+    assert((a - b).byKey.array == ["test2"]);
+    assert((b - a).byKey.array == ["test4"]);
 }
