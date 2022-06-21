@@ -10,13 +10,19 @@
 		"dhtslib": "~>0.14.0+htslib-1.13",
 		"libmucor":{
 			"path": "../libmucor"
-		}
+		},
+		"progress": "~>5.0.1"
 	},
 	"targetPath": "../bin",
 	"configurations": [
 		{
 			"name": "standard",
 			"targetType": "executable"
+		},
+		{
+			"name": "SSE4",
+			"targetType": "executable",
+			"dflags-ldc": ["-mattr=+sse4.2"]
 		},
 		{
 			"name": "unittest",

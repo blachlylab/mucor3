@@ -1,0 +1,38 @@
+{
+	"authors": [
+		"Thomas"
+	],
+	"copyright": "Copyright © 2022, Thomas",
+	"description": "A minimal D application.",
+	"license": "MIT",
+	"name": "mucor3",
+    "targetType": "none",
+    "subPackages": [
+        "./libmucor/",
+        "./mucor3/"
+    ],
+	"sourcePaths": [
+        "./libmucor/",
+        "./mucor3/"
+    ],
+	"importPaths": [
+        "./libmucor/",
+        "./mucor3/"
+    ],
+	"dependencies": {
+		"asdf": "~>0.7.8",
+		"dhtslib": "~>0.14.0+htslib-1.13",
+		"progress": "~>5.0.1"
+	},
+	"configurations": [
+		{
+			"name": "binary",
+			"targetType": "executable"
+		},
+		{
+			"name": "unittest",
+			"targetType": "library",
+			"excludedSourceFiles": ["mucor3/source/app.d"]
+		}
+	]
+}

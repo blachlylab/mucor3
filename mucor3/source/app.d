@@ -1,5 +1,9 @@
 import std.stdio;
 import mucor3;
+import htslib.hts_log;
+import libmucor;
+import std.getopt;
+import libmucor.error;
 
 string help = "
 depthgauge		Takes in an AF.tsv table, a directory path to a
@@ -33,42 +37,45 @@ uniq			Uniqifies JSON arrays in JSON data.
 
 void main(string[] args)
 {
-    if(args.length == 1){
+    // set_log_level(LogLevel.Trace);
+    if (args.length == 1)
+    {
         stderr.writeln(help);
         return;
     }
-    switch(args[1]){
-		case "depthgauge":
-            depthgauge(args[1..$]);
-            return;
-        case "atomize":
-            atomize(args[1..$]);
-            return;
-        case "query":
-            query_main(args[2..$]);
-            return;
-        case "index":
-            index_main(args[2..$]);
-            return;
-        case "merge":
-            merge_main(args[2..$]);
-            return;
-        case "table":
-            table_main(args[1..$]);
-            return;
-        case "pivot":
-            piv_main(args[1..$]);
-            return;
-        case "norm":
-            norm_main(args[1..$]);
-            return;
-        case "uniq":
-            unique_main(args[1..$]);
-            return;
-        case "diff":
-            diff_main(args[1..$]);
-            return;
-        default:
-            break;
+    switch (args[1])
+    {
+    case "depthgauge":
+        depthgauge(args[1 .. $]);
+        return;
+    case "atomize":
+        atomize(args[1 .. $]);
+        return;
+    case "query":
+        query_main(args[1 .. $]);
+        return;
+    case "index":
+        index_main(args[1 .. $]);
+        return;
+    case "merge":
+        merge_main(args[2 .. $]);
+        return;
+    case "table":
+        table_main(args[1 .. $]);
+        return;
+    case "pivot":
+        piv_main(args[1 .. $]);
+        return;
+    case "norm":
+        norm_main(args[1 .. $]);
+        return;
+    case "uniq":
+        unique_main(args[1 .. $]);
+        return;
+    case "diff":
+        diff_main(args[1 .. $]);
+        return;
+    default:
+        mucor_main(args);
     }
 }

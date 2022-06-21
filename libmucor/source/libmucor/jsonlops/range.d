@@ -9,8 +9,10 @@ import std.functional : unaryFun, binaryFun;
 
 import asdf;
 import libmucor.jsonlops.basic;
+import libmucor.error;
 
-struct GroupByObject{
+struct GroupByObject
+{
     Asdf[] index;
     Asdf[] objs;
     string[] keys;
@@ -24,14 +26,13 @@ struct GroupByObject{
             objNode["index", key] = AsdfNode(index[i]);
         }
         objNode["rows"] = AsdfNode(objs.makeAsdfArray);
-        return cast(Asdf)objNode;
+        return cast(Asdf) objNode;
     }
 }
 
-auto groupby(Range)(Range range, string[] keys)
-if(is(ElementType!Range == Asdf))
+auto groupby(Range)(Range range, string[] keys) if (is(ElementType!Range == Asdf))
 {
-    
+
     GroupByObject[ubyte[]] hashmap;
     foreach (obj; range)
     {
@@ -42,17 +43,23 @@ if(is(ElementType!Range == Asdf))
         {
             auto asdfKeys = key.split("/");
             auto prevLen = hashKey.length;
-            if(obj[asdfKeys] != Asdf.init){
+            if (obj[asdfKeys] != Asdf.init)
+            {
                 hashKey ~= obj[asdfKeys].data;
-            }else{
+            }
+            else
+            {
                 hashKey ~= `null`.parseJson.data;
             }
             idx ~= Asdf(hashKey[prevLen .. $]);
         }
         auto grpPtr = hashKey in hashmap;
-        if(grpPtr){
+        if (grpPtr)
+        {
             grpPtr.objs ~= obj;
-        }else{
+        }
+        else
+        {
             hashmap[hashKey.idup] = GroupByObject(idx, [obj], keys);
         }
     }
@@ -60,22 +67,21 @@ if(is(ElementType!Range == Asdf))
     return hashmap.byValue;
 }
 
-auto groups(Range)(Range range)
-if(is(ElementType!Range == GroupByObject))
+auto groups(Range)(Range range) if (is(ElementType!Range == GroupByObject))
 {
     return range.map!"a.toAsdf";
 }
-
 
 unittest
 {
     import std.stdio;
     import std.conv : to;
+
     auto text = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}}`;
-    auto textJson =  text.parseJson;
-    auto textJson2 =  text.parseJson;
-    auto range = [textJson,textJson2];
-    auto res = makeAsdfArray(range.groupby(["foo","inner/c"]).groups.array).to!string;
+    auto textJson = text.parseJson;
+    auto textJson2 = text.parseJson;
+    auto range = [textJson, textJson2];
+    auto res = makeAsdfArray(range.groupby(["foo", "inner/c"]).groups.array).to!string;
     auto exp = `[{"index":{"inner/c":"32323","foo":"bar"},"rows":[{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}},{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}}]}]`;
 
     assert(res == exp);
@@ -85,81 +91,91 @@ unittest
 {
     import std.stdio;
     import std.conv : to;
-    auto textJson = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}}`.parseJson;
-    auto textJson2 =  `{"foo":"bar","inner":{"a":true,"b":false,"c":"32","d":null,"e":{}}}`.parseJson;
-    auto range = [textJson,textJson2];
-    auto res = makeAsdfArray(range.groupby(["foo","inner/c"]).groups.array).to!string;
+
+    auto textJson = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}}`
+        .parseJson;
+    auto textJson2 = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32","d":null,"e":{}}}`
+        .parseJson;
+    auto range = [textJson, textJson2];
+    auto res = makeAsdfArray(range.groupby(["foo", "inner/c"]).groups.array).to!string;
     auto exp = `[{"index":{"inner/c":"32323","foo":"bar"},"rows":[{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}}]},{"index":{"inner/c":"32","foo":"bar"},"rows":[{"foo":"bar","inner":{"a":true,"b":false,"c":"32","d":null,"e":{}}}]}]`;
     assert(res == exp);
 }
 
 /// apply function to any asdf range
-template apply(fun)
+template apply(fun...)
 {
-    auto apply(Range)(Range range)
-    if(isInputRange!Range && is(ElementType!Range == Asdf))
+    auto apply(Range)(Range range) if (is(ElementType!Range == Asdf))
     {
-        auto f = unaryFun(fun);
+        alias f = unaryFun!fun;
         return range.map!f;
     }
-    auto apply(Range)(Range range)
-    if(isInputRange!Range && is(ElementType!Range == GroupByObject))
+
+    auto apply(Range)(Range range) if (is(ElementType!Range == GroupByObject))
     {
-        auto f = unaryFun(fun);
-        return range.map!(x=>x["objs"].map!f).joiner;
+        alias f = unaryFun!fun;
+        return range.map!(x => x["objs"].map!f).joiner;
     }
 }
 
 /// apply reducing function (folding function) to any groupby range 
 template aggregate(fun...)
 {
-    auto aggregate(Range)(Range range)
-    if(is(ElementType!Range == GroupByObject))
+    auto aggregate(Range)(Range range) if (is(ElementType!Range == GroupByObject))
     {
         alias f = binaryFun!(fun);
-        return range.map!(x=>x.objs.fold!f);
+        return range.map!(x => x.objs.fold!f);
     }
 }
-
 
 unittest
 {
     import std.stdio;
     import std.conv : to;
-    auto textJson = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}}`.parseJson;
-    auto textJson2 =  `{"foo":"bar","inner":{"a":true,"b":false,"c":"32","d":null,"e":{}}}`.parseJson;
-    auto textJson3 =  `{"foo":"bar","inner":{"a":true,"b":false,"c":"32","d":false,"e":{}}}`.parseJson;
-    auto range = [textJson,textJson2,textJson3];
-    auto res = makeAsdfArray(range.groupby(["foo","inner/c"]).aggregate!merge.array).to!string;
+
+    auto textJson = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}}`
+        .parseJson;
+    auto textJson2 = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32","d":null,"e":{}}}`
+        .parseJson;
+    auto textJson3 = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32","d":false,"e":{}}}`
+        .parseJson;
+    auto range = [textJson, textJson2, textJson3];
+    auto res = makeAsdfArray(range.groupby(["foo", "inner/c"]).aggregate!merge.array).to!string;
     auto exp = `[{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}},{"foo":["bar","bar"],"inner":{"c":["32","32"],"a":[true,true],"e":{},"b":[false,false],"d":[null,false]}}]`;
     assert(res == exp);
 }
 
-/// apply reducing function (folding function) to any groupby range 
 template pivot(fun...)
 {
-    static if(fun[0] == "self"){
-        auto pivot(Range)(Range range, string on, string val, string[] extraCols=[])
-        if(is(ElementType!Range == GroupByObject))
+    static if (fun[0] == "self")
+    {
+        auto pivot(Range)(Range range, string on, string val, string[] extraCols = []) 
+        if (is(ElementType!Range == GroupByObject))
         {
             return range.map!((x) {
-                return x.objs.map!((y) {
-                    auto ret = AsdfNode(`{}`.parseJson);
-                    foreach (i,idx; x.index)
-                    {
-                        ret[x.keys[i]] = AsdfNode(idx);
-                    }
-                    assert(y[on] != Asdf.init, "pivot on value must be in groupby index");
-                    auto onFields = on.split("/");
-                    auto onVal = y[on];
+                auto ret = AsdfNode(`{}`.parseJson);
+                foreach (i, idx; x.index)
+                {
+                    ret[x.keys[i]] = AsdfNode(idx);
+                }
+                foreach (col; extraCols)
+                {
+                    ret[col] = AsdfNode(parseJson(`[]`));
+                }
+                foreach (Asdf obj; x.objs)
+                {
+                    Asdf onVal;   
+                    if(obj[on] != Asdf.init)
+                        onVal = obj[on];
+                    else if(obj[on.split("/")] != Asdf.init)
+                        onVal = obj[on.split("/")];
+                    else
+                        log_err(__FUNCTION__, "Record doesn't have on val: %s, %s", on, obj);
+
                     string onStr;
-                    foreach (col; extraCols)
+                    
+                    switch (onVal.kind)
                     {
-                        auto colFields = col.split("/");
-                        if(y[colFields] != Asdf.init)
-                            ret[col] = AsdfNode(y[colFields]);
-                    }
-                    switch(onVal.kind){
                         case Asdf.Kind.array:
                         case Asdf.Kind.object:
                             onStr = onVal.to!string;
@@ -167,69 +183,97 @@ template pivot(fun...)
                         default:
                             onStr = deserialize!string(onVal);
                     }
-                    auto valFields = val.split("/");
-                    if(y[valFields] != Asdf.init)
-                        ret[onStr] = AsdfNode(y[valFields]);
-                    return cast(Asdf) ret;
-                }).fold!merge.unique;
-           });
-        }
-    }else{
+                    foreach (col; extraCols)
+                    {
 
+                        auto colFields = col.split("/");
+                        if (obj[col] != Asdf.init)
+                            ret[col] = AsdfNode(combineAsdfArray(cast(Asdf)ret[col], obj[col]));
+                        else if (obj[colFields] != Asdf.init)
+                            ret[col] = AsdfNode(combineAsdfArray(cast(Asdf)ret[col], obj[colFields]));
+                    }
+                    if (obj[val] != Asdf.init)
+                        ret[onStr] = AsdfNode(obj[val]);
+                    else if (obj[val.split("/")] != Asdf.init)
+                        ret[onStr] = AsdfNode(obj[val.split("/")]);
+                }
+                foreach (col; extraCols)
+                {
+                    if((cast(Asdf)ret[col]) == parseJson(`[]`))
+                        ret.children.remove(col);
+                    else {
+                        string[] res;
+                        foreach (e; unique(cast(Asdf)ret[col]).byElement)
+                        {
+                            res ~= e.to!string;
+                        }
+                        ret[col] = AsdfNode(parseJson(res.join(";")));
+                    }
+                }
+                return cast(Asdf)ret;
+            });
+        }
     }
-    auto aggregate(Range)(Range range)
-    if(is(ElementType!Range == GroupByObject))
+    else
     {
-        alias f = binaryFun!(fun);
-        return range.map!(x=>x.objs.fold!f);
+
     }
 }
 
+/// apply reducing function (folding function) to any groupby range 
+auto aggregate(Range)(Range range) 
+if (is(ElementType!Range == GroupByObject))
+{
+    alias f = binaryFun!(fun);
+    return range.map!(x => x.objs.fold!f);
+}
 
 unittest
 {
     import std.stdio;
     import std.conv : to;
-    auto textJson = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}}`.parseJson;
-    auto textJson2 =  `{"foo":"bar","inner":{"a":true,"b":false,"c":"32","d":null,"e":{}}}`.parseJson;
-    auto textJson3 =  `{"foo":"bar","inner":{"a":true,"b":false,"c":"32","d":false,"e":{}}}`.parseJson;
-    auto range = [textJson,textJson2,textJson3];
-    auto res = makeAsdfArray(range.groupby(["foo","inner/c"]).aggregate!merge.array).to!string;
+
+    auto textJson = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}}`
+        .parseJson;
+    auto textJson2 = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32","d":null,"e":{}}}`
+        .parseJson;
+    auto textJson3 = `{"foo":"bar","inner":{"a":true,"b":false,"c":"32","d":false,"e":{}}}`
+        .parseJson;
+    auto range = [textJson, textJson2, textJson3];
+    auto res = makeAsdfArray(range.groupby(["foo", "inner/c"]).aggregate!merge.array).to!string;
     auto exp = `[{"foo":"bar","inner":{"a":true,"b":false,"c":"32323","d":null,"e":{}}},{"foo":["bar","bar"],"inner":{"c":["32","32"],"a":[true,true],"e":{},"b":[false,false],"d":[null,false]}}]`;
     assert(res == exp);
 }
 
-
-auto expandBySample(R)(R objs, bool active) 
-if (is(ElementType!R == Asdf))
+auto expandBySample(R)(R objs, bool active) if (is(ElementType!R == Asdf))
 {
     return objs.map!((x) {
-        if(!active)
+        if (!active)
             return [x];
-        if(x["FORMAT"] == Asdf.init)
+        if (x["FORMAT"] == Asdf.init)
             return [x];
         auto samples = x["FORMAT"].byKeyValue;
         return samples.map!((y) {
             auto root = AsdfNode(Asdf(x.data.dup));
             root["sample"] = AsdfNode(y.key.serializeToAsdf);
             root["FORMAT"] = AsdfNode(y.value);
-            return cast(Asdf)root;
+            return cast(Asdf) root;
         }).array;
     }).joiner;
 }
 
-auto expandMultiAllelicSites(R)(R objs, bool active) 
-if (is(ElementType!R == Asdf))
+auto expandMultiAllelicSites(R)(R objs, bool active) if (is(ElementType!R == Asdf))
 {
     return objs.map!((x) {
-        if(!active)
+        if (!active)
             return [x];
-        if(x["FORMAT"] == Asdf.init)
+        if (x["FORMAT"] == Asdf.init)
             return [x];
-        if(x["INFO"]["by_allele"] == Asdf.init)
+        if (x["INFO"]["by_allele"] == Asdf.init)
             return [x];
         // if expanded by sample already
-        if(x["sample"] != Asdf.init) {
+        if (x["sample"] != Asdf.init)
+        {
             auto allele_vals = x["FORMAT"]["by_allele"].byElement;
             auto info_vals = x["INFO"]["by_allele"].byElement.array;
             return allele_vals.enumerate.map!((y) {
@@ -249,17 +293,21 @@ if (is(ElementType!R == Asdf))
                     rootNode["ALT"] = AsdfNode(root["ALT"].byElement.array[y.index]);
                 return cast(Asdf) rootNode;
             }).array;
-        }else {
+        }
+        else
+        {
             auto info_vals = x["INFO"]["by_allele"].byElement.array;
             return info_vals.enumerate.map!((y) {
                 auto root = Asdf(x.data.dup);
                 root["INFO"]["by_allele"].remove();
-                foreach(sample;root["FORMAT"].byKeyValue){
+                foreach (sample; root["FORMAT"].byKeyValue)
+                {
                     root["FORMAT"][sample.key]["by_allele"].remove;
                     auto rootNode = AsdfNode(root);
                     foreach (obj; x["FORMAT"][sample.key]["by_allele"].byKeyValue)
                     {
-                        rootNode["FORMAT"][sample.key][obj.key] = AsdfNode(obj.value.byElement.array[y.index]);
+                        rootNode["FORMAT"][sample.key][obj.key] = AsdfNode(
+                        obj.value.byElement.array[y.index]);
                     }
                     root = cast(Asdf) rootNode;
                 }
@@ -276,14 +324,16 @@ if (is(ElementType!R == Asdf))
     }).joiner;
 }
 
-auto dropNullGenotypes(R)(R objs, bool active) 
-if (is(ElementType!R == Asdf))
+auto dropNullGenotypes(R)(R objs, bool active) if (is(ElementType!R == Asdf))
 {
     return objs.map!((x) {
-        if(active) {
-            if (x["FORMAT"] != Asdf.init) {
-                foreach(sample;x["FORMAT"].byKeyValue) {
-                    if (sample.value["GT"].deserialize!string[0] =='.')
+        if (active)
+        {
+            if (x["FORMAT"] != Asdf.init)
+            {
+                foreach (sample; x["FORMAT"].byKeyValue)
+                {
+                    if (sample.value["GT"].deserialize!string[0] == '.')
                         sample.value.remove();
                 }
             }
@@ -294,37 +344,45 @@ if (is(ElementType!R == Asdf))
     });
 }
 
-auto subset(Range)(Range range, string[] keys)
-if(is(ElementType!Range == Asdf))
+auto subset(Range)(Range range, string[] keys) if (is(ElementType!Range == Asdf))
 {
     string[] byVarKeys = ["CHROM", "POS", "REF", "ALT"];
     string[] bySamVarKeys = ["sample", "CHROM", "POS", "REF", "ALT"];
-    return range.map!(x => subset(x, keys))
-        .uniq;
+    return range.map!(x => subset(x, keys)).uniq;
 }
-
 
 Asdf subset(Asdf obj, string[] keys)
 {
-    auto node =  AsdfNode("{}".parseJson);
+    auto node = AsdfNode("{}".parseJson);
     foreach (string key; keys)
         node[key] = AsdfNode(obj[key]);
-    return cast(Asdf)node;
+    return cast(Asdf) node;
 }
 
-auto to_table(R)(R json_stream, string[] fields, string delimiter="\t",string fill="."){
-    struct Result{
+auto to_table(R)(R json_stream, string[] fields, string delimiter = "\t", string fill = ".")
+{
+    struct Result
+    {
         R json_stream;
+        bool first;
+        string[] fields;
 
-        @property bool empty(){
+        @property bool empty()
+        {
             return json_stream.empty;
         }
 
-        string front(){
+        string front()
+        {
+            if(first) {
+                first = false;
+                return fields.join(delimiter);
+            }
             string[] to_write;
             auto val = json_stream.front;
-            foreach(key; fields){
-                if(val[key] != Asdf.init)
+            foreach (key; fields)
+            {
+                if (val[key] != Asdf.init)
                     to_write ~= to!(string)(val[key]);
                 else
                     to_write ~= fill;
@@ -332,11 +390,11 @@ auto to_table(R)(R json_stream, string[] fields, string delimiter="\t",string fi
             return to_write.join(delimiter);
         }
 
-        void popFront(){
+        void popFront()
+        {
             json_stream.popFront;
         }
     }
     //auto json_stream=stdin.byChunk(4096).parseJsonByLine;
-    return Result(json_stream);
+    return Result(json_stream, true, fields);
 }
-

@@ -1,9 +1,9 @@
 module mucor3.diff;
 
-import std.path: buildPath;
+import std.path : buildPath;
 import std.algorithm : map, joiner;
 
-import mucor3.diff.process; 
+import mucor3.diff.process;
 
 import dhtslib.vcf;
 import dhtslib.coordinates;
@@ -25,14 +25,15 @@ void diff_main(string[] args)
     auto aRange = parseVCF(vcfa, 4);
     auto bRange = parseVCF(vcfb, 4);
     auto prefix = "";
-    
-    auto idxs = processVcfRaw(aRange, bRange, buildPath(prefix,"raw"));
+
+    auto idxs = processVcfRaw(aRange, bRange, buildPath(prefix, "raw"));
     processVcfFiltered(aRange, bRange, args[3], idxs, buildPath(prefix, "filtered"));
 
 }
 
 /// Parse VCF to JSONL
-auto parseVCF(VCFReaderImpl!(CoordSystem.zbc, false) vcf, int threads){
+auto parseVCF(VCFReaderImpl!(CoordSystem.zbc, false) vcf, int threads)
+{
 
     //get info needed from header 
     auto cfg = getHeaderConfig(vcf.vcfhdr);
@@ -43,5 +44,7 @@ auto parseVCF(VCFReaderImpl!(CoordSystem.zbc, false) vcf, int threads){
         .map!((obj) {
             auto numAlts = getNumAlts(obj);
             return expandMultiAllelicSites!true(obj, numAlts);
-        }).joiner.map!(x => x.serializeToAsdf.md5sumObject);
+        })
+        .joiner
+        .map!(x => x.serializeToAsdf.spookyhashObject);
 }

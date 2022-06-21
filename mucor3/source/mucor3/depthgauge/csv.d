@@ -11,87 +11,116 @@ import std.traits : ReturnType;
 import dhtslib.sam : SAMFile;
 import dhtslib.coordinates;
 
-struct Table {
+struct Table
+{
     string[] header;
     string[] samples;
     Record[] records;
     uint[string] contigs;
-    SAMFile * sam;
+    SAMFile* sam;
 
     File f;
     string delim;
     ReturnType!createMatrix matrix;
-    this(string filename, OB startSamples){
-        this(filename,startSamples,"\t");
+    this(string filename, OB startSamples)
+    {
+        this(filename, startSamples, "\t");
     }
 
-    this(string filename, OB startSamples, string delim){
-        f=File(filename);
-        this.delim=delim;
+    this(string filename, OB startSamples, string delim)
+    {
+        f = File(filename);
+        this.delim = delim;
         parseSamples(startSamples);
     }
 
-    void parseSamples(OB startSamples){
-        auto lines=f.byLineCopy();
+    void parseSamples(OB startSamples)
+    {
+        auto lines = f.byLineCopy();
         //set header
-        header=lines.front.splitter(delim).array;
+        header = lines.front.splitter(delim).array;
         //create samples
-        samples=header[startSamples.to!(Basis.zero).pos..$];
+        samples = header[startSamples.to!(Basis.zero).pos .. $];
     }
 
-    void parseRecords(SAMFile * sam, OB startSamples){
-        auto lines=f.byLineCopy();
-        this.sam=sam;
+    void parseRecords(SAMFile* sam, OB startSamples)
+    {
+        auto lines = f.byLineCopy();
+        this.sam = sam;
         //debug writeln(header);
         //debug writeln(samples);
         //lines.popFront;
         //create records
-        foreach(line;lines){
-            auto split=line.splitter(delim);
-            auto rec=split.take(startSamples).array;
-            records~=Record(rec,sam);
+        foreach (line; lines)
+        {
+            auto split = line.splitter(delim);
+            auto rec = split.take(startSamples).array;
+            records ~= Record(rec, sam);
         }
-        matrix=createMatrix();
+        matrix = createMatrix();
     }
 
-    void write(File f){
-        f.writeln(join(header,delim));
-        foreach(i,rec;enumerate(records.sort)){
-            f.writeln(
-                join([sam.header.targetName(rec.chr).idup,(rec.pos.pos).to!(string)]~rec.extra~matrix[i][].map!(x=>x.to!(string)).array,delim));
+    void write(File f)
+    {
+        f.writeln(join(header, delim));
+        foreach (i, rec; enumerate(records.sort))
+        {
+            f.writeln(join([
+                    sam.header.targetName(rec.chr).idup, (rec.pos.pos).to!(string)
+                    ] ~ rec.extra ~ matrix[i][].map!(x => x.to!(string)).array, delim));
         }
     }
-    auto createMatrix(){
+
+    auto createMatrix()
+    {
         auto buf = new ulong[records.length * samples.length];
         return buf.chunks(samples.length);
     }
 }
 
-struct Sample{
+struct Sample
+{
     string name;
-    this(string name){
-        this.name=name;
+    this(string name)
+    {
+        this.name = name;
     }
 }
 
-struct Record {
+struct Record
+{
     int chr;
     //one-based
     OB pos;
     string[] extra;
-    this(string[] line,SAMFile * sam){
-        chr=sam.header.targetId(line.front);
+    this(string[] line, SAMFile* sam)
+    {
+        chr = sam.header.targetId(line.front);
         line.popFront;
         //convert from 1-based to 0-based
-        pos=OB(line.front.to!long);
+        pos = OB(line.front.to!long);
         line.popFront;
-        extra=line.array;
+        extra = line.array;
     }
-    int opCmp(const ref Record other) const nothrow{
-        if(this.chr > other.chr){return 1;}
-        if(this.chr <other.chr){return -1;}
-        if(this.pos > other.pos){return 1;}
-        if(this.pos < other.pos){return -1;}
+
+    int opCmp(const ref Record other) const nothrow
+    {
+        if (this.chr > other.chr)
+        {
+            return 1;
+        }
+        if (this.chr < other.chr)
+        {
+            return -1;
+        }
+        if (this.pos > other.pos)
+        {
+            return 1;
+        }
+        if (this.pos < other.pos)
+        {
+            return -1;
+        }
         return 0;
     }
 }

@@ -15,9 +15,28 @@ module libmucor.wideint;
           - a / b should be an unsigned division   if at least one operand is unsigned
  */
 
-import std.traits,
-       std.ascii;
+import std.traits, std.ascii;
 import std.format : FormatSpec;
+
+const(ubyte)[256] hex2nibble = [
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, //    0-15: 0x0 - 0xF
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, //   16-31: 0x10 - 0x1F
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, //   32-47: special chars
+      0,   1,   2,   3,    4,   5,   6,   7,    8,   9, 255, 255,  255, 255, 255, 255, //   48-63: 0-9 and more special
+    255,  10,  11,  12,   13,  14,  15, 255,  255, 255, 255, 255,  255, 255, 255, 255, //   64-79: @, A-O
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, //   80-95: P-Z, other
+    255,  10,  11,  12,   13,  14,  15, 255,  255, 255, 255, 255,  255, 255, 255, 255, //  96-112: `, a-o
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, // 112-127: p-z, other
+
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255, 
+    255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255,  255, 255, 255, 255
+];
 
 /// Wide signed integer.
 /// Params:
@@ -44,8 +63,7 @@ alias wideint!256 int256;
 alias uwideint!256 uint256;
 
 /// Use this template to get an arbitrary sized integer type.
-private template integer(bool signed, int bits)
-    if ((bits & (bits - 1)) == 0)
+private template integer(bool signed, int bits) if ((bits & (bits - 1)) == 0)
 {
 
     // forward to native type for lower numbers of bits
@@ -83,8 +101,7 @@ private template integer(bool signed, int bits)
     }
 }
 
-private template integer(bool signed, int bits)
-    if ((bits & (bits - 1)) != 0)
+private template integer(bool signed, int bits) if ((bits & (bits - 1)) != 0)
 {
     static assert(0, "wide integer bits must be a power of 2");
 }
@@ -102,21 +119,20 @@ struct wideIntImpl(bool signed, int bits)
             enum bool isSelf = is(Unqual!T == self);
         }
 
-        alias integer!(true, bits/2) sub_int_t;   // signed bits/2 integer
-        alias integer!(false, bits/2) sub_uint_t; // unsigned bits/2 integer
+        alias integer!(true, bits / 2) sub_int_t; // signed bits/2 integer
+        alias integer!(false, bits / 2) sub_uint_t; // unsigned bits/2 integer
 
-        alias integer!(true, bits/4) sub_sub_int_t;   // signed bits/4 integer
-        alias integer!(false, bits/4) sub_sub_uint_t; // unsigned bits/4 integer
+        alias integer!(true, bits / 4) sub_sub_int_t; // signed bits/4 integer
+        alias integer!(false, bits / 4) sub_sub_uint_t; // unsigned bits/4 integer
 
-        static if(signed)
+        static if (signed)
             alias sub_int_t hi_t; // hi_t has same signedness as the whole struct
         else
             alias sub_uint_t hi_t;
 
-        alias sub_uint_t low_t;   // low_t is always unsigned
+        alias sub_uint_t low_t; // low_t is always unsigned
 
-        enum _bits = bits,
-             _signed = signed;
+        enum _bits = bits, _signed = signed;
     }
 
     /// Construct from a value.
@@ -127,17 +143,37 @@ struct wideIntImpl(bool signed, int bits)
 
     /// Construct from hex string
     /// Added by Charles Gregory
-    @nogc void fromHexString(string str){
+    @nogc void fromHexString(string str)
+    {
         typeof(this) value;
         assert(str.length * 4 <= _bits);
-        foreach (d; str)
-        {
-            assert(isHexDigit(d));
-            value <<= 4;
-            if (isDigit(d))
-                value += d - '0';
-            else
-                value += 10 + toUpper(d) - 'A';
+        auto missing = 32 - str.length;
+        if(missing == 0) {
+            auto strIdx = 0;
+            for(auto i = 0; i < 16; i++) {
+                assert(hex2nibble[str[strIdx]] != 255);
+                value.hi = (value.hi << 4 ) | hex2nibble[str[strIdx++]];
+            }   
+            for(auto i = 0; i < 16; i++) {
+                assert(hex2nibble[str[strIdx]] != 255);
+                value.lo = (value.lo << 4 ) | hex2nibble[str[strIdx++]];
+            }
+        }
+        else if(missing < 16) {
+            auto strIdx = 0;
+            for(auto i = 0; i < 16 - missing; i++) {
+                assert(hex2nibble[str[strIdx]] != 255);
+                value.hi = (value.hi << 4 ) | hex2nibble[str[strIdx++]];
+            }   
+            for(auto i = 0; i < 16; i++) {
+                assert(hex2nibble[str[strIdx]] != 255);
+                value.lo = (value.lo << 4 ) | hex2nibble[str[strIdx++]];
+            }
+        } else {
+            for(auto i = 0; i < 32 - missing; i++) {
+                assert(hex2nibble[str[i]] != 255);
+                value.lo = (value.lo << 4 ) | hex2nibble[str[i]];
+            }
         }
         this = value;
     }
@@ -162,7 +198,7 @@ struct wideIntImpl(bool signed, int bits)
                 if (digits.startsWith("-"))
                     digits = digits[1 .. $];
             if (digits.length < 1)
-                return false;   // at least 1 digit required
+                return false; // at least 1 digit required
             foreach (d; digits)
             {
                 if (!isDigit(d) && d != '_')
@@ -230,8 +266,7 @@ struct wideIntImpl(bool signed, int bits)
     /// ----
     template literal(string digits)
     {
-        static assert(isValidDigitString(digits),
-                      "invalid digits in literal: " ~ digits);
+        static assert(isValidDigitString(digits), "invalid digits in literal: " ~ digits);
         enum literal = literalImpl(digits);
     }
 
@@ -248,15 +283,16 @@ struct wideIntImpl(bool signed, int bits)
     {
         // shorter int always gets sign-extended,
         // regardless of the larger int being signed or not
-        hi = (n < 0) ? cast(hi_t)(-1) : cast(hi_t)0;
+        hi = (n < 0) ? cast(hi_t)(-1) : cast(hi_t) 0;
 
         // will also sign extend as well if needed
-        lo = cast(sub_int_t)n;
+        lo = cast(sub_int_t) n;
         return this;
     }
 
     /// Assign with a wide integer of the same size (sign is lost).
-    @nogc ref self opAssign(T)(T n) pure nothrow if (isWideIntInstantiation!T && T._bits == bits)
+    @nogc ref self opAssign(T)(T n) pure nothrow 
+            if (isWideIntInstantiation!T && T._bits == bits)
     {
         hi = n.hi;
         lo = n.lo;
@@ -264,7 +300,8 @@ struct wideIntImpl(bool signed, int bits)
     }
 
     /// Assign with a smaller wide integer (sign is extended accordingly).
-    @nogc ref self opAssign(T)(T n) pure nothrow if (isWideIntInstantiation!T && T._bits < bits)
+    @nogc ref self opAssign(T)(T n) pure nothrow 
+            if (isWideIntInstantiation!T && T._bits < bits)
     {
         static if (T._signed)
         {
@@ -273,7 +310,7 @@ struct wideIntImpl(bool signed, int bits)
             hi = cast(hi_t)((n < 0) ? -1 : 0);
 
             // will also sign extend as well if needed
-            lo = cast(sub_int_t)n;
+            lo = cast(sub_int_t) n;
             return this;
         }
         else
@@ -287,7 +324,7 @@ struct wideIntImpl(bool signed, int bits)
     /// Cast to a smaller integer type (truncation).
     @nogc T opCast(T)() pure const nothrow if (isIntegral!T)
     {
-        return cast(T)lo;
+        return cast(T) lo;
     }
 
     /// Cast to bool.
@@ -300,15 +337,15 @@ struct wideIntImpl(bool signed, int bits)
     @nogc T opCast(T)() pure const nothrow if (isWideIntInstantiation!T)
     {
         static if (T._bits < bits)
-            return cast(T)lo;
+            return cast(T) lo;
         else
             return T(this);
     }
 
     /// Converts to a string. Supports format specifiers %d, %s (both decimal)
     /// and %x (hex).
-    void toString(DG, Char)(DG sink, FormatSpec!Char fmt) const
-        if (is(typeof(sink((const(Char)[]).init))))
+    void toString(DG, Char)(DG sink, FormatSpec!Char fmt) const 
+            if (is(typeof(sink((const(Char)[]).init))))
     {
         if (fmt.spec == 'x')
         {
@@ -323,13 +360,13 @@ struct wideIntImpl(bool signed, int bits)
             wideIntImpl tmp = this;
             size_t i;
 
-            for (i = maxDigits-1; tmp != 0 && i < buf.length; i--)
+            for (i = maxDigits - 1; tmp != 0 && i < buf.length; i--)
             {
-                buf[i] = hexDigits[cast(int)tmp & 0b00001111];
+                buf[i] = hexDigits[cast(int) tmp & 0b00001111];
                 tmp >>= 4;
             }
-            assert(i+1 < buf.length);
-            sink(buf[i+1 .. $]);
+            assert(i + 1 < buf.length);
+            sink(buf[i + 1 .. $]);
         }
         else // default to decimal
         {
@@ -357,7 +394,7 @@ struct wideIntImpl(bool signed, int bits)
                 sink("-");
                 tmp = -tmp;
             }
-            for (i = maxDigits-1; tmp > 0; i--)
+            for (i = maxDigits - 1; tmp > 0; i--)
             {
                 assert(i < buf.length);
                 static if (signed)
@@ -368,12 +405,13 @@ struct wideIntImpl(bool signed, int bits)
                 buf[i] = digits[cast(int)(r)];
                 tmp = q;
             }
-            assert(i+1 < buf.length);
-            sink(buf[i+1 .. $]);
+            assert(i + 1 < buf.length);
+            sink(buf[i + 1 .. $]);
         }
     }
 
-    @nogc self opBinary(string op, T)(T o) pure const nothrow if (!isSelf!T && op !="in")
+    @nogc self opBinary(string op, T)(T o) pure const nothrow 
+            if (!isSelf!T && op != "in")
     {
         self r = this;
         self y = o;
@@ -437,14 +475,14 @@ struct wideIntImpl(bool signed, int bits)
                 hi = signFill;
                 lo = signFill;
             }
-            else if (y >= bits/2)
+            else if (y >= bits / 2)
             {
-                lo = hi >> (y.lo - bits/2);
+                lo = hi >> (y.lo - bits / 2);
                 hi = signFill;
             }
             else if (y > 0)
             {
-                lo = (hi << (-y.lo + bits/2)) | (lo >> y.lo);
+                lo = (hi << (-y.lo + bits / 2)) | (lo >> y.lo);
                 hi = hi >> y.lo;
             }
         }
@@ -454,9 +492,9 @@ struct wideIntImpl(bool signed, int bits)
             sub_sub_uint_t[4] b = y.toParts();
 
             this = 0;
-            for(int i = 0; i < 4; ++i)
-                for(int j = 0; j < 4 - i; ++j)
-                    this += self(cast(sub_uint_t)(a[i]) * b[j]) << ((bits/4) * (i + j));
+            for (int i = 0; i < 4; ++i)
+                for (int j = 0; j < 4 - i; ++j)
+                    this += self(cast(sub_uint_t)(a[i]) * b[j]) << ((bits / 4) * (i + j));
         }
         else static if (op == "&")
         {
@@ -476,7 +514,7 @@ struct wideIntImpl(bool signed, int bits)
         else static if (op == "/" || op == "%")
         {
             self q = void, r = void;
-            static if(signed)
+            static if (signed)
                 Internals!bits.signedDivide(this, y, q, r);
             else
                 Internals!bits.unsignedDivide(this, y, q, r);
@@ -493,7 +531,8 @@ struct wideIntImpl(bool signed, int bits)
     }
 
     // const unary operations
-    @nogc self opUnary(string op)() pure const nothrow if (op == "+" || op == "-" || op == "~")
+    @nogc self opUnary(string op)() pure const nothrow 
+            if (op == "+" || op == "-" || op == "~")
     {
         static if (op == "-")
         {
@@ -503,7 +542,7 @@ struct wideIntImpl(bool signed, int bits)
             return r;
         }
         else static if (op == "+")
-           return this;
+            return this;
         else static if (op == "~")
         {
             self r = this;
@@ -529,7 +568,7 @@ struct wideIntImpl(bool signed, int bits)
 
     @nogc bool opEquals(T)(T y) pure const if (isSelf!T)
     {
-       return lo == y.lo && y.hi == hi;
+        return lo == y.lo && y.hi == hi;
     }
 
     @nogc int opCmp(T)(T y) pure const if (!isSelf!T)
@@ -539,27 +578,34 @@ struct wideIntImpl(bool signed, int bits)
 
     @nogc int opCmp(T)(T y) pure const if (isSelf!T)
     {
-        if (hi < y.hi) return -1;
-        if (hi > y.hi) return 1;
-        if (lo < y.lo) return -1;
-        if (lo > y.lo) return 1;
+        if (hi < y.hi)
+            return -1;
+        if (hi > y.hi)
+            return 1;
+        if (lo < y.lo)
+            return -1;
+        if (lo > y.lo)
+            return 1;
         return 0;
     }
 
     private size_t _toHash(ulong hi, ulong lo) const nothrow @safe
     {
         ulong p = 0x5555555555555555; // pattern of alternating 0 and 1
-        ulong c = 17316035218449499591;// random uneven integer constant; 
+        ulong c = 17316035218449499591; // random uneven integer constant; 
         ulong tmp = p * (hi ^ (hi >> 32));
         auto hash = c * (tmp ^ (tmp >> 32));
-        return hash^(lo+c);
+        return hash ^ (lo + c);
     }
 
     size_t toHash() const nothrow @safe
     {
-        static if(_bits <= 128){
+        static if (_bits <= 128)
+        {
             return _toHash(this.hi, this.lo);
-        }else{
+        }
+        else
+        {
             auto a = _toHash(this.hi.hi, this.hi.lo);
             auto b = _toHash(this.lo.hi, this.lo.lo);
             return _toHash(a, b);
@@ -604,12 +650,14 @@ struct wideIntImpl(bool signed, int bits)
         @nogc void increment() pure nothrow
         {
             ++lo;
-            if (lo == 0) ++hi;
+            if (lo == 0)
+                ++hi;
         }
 
         @nogc void decrement() pure nothrow
         {
-            if (lo == 0) --hi;
+            if (lo == 0)
+                --hi;
             --lo;
         }
 
@@ -644,7 +692,7 @@ template isWideIntInstantiation(U)
 
 @nogc public wideIntImpl!(signed, bits) abs(bool signed, int bits)(wideIntImpl!(signed, bits) x) pure nothrow
 {
-    if(x >= 0)
+    if (x >= 0)
         return x;
     else
         return -x;
@@ -656,7 +704,7 @@ private struct Internals(int bits)
     alias wideIntImpl!(false, bits) uwint_t;
 
     @nogc static void unsignedDivide(uwint_t dividend, uwint_t divisor,
-                                     out uwint_t quotient, out uwint_t remainder) pure nothrow
+            out uwint_t quotient, out uwint_t remainder) pure nothrow
     {
         assert(divisor != 0);
 
@@ -689,7 +737,7 @@ private struct Internals(int bits)
     }
 
     @nogc static void signedDivide(wint_t dividend, wint_t divisor,
-                                   out wint_t quotient, out wint_t remainder) pure nothrow
+            out wint_t quotient, out wint_t remainder) pure nothrow
     {
         uwint_t q, r;
         unsignedDivide(uwint_t(abs(dividend)), uwint_t(abs(divisor)), q, r);
@@ -762,6 +810,19 @@ unittest
 
     x.fromHexString("FFFFFFFFFFFFFFFEEA71B9F6EC2FFFFF");
     assert(format("%x", x) == "FFFFFFFFFFFFFFFEEA71B9F6EC2FFFFF");
+
+    x.hi = 0;
+    x.lo = 0;
+
+    x.fromHexString("1158e460913d00001");
+    assert(format("%x", x) == "1158E460913D00001");
+    assert(format("%x", x));
+
+    x.hi = 0;
+    x.lo = 0;
+
+    x.fromHexString("fffffffffffffffeea71b9f6ec2fffff");
+    assert(format("%x", x) == "FFFFFFFFFFFFFFFEEA71B9F6EC2FFFFF");
 }
 
 unittest
@@ -771,8 +832,8 @@ unittest
     {
         for (long sj = long.min; sj <= long.max - step; sj += step)
         {
-            ulong ui = cast(ulong)si;
-            ulong uj = cast(ulong)sj;
+            ulong ui = cast(ulong) si;
+            ulong uj = cast(ulong) sj;
             int128 csi = si;
             uint128 cui = si;
             int128 csj = sj;
@@ -791,7 +852,7 @@ unittest
             string testMixed(string op)
             {
                 return "assert(cast(ulong)(ui" ~ op ~ "sj) == cast(ulong)(cui" ~ op ~ "csj));"
-                     ~ "assert(cast(ulong)(si" ~ op ~ "uj) == cast(ulong)(csi" ~ op ~ "cuj));";
+                    ~ "assert(cast(ulong)(si" ~ op ~ "uj) == cast(ulong)(csi" ~ op ~ "cuj));";
             }
 
             string testUnsigned(string op)
@@ -851,8 +912,7 @@ unittest
 
     // Negative literals should be supported
     auto x = int128.literal!"-20000000000000000001";
-    assert(x.hi == 0xFFFF_FFFF_FFFF_FFFE &&
-           x.lo == 0xEA71_B9F6_EC2F_FFFF);
+    assert(x.hi == 0xFFFF_FFFF_FFFF_FFFE && x.lo == 0xEA71_B9F6_EC2F_FFFF);
     assert(format("%d", x) == "-20000000000000000001");
     assert(format("%x", x) == "FFFFFFFFFFFFFFFEEA71B9F6EC2FFFFF");
 

@@ -4,7 +4,7 @@ import std.getopt;
 import std.parallelism;
 
 import libmucor.vcfops.vcf : parseVCF;
-import htslib.hts_log;
+import libmucor.error;
 
 bool multiSample;
 bool multiAllelic;
@@ -12,7 +12,6 @@ bool splitAnnotations;
 bool flatten;
 
 int threads = 0;
-
 
 string help = "
 atomize_vcf: converts VCF format to JSONL
@@ -26,28 +25,26 @@ one-to-one VCF record representation, use the -s and -m flags.
 
 void atomize(string[] args)
 {
-	auto res = getopt(args, config.bundling, 
-		"threads|t","extra threads for parsing the VCF file", &threads,
-		"multi-sample|s", "don't split (and duplicate) records by sample", &multiSample,
-		"multi-allelic|m", "don't split (and duplicate) records by sample", &multiAllelic,
-		"annotation|a", "split (and duplicate) records by annotation (also sets -m flag)", &splitAnnotations,
-        "flatten|f", "flatten sub-objects", &flatten
-		);
+    auto res = getopt(args, config.bundling, "threads|t",
+            "extra threads for parsing the VCF file", &threads, "multi-sample|s",
+            "don't split (and duplicate) records by sample", &multiSample,
+            "multi-allelic|m",
+            "don't split (and duplicate) records by sample",
+            &multiAllelic, "annotation|a", "split (and duplicate) records by annotation (also sets -m flag)",
+            &splitAnnotations, "flatten|f", "flatten sub-objects", &flatten);
 
-	if (res.helpWanted | (args.length < 2))
-	{
-		defaultGetoptPrinter(help,res.options);
-		stderr.writeln();
-		return;
-	}
-	if(splitAnnotations){
-		hts_log_warning(__FUNCTION__, "using -a also splits by allele");	
-	}
+    if (res.helpWanted | (args.length < 2))
+    {
+        defaultGetoptPrinter(help, res.options);
+        stderr.writeln();
+        return;
+    }
+    if (splitAnnotations)
+    {
+        log_warn(__FUNCTION__, "using -a also splits by allele");
+    }
 
-	ubyte con = 
-        (cast(ubyte)(flatten) << 3) |
-		(cast(ubyte)(!multiSample) << 2) | 
-		(cast(ubyte)(!multiAllelic) << 1) | 
-		cast(ubyte)(splitAnnotations);
-	parseVCF(args[1], threads, con);
+    ubyte con = (cast(ubyte)(flatten) << 3) | (cast(ubyte)(!multiSample) << 2) | (
+            cast(ubyte)(!multiAllelic) << 1) | cast(ubyte)(splitAnnotations);
+    parseVCF(args[1], threads, con, stdout);
 }
