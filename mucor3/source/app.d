@@ -75,6 +75,9 @@ void main(string[] args)
     case "diff":
         diff_main(args[1 .. $]);
         return;
+    case "principal":
+        principal(args[1 .. $]);
+        return;
     default:
         mucor_main(args);
     }
