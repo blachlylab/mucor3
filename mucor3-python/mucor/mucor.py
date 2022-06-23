@@ -15,12 +15,13 @@ def fix_cells(x):
         new_list = list()
         for item in x:
             if type(item) is list:
-                new_list.append("&".join([str(y) for y in item]))
+                new_list.append(",".join([str(y) for y in item]))
             else:
                 new_list.append(str(item))
         ret = ",".join([str(y) for y in np.unique(new_list).tolist()])
     if type(ret) is str:
         if len(ret) > 32767:
+            print("Warning: row found that was too big to be displayed in excel", file=sys.stderr)
             ret = ret[0::32767]
     return ret
 
@@ -28,7 +29,7 @@ def form_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     #default=["ANN_gene_name","EFFECT","INFO_cosmic_ids", "INFO_dbsnp_ids"]
     parser.add_argument("-e","--extra",help="comma delimited list of extra columns to include in pivoted table index",type=str)
-    parser.add_argument("-a","--value",default="AF", help="Value to be displayed in pivoted table values")
+    parser.add_argument("-a","--value",default="FMT.AF", help="Value to be displayed in pivoted table values")
     parser.add_argument("-m","--merge", action="store_true", help="Merge rows togther to deal with annotation explosion")
     parser.add_argument("datafile", help="input jsonl data from vcf_atomizer")
     parser.add_argument("prefix", help="directory for output")
@@ -64,9 +65,9 @@ def main():
         sys.exit(0)
 
     #create EFFECT column
-    if("ANN_hgvs_p" in master):
-        master["EFFECT"]=master["ANN_hgvs_p"]
-        master["EFFECT"].fillna(master["ANN_effect"],inplace=True)
+    if("INFO.ANN.hgvs_p" in master):
+        master["EFFECT"]=master["INFO.ANN.hgvs_p"]
+        master["EFFECT"].fillna(master["INFO.ANN.effect"],inplace=True)
 
     #create Total Depth column
     if(("Ref_Depth" in master) and ("Alt_depths" in master)):
@@ -100,7 +101,7 @@ def main():
 
         #import merged dataset
         merged=pd.read_json(os.path.join(args.prefix,"__merge_sample.jsonl"),orient="records",lines=True)
-
+    merged = merged.applymap(fix_cells)
     #write master tsv
     jsonlcsv.jsonl2tsv(
         merged,

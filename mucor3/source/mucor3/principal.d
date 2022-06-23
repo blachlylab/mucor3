@@ -169,7 +169,7 @@ void filterAnnotationToPrincipalIsoform(VCFRecord rec, string annotationFile, st
     auto region = GFF3Reader(annotationFile, rec.chrom, rec.coordinates);
     auto anns = Annotations((*field).to!string, annFieldNames);
 
-    auto featureNames = anns.map!(x => x[annField].value[0]).array;
+    auto featureNames = anns.filter!(x => !x[annField].isNull).map!(x => x[annField].value[0]).array;
     auto matchingRecords = region.filter!(rec => featureNames.countUntil(rec["ID"]) != -1).array;
     
     auto scores = matchingRecords.map!(x => PrincipalScore(x).combinedScore).array;
