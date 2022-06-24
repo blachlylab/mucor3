@@ -155,6 +155,7 @@ def main():
             replaceValuesWithDelimiter(rawFile, args.column, "accession", expandedIndex)
             expandedRaw.to_csv(args.output, index=False, sep='\t')
     else:
+        rawFile.reset_index(inplace=True)
         # No column name provided
         print("No column name was provided to filter on, assuming values in header")
         idNameLST = args.idName.split(',')
