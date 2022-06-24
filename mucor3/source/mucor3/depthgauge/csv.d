@@ -63,7 +63,7 @@ struct Table
     void write(File f)
     {
         f.writeln(join(header, delim));
-        foreach (i, rec; enumerate(records.sort))
+        foreach (i, rec; enumerate(records))
         {
             f.writeln(join([
                     sam.header.targetName(rec.chr).idup, (rec.pos.pos).to!(string)
