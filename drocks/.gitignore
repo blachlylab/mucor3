@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/drocks
+drocks.so
+drocks.dylib
+drocks.dll
+drocks.a
+drocks.lib
+drocks-test-*
+*.exe
+*.o
+*.obj
+*.lst
