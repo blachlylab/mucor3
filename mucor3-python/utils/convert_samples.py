@@ -40,7 +40,7 @@ def expand_field_by_delimiter(column: pd.Series, delim: str):
         pd.Series - input series converted to series of lists
             split by delim 
     """
-    column.str.split(delim)
+    return column.str.split(delim)
 
 def remap_expanded_value(x, mapping: dict, delim: str):
     """ remaps value in column that has been expanded with 
@@ -54,7 +54,7 @@ def remap_expanded_value(x, mapping: dict, delim: str):
         pd.Series - series with remapped ids combined by delimiter 
     """
     if type(x) == list:
-        return delim.join([str(mapping.get(x, None)) for e in x])
+        return delim.join([str(mapping.get(e, None)) for e in x])
     else:
         return mapping.get(x, None)
 
@@ -76,7 +76,7 @@ def convert_dataframe_ids_in_rows(df: pd.DataFrame, mapping: dict, args: ap.Argu
         mapping - dictionary of id conversions
         args - program arguments
     """
-    for col in args.columns:
+    for col in args.column:
         df[col] = expand_field_by_delimiter(df[col], args.delim) \
             .apply(lambda x: remap_expanded_value(x, mapping, args.delim))
 
@@ -118,15 +118,15 @@ def convert_dataframe_ids(data_df: pd.DataFrame, key_df: pd.DataFrame, args: ap.
         args - program arguments
     """
     mapping = dict()
-    for pair in args.mappings:
+    for pair in args.mapping.split(","):
         vals = pair.split("=")
         if len(vals) != 2:
             raise Exception("id column pair not valid: {}".format(pair))
         f = vals[0]
         t = vals[1]
-        mapping.update(make_remapping(key_df. f, t))
+        mapping.update(make_remapping(key_df, f, t))
 
-    if args.columns is None:
+    if args.column is None:
         convert_dataframe_ids_in_columns(data_df, mapping, args)
     else:
         convert_dataframe_ids_in_rows(data_df, mapping, args)
@@ -201,14 +201,15 @@ def main():
     parser.add_argument("datafile",type=str, help="Input file containing Id to be converted")
     parser.add_argument("keyfile",type=str, help="File containing columns with id conversions")
     parser.add_argument("--column","-c", default=None, nargs="+", help="Name of column/s that the ids exist in the data file")
-    parser.add_argument("--mapping", nargs="+", required=True, help="Column name pairs in keyfile to create id conversion mapping from, e.g \"sample=accession\"")
+    parser.add_argument("--mapping","-m", required=True, help="Column name pairs in keyfile to create id conversion mapping from, e.g \"sample=accession\"")
+    parser.add_argument("--delim","-d", default=";")
     args = parser.parse_args()
     
     # Read files intp pandas dataframe
-    keys = read_dataframe(args.datafile)
-    data = read_dataframe(args.keyfile)
+    data = read_dataframe(args.datafile)
+    keys = read_dataframe(args.keyfile)
     convert_dataframe_ids(data, keys, args)
-
+    path = args.datafile
     if path.endswith(".xlsx"):
         data.to_excel(sys.stdout, index=False)
     elif path.endswith(".tsv"):
