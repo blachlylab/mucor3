@@ -97,7 +97,7 @@ struct Info {
             auto idx = cfg.getIdx(v.key);
             auto hdrInfo = cfg.getInfo(v.key);
             if(cfg.isAnn[v.key]) {
-                annFields[idx] = Annotations(info.to!string, ANN_FIELDS);
+                annFields[idx] = Annotations(info.to!string);
                 continue;
             }
             final switch (info.type)
@@ -180,18 +180,7 @@ struct Info {
             auto l = serializer.listBegin;
             foreach (ann; anns)
             {
-                auto s = serializer.structBegin;
-                foreach (field; ann)
-                {
-                    if(field.isNull) continue;
-                    serializer.putKey(field.name);
-                    if(field.value.length > 1) {
-                        serializeValue(serializer, field.value);
-                    } else {
-                        serializer.putValue(field.value[0]);    
-                    }
-                }
-                serializer.structEnd(s);
+                serializeValue(serializer, ann);
             }
             serializer.listEnd(l);
         }
@@ -236,19 +225,8 @@ struct InfoSingleAlt {
             auto l = serializer.listBegin;
             foreach (ann; anns)
             {
-                auto s = serializer.structBegin;
-                foreach (field; ann)
-                {
-                    if(field.isNull) continue;
-                    if(field.name == "allele" && field.value[0] != allele) break;
-                    serializer.putKey(field.name);
-                    if(field.value.length > 1) {
-                        serializeValue(serializer, field.value);
-                    } else {
-                        serializer.putValue(field.value[0]);    
-                    }
-                }
-                serializer.structEnd(s);
+                if(ann.allele != allele) continue;
+                serializeValue(serializer, ann);
             }
             serializer.listEnd(l);
         }
