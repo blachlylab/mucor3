@@ -22,12 +22,6 @@ import mir.ser.interfaces;
 /// List of objects
 struct Annotations {
     @serdeIgnoreOut
-    /// field names
-    string[] fieldnames;
-    @serdeIgnoreOut
-    /// field types
-    TYPES[] types;
-    @serdeIgnoreOut
     /// slice of original string 
     string original;
     @serdeIgnoreOut

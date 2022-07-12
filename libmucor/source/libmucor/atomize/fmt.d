@@ -198,8 +198,8 @@ struct Fmt {
                 
                 if (gt.isNull) continue;
                 auto val = vals[i];
-                this.bySample[i].byAllele.length = val.length;
                 auto byAllele = &this.bySample[i].byAllele;
+                if(byAllele.length == 0) return;
                 assert(fmt.n == val.length);
 
                 auto first = val[0];
@@ -214,7 +214,7 @@ struct Fmt {
                 auto j = 0;
                 foreach (gi; gt.alleles)
                 {
-                    if (gi != 0)
+                    if (gi != 0 && j < byAllele.length)
                     {
                         (*byAllele)[j][idx] = [first, val[gi]];
                         j++;
@@ -230,6 +230,7 @@ struct Fmt {
                 if (gt.isNull) continue;
 
                 auto val = vals[i];
+                if(this.bySample[i].byAllele.length == 0) return;
                 assert(this.bySample[i].byAllele.length == val.length);
 
                 foreach (j, ref allele; this.bySample[i].byAllele)

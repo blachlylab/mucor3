@@ -86,7 +86,7 @@ struct Info {
         } else {
             this.byAllele.length = rec.line.n_allele - 1;
         }
-
+        if(rec.line.n_info == 0) return;
         /// loop over infos
         foreach (bcf_info_t v; rec.line.d.info[0 .. rec.line.n_info])
         {
@@ -126,6 +126,7 @@ struct Info {
         final switch (hdrInfo.n)
         {
         case HeaderLengths.OnePerAllele:
+            if(this.byAllele.length == 0) return;
             auto vals = info.to!(T[]);
 
             foreach (i, val; vals)
@@ -136,6 +137,7 @@ struct Info {
             }
             return;
         case HeaderLengths.OnePerAltAllele:
+            if(this.byAllele.length == 0) return;
             auto vals = info.to!(T[]);
 
             foreach (i, val; vals)

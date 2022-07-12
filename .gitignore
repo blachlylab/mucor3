@@ -9,7 +9,6 @@ docs/
 *.obj
 *.lst
 *.vcf.gz
-*.vcf
 bin/
 test.*
 *.tbi

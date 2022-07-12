@@ -7,7 +7,7 @@ import libmucor.atomize.info;
 import libmucor.atomize.ann;
 import libmucor.atomize.header;
 
-struct VcfIR {
+struct VcfRec {
     @serdeKeys("CHROM", "chrom")
     string chrom;
 
@@ -51,7 +51,7 @@ struct VcfIR {
         this.id = rec.id;
         this.ref_ = rec.refAllele;
         this.alt = rec.altAllelesAsArray;
-        this.qual = rec.qual;
+        this.qual = rec.line.qual;
         this.filter = rec.filter.split(";");
         this.info.parse(rec);
         this.fmt.parse(rec);
@@ -63,7 +63,7 @@ unittest {
     import mir.ion.conv;
     import std.stdio;
 
-    VcfIR rec;
+    VcfRec rec;
     rec.chrom = "chr1";
     rec.pos = 1;
     rec.id = ".";
@@ -73,7 +73,7 @@ unittest {
     writeln(serializeIon(rec).ion2text);
 }
 
-struct VcfIRSingleSample {
+struct VcfRecSingleSample {
     @serdeKeys("CHROM", "chrom")
     string chrom;
 
@@ -106,7 +106,7 @@ struct VcfIRSingleSample {
     @serdeIgnoreOut
     HeaderConfig hdrInfo;
 
-    this(VcfIR rec, size_t samIdx) {
+    this(VcfRec rec, size_t samIdx) {
         this.chrom = rec.chrom;
         this.pos = rec.pos;
         this.id = rec.id;
@@ -121,7 +121,7 @@ struct VcfIRSingleSample {
     }
 }
 
-struct VcfIRSingleAlt {
+struct VcfRecSingleAlt {
     @serdeKeys("CHROM", "chrom")
     string chrom;
 
@@ -153,7 +153,7 @@ struct VcfIRSingleAlt {
     @serdeIgnoreOut
     HeaderConfig hdrInfo;
 
-    this(VcfIRSingleSample rec, size_t altIdx) {
+    this(VcfRecSingleSample rec, size_t altIdx) {
         this.chrom = rec.chrom;
         this.pos = rec.pos;
         this.id = rec.id;
@@ -182,21 +182,21 @@ unittest {
     auto res3 = `{CHROM:"1",POS:3000149,ID:".",REF:"C",ALT:["T"],QUAL:59.2,FILTER:["PASS"],sample:"B",INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
     auto res4 = `{CHROM:"1",POS:3000149,ID:".",REF:"C",ALT:"T",QUAL:59.2,FILTER:["PASS"],sample:"A",INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
     auto res5 = `{CHROM:"1",POS:3000149,ID:".",REF:"C",ALT:"T",QUAL:59.2,FILTER:["PASS"],sample:"B",INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
-    auto ionRec = VcfIR(vcf.vcfhdr);
+    auto ionRec = VcfRec(vcf.vcfhdr);
 
     ionRec.parse(rec);
     
     assert(serializeIon(ionRec).ion2text == res1);
 
     {
-        auto ionRecSS1 = VcfIRSingleSample(ionRec, 0);
+        auto ionRecSS1 = VcfRecSingleSample(ionRec, 0);
         assert(serializeIon(ionRecSS1).ion2text == res2);
-        auto ionRecSS2 = VcfIRSingleSample(ionRec, 1);
+        auto ionRecSS2 = VcfRecSingleSample(ionRec, 1);
         assert(serializeIon(ionRecSS2).ion2text == res3);
 
-        auto ionRecSA1 = VcfIRSingleAlt(ionRecSS1, 0);
+        auto ionRecSA1 = VcfRecSingleAlt(ionRecSS1, 0);
         assert(serializeIon(ionRecSA1).ion2text == res4);
-        auto ionRecSA2 = VcfIRSingleAlt(ionRecSS2, 0);
+        auto ionRecSA2 = VcfRecSingleAlt(ionRecSS2, 0);
         assert(serializeIon(ionRecSA2).ion2text == res5);
     }
 
@@ -216,21 +216,21 @@ unittest {
     ionRec.parse(rec);
     assert(serializeIon(ionRec).ion2text == res1);
 
-    auto ionRecSS1 = VcfIRSingleSample(ionRec, 0);
+    auto ionRecSS1 = VcfRecSingleSample(ionRec, 0);
     assert(serializeIon(ionRecSS1).ion2text == res2);
 
-    auto ionRecSS2 = VcfIRSingleSample(ionRec, 1);
+    auto ionRecSS2 = VcfRecSingleSample(ionRec, 1);
     assert(serializeIon(ionRecSS2).ion2text == res3);
 
-    auto ionRecSA1 = VcfIRSingleAlt(ionRecSS1, 0);
+    auto ionRecSA1 = VcfRecSingleAlt(ionRecSS1, 0);
     assert(serializeIon(ionRecSA1).ion2text == res4);
 
-    auto ionRecSA2 = VcfIRSingleAlt(ionRecSS2, 0);
+    auto ionRecSA2 = VcfRecSingleAlt(ionRecSS2, 0);
     assert(serializeIon(ionRecSA2).ion2text == res5);
 
-    auto ionRecSA3 = VcfIRSingleAlt(ionRecSS1, 1);
+    auto ionRecSA3 = VcfRecSingleAlt(ionRecSS1, 1);
     assert(serializeIon(ionRecSA3).ion2text == res6);
 
-    auto ionRecSA4 = VcfIRSingleAlt(ionRecSS2, 1);
+    auto ionRecSA4 = VcfRecSingleAlt(ionRecSS2, 1);
     assert(serializeIon(ionRecSA4).ion2text == res7);
 }
