@@ -1,6 +1,8 @@
 module libmucor.atomize.record;
 import mir.ser;
 
+import std.math : isNaN;
+
 import dhtslib.vcf;
 import libmucor.atomize.fmt;
 import libmucor.atomize.info;
@@ -8,31 +10,37 @@ import libmucor.atomize.ann;
 import libmucor.atomize.header;
 
 struct VcfRec {
-    @serdeKeys("CHROM", "chrom")
+    @serdeAnnotation
+    @serdeKeys("CHROM")
     string chrom;
 
-    @serdeKeys("POS", "pos")
+    @serdeKeys("POS")
     long pos;
 
-    @serdeKeys("ID", "id")
+    @serdeKeys("ID")
+    @serdeIgnoreOutIf!`a == "."`
     string id;
 
-    @serdeKeys("REF", "ref")
+    @serdeAnnotation
+    @serdeKeys("REF")
     string ref_;
 
-    @serdeKeys("ALT", "alt")
+    @serdeAnnotation
+    @serdeKeys("ALT")
     string[] alt;
 
-    @serdeKeys("QUAL", "qual")
+    @serdeIgnoreOutIf!isNaN
+    @serdeKeys("QUAL")
     float qual;
 
-    @serdeKeys("FILTER", "filter")
+    @serdeAnnotation
+    @serdeKeys("FILTER")
     string[] filter;
 
-    @serdeKeys("INFO", "info")
+    @serdeKeys("INFO")
     Info info;
 
-    @serdeKeys("FORMAT", "fmt")
+    @serdeKeys("FORMAT")
     Fmt fmt;
     // Annotations[] anns;
     @serdeIgnoreOut
@@ -74,33 +82,40 @@ unittest {
 }
 
 struct VcfRecSingleSample {
-    @serdeKeys("CHROM", "chrom")
+    @serdeAnnotation
+    @serdeKeys("CHROM")
     string chrom;
-
-    @serdeKeys("POS", "pos")
+    
+    @serdeKeys("POS")
     long pos;
 
-    @serdeKeys("ID", "id")
+    @serdeIgnoreOutIf!`a == "."`
+    @serdeKeys("ID")
     string id;
 
-    @serdeKeys("REF", "ref")
+    @serdeAnnotation
+    @serdeKeys("REF")
     string ref_;
 
-    @serdeKeys("ALT", "alt")
+    @serdeAnnotation
+    @serdeKeys("ALT")
     string[] alt;
 
-    @serdeKeys("QUAL", "qual")
+    @serdeIgnoreOutIf!isNaN
+    @serdeKeys("QUAL")
     float qual;
 
-    @serdeKeys("FILTER", "filter")
+    @serdeAnnotation
+    @serdeKeys("FILTER")
     string[] filter;
 
+    @serdeAnnotation
     string sample;
 
-    @serdeKeys("INFO", "info")
+    @serdeKeys("INFO")
     Info info;
 
-    @serdeKeys("FORMAT", "fmt")
+    @serdeKeys("FORMAT")
     FmtSingleSample fmt;
     // Annotations[] anns;
     @serdeIgnoreOut
@@ -122,33 +137,40 @@ struct VcfRecSingleSample {
 }
 
 struct VcfRecSingleAlt {
-    @serdeKeys("CHROM", "chrom")
+    @serdeAnnotation
+    @serdeKeys("CHROM")
     string chrom;
 
-    @serdeKeys("POS", "pos")
+    @serdeKeys("POS")
     long pos;
 
-    @serdeKeys("ID", "id")
+    @serdeKeys("ID")
+    @serdeIgnoreOutIf!`a == "."`
     string id;
 
-    @serdeKeys("REF", "ref")
+    @serdeAnnotation
+    @serdeKeys("REF")
     string ref_;
 
-    @serdeKeys("ALT", "alt")
+    @serdeAnnotation
+    @serdeKeys("ALT")
     string alt;
 
-    @serdeKeys("QUAL", "qual")
+    @serdeIgnoreOutIf!isNaN
+    @serdeKeys("QUAL")
     float qual;
 
-    @serdeKeys("FILTER", "filter")
+    @serdeAnnotation
+    @serdeKeys("FILTER")
     string[] filter;
     
+    @serdeAnnotation
     string sample;
 
-    @serdeKeys("INFO", "info")
+    @serdeKeys("INFO")
     InfoSingleAlt info;
 
-    @serdeKeys("FORMAT", "fmt")
+    @serdeKeys("FORMAT")
     FmtSingleAlt fmt;
     @serdeIgnoreOut
     HeaderConfig hdrInfo;
@@ -177,11 +199,11 @@ unittest {
 
     auto rec = vcf.front;
 
-    auto res1 = `{CHROM:"1",POS:3000149,ID:".",REF:"C",ALT:["T"],QUAL:59.2,FILTER:["PASS"],INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{A:{GT:"0/1",GQ:245},B:{GT:"0/1",GQ:245}}}`;
-    auto res2 = `{CHROM:"1",POS:3000149,ID:".",REF:"C",ALT:["T"],QUAL:59.2,FILTER:["PASS"],sample:"A",INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
-    auto res3 = `{CHROM:"1",POS:3000149,ID:".",REF:"C",ALT:["T"],QUAL:59.2,FILTER:["PASS"],sample:"B",INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
-    auto res4 = `{CHROM:"1",POS:3000149,ID:".",REF:"C",ALT:"T",QUAL:59.2,FILTER:["PASS"],sample:"A",INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
-    auto res5 = `{CHROM:"1",POS:3000149,ID:".",REF:"C",ALT:"T",QUAL:59.2,FILTER:["PASS"],sample:"B",INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
+    auto res1 = `'1'::C::T::PASS::{POS:3000149,QUAL:59.2,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{A:{GT:"0/1",GQ:245},B:{GT:"0/1",GQ:245}}}`;
+    auto res2 = `'1'::C::T::PASS::A::{POS:3000149,QUAL:59.2,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
+    auto res3 = `'1'::C::T::PASS::B::{POS:3000149,QUAL:59.2,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
+    auto res4 = `'1'::C::T::PASS::A::{POS:3000149,QUAL:59.2,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
+    auto res5 = `'1'::C::T::PASS::B::{POS:3000149,QUAL:59.2,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
     auto ionRec = VcfRec(vcf.vcfhdr);
 
     ionRec.parse(rec);
@@ -204,13 +226,13 @@ unittest {
     vcf.popFront;
     vcf.popFront;
 
-    res1 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:"G",ALT:["T","C"],QUAL:12.6,FILTER:["test"],INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{A:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},B:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}}`;
-    res2 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:"G",ALT:["T","C"],QUAL:12.6,FILTER:["test"],sample:"A",INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
-    res3 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:"G",ALT:["T","C"],QUAL:12.6,FILTER:["test"],sample:"B",INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
-    res4 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:"G",ALT:"T",QUAL:12.6,FILTER:["test"],sample:"A",INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
-    res5 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:"G",ALT:"T",QUAL:12.6,FILTER:["test"],sample:"B",INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
-    auto res6 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:"G",ALT:"C",QUAL:12.6,FILTER:["test"],sample:"A",INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
-    auto res7 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:"G",ALT:"C",QUAL:12.6,FILTER:["test"],sample:"B",INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
+    res1 = `'1'::G::T::C::test::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{A:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},B:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}}`;
+    res2 = `'1'::G::T::C::test::A::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
+    res3 = `'1'::G::T::C::test::B::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
+    res4 = `'1'::G::T::test::A::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
+    res5 = `'1'::G::T::test::B::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
+    auto res6 = `'1'::G::C::test::A::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
+    auto res7 = `'1'::G::C::test::B::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
     
     rec = vcf.front;
     ionRec.parse(rec);

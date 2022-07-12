@@ -20,7 +20,7 @@ struct Option(T) {
         this.isNone = true;
     }
 
-    auto unwrap() {
+    auto unwrap() @safe const {
         assert(!this.isNone, "Tried to unwrap None option");
         return this.val;
     }

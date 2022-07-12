@@ -15,6 +15,7 @@ import libmucor.vcfops;
 import libmucor.jsonlops;
 import libmucor.error;
 import libmucor.option;
+import libmucor.atomize.util : enumFromStr;
 import mir.ser;
 import mir.ser.interfaces;
 
@@ -68,29 +69,100 @@ struct Annotations {
     }
 }
 
+enum Modifier {
+    HIGH, 
+    MODERATE, 
+    LOW, 
+    MODIFIER
+}
+
+enum Effect {
+    chromosome_number_variation,
+    exon_loss_variant,
+    frameshift_variant,
+    stop_gained,
+    stop_lost,
+    start_lost,
+    splice_acceptor_variant,
+    splice_donor_variant,
+    rare_amino_acid_variant,
+    missense_variant,
+    disruptive_inframe_insertion,
+    conservative_inframe_insertion,
+    disruptive_inframe_deletion,
+    conservative_inframe_deletion,
+    @serdeKeys("5_prime_UTR_truncation")
+    _5_prime_UTR_truncation,
+    @serdeKeys("3_prime_UTR_truncation")
+    _3_prime_UTR_truncation,
+    exon_loss,
+    splice_branch_variant,
+    splice_region_variant,
+    stop_retained_variant,
+    initiator_codon_variant,
+    synonymous_variant,
+    non_canonical_start_codon,
+    coding_sequence_variant,
+    @serdeKeys("5_prime_UTR_variant")
+    _5_prime_UTR_variant,
+    @serdeKeys("3_prime_UTR_variant")
+    _3_prime_UTR_variant,
+    @serdeKeys("5_prime_UTR_premature_start_codon_gain_variant")
+    _5_prime_UTR_premature_start_codon_gain_variant,
+    upstream_gene_variant,
+    downstream_gene_variant,
+    TF_binding_site_variant,
+    regulatory_region_variant,
+    miRNA,
+    custom,
+    sequence_feature,
+    conserved_intron_variant,
+    intron_variant,
+    intragenic_variant,
+    conserved_intergenic_variant,
+    intergenic_region,
+    non_coding_exon_variant,
+    nc_transcript_variant,
+    gene_variant,
+    chromosome,
+    non_coding_transcript_exon_variant,
+    TFBS_ablation,
+    gene_fusion,
+    feature_ablation,
+    feature_fusion,
+    transcript_ablation,
+    non_coding_transcript_variant,
+    duplication,
+    bidirectional_gene_fusion,
+}
+
 struct Annotation {
     /// Allele (or ALT)
+    @serdeAnnotation
     string allele;
 
     /// Annotation (a.k.a. effect or consequence): Annotated using Sequence Ontology terms. Multiple effects can be concatenated using ‘&’.
-    string[] effect;
+    Effect[] effect;
 
     /// Putative_impact: A simple estimation of putative impact / deleteriousness : {HIGH, MODERATE, LOW, MODIFIER}
-    string impact;
+    Modifier impact;
 
     /// Gene Name: Common gene name (HGNC).
+    @serdeAnnotation
     string gene_name;
 
     /// Gene ID: Gene ID
     string gene_id;
 
     /// Feature type: Which type of feature is in the next field
+    @serdeAnnotation
     string feature_type;
 
     /// Feature ID: Depending on the annotation, this may be: Transcript ID, Motif ID, miRNA, ChipSeq peak, Histone mark, etc.
     string feature_id;
 
     /// Transcript biotype. The bare minimum is at least a description on whether the transcript is {“Coding”, “Noncoding”}. Whenever possible, use ENSEMBL biotypes.
+    @serdeAnnotation
     string transcript_biotype;
     
     /// Rank / total : Exon or Intron rank / total number of exons or introns.
@@ -142,16 +214,15 @@ struct Annotation {
 
     this(string ann) {
         import std.algorithm : findSplit;
-        import libmucor.query.util : enumFromStr;
 
         auto vals = ann.findSplit("|");
         this.allele = vals[0];
 
         vals = vals[2].findSplit("|");
-        this.effect = vals[0].split("&");
+        this.effect = vals[0].splitter("&").map!(x => enumFromStr!Effect(x)).array;
 
         vals = vals[2].findSplit("|");
-        this.impact = vals[0];
+        this.impact = enumFromStr!Modifier(vals[0]);
 
         vals = vals[2].findSplit("|");
         this.gene_name = vals[0];
@@ -228,8 +299,9 @@ unittest{
     import mir.ser.ion;
     import mir.ion.conv;
     auto parsed = anns.array;
-    
-    assert(serializeIon(parsed[0]).ion2text == `{allele:"A",effect:["intron_variant"],impact:"MODIFIER",gene_name:"PLCXD1",gene_id:"ENSG00000182378",feature_type:"Transcript",feature_id:"ENST00000381657",transcript_biotype:"protein_coding",hgvs_c:"1/6",hgvs_p:"ENST00000381657.2:c.-21-26C>A"}`);
-    assert(serializeIon(parsed[1]).ion2text == `{allele:"A",effect:["intron_variant"],impact:"MODIFIER",gene_name:"PLCXD1",gene_id:"ENSG00000182378",feature_type:"Transcript",feature_id:"ENST00000381663",transcript_biotype:"protein_coding",hgvs_c:"1/7",hgvs_p:"ENST00000381663.3:c.-21-26C>A"}`);
+    assert(serializeIon(parsed[0]).ion2text == `A::PLCXD1::Transcript::protein_coding::{effect:[intron_variant],impact:MODIFIER,gene_id:"ENSG00000182378",feature_id:"ENST00000381657",hgvs_c:"1/6",hgvs_p:"ENST00000381657.2:c.-21-26C>A"}`);
+    assert(serializeIon(parsed[1]).ion2text == `A::PLCXD1::Transcript::protein_coding::{effect:[intron_variant],impact:MODIFIER,gene_id:"ENSG00000182378",feature_id:"ENST00000381663",hgvs_c:"1/7",hgvs_p:"ENST00000381663.3:c.-21-26C>A"}`);
+
+    assert(serializeIon(Effect._5_prime_UTR_premature_start_codon_gain_variant).ion2text == "'5_prime_UTR_premature_start_codon_gain_variant'");
     
 }
