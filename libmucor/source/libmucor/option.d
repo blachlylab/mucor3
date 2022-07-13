@@ -3,6 +3,17 @@ module libmucor.option;
 import mir.ser;
 import mir.ser.interfaces;
 
+template isOption(T) {
+    alias inner(O: Option!(I), I) = I;
+    static if(__traits(compiles, inner!T))
+        enum isOption = true;
+    else
+        enum isOption = false;
+}
+
+static assert(isOption!(Option!string));
+static assert(!isOption!(string));
+
 enum None = null;
 
 struct Option(T) {
@@ -31,7 +42,7 @@ struct Option(T) {
     }
 
 
-    void serialize(ISerializer serializer) const @safe {
+    void serialize(S)(ref S serializer){
         if(!isNone)
             serializer.putValue(this.val);
     }

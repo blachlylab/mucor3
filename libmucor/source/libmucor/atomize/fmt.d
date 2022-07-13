@@ -294,7 +294,7 @@ struct FmtSingleSample {
         this.cfg = fmt.cfg;
     }
 
-    void serialize(ISerializer serializer) {
+    void serialize(S)(ref S serializer) {
         this.sampleValues.serialize(serializer, &cfg);
     }
 }

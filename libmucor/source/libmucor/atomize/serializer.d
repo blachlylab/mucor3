@@ -43,8 +43,8 @@ struct VcfSerializer(T) {
     IonSymbolTable!true table;
 
     enum nMax = 4096u;
-    enum keys = serdeGetSerializationKeysRecurse!T.removeSystemSymbols ~ serdeGetSerializationKeysRecurse!Annotation.removeSystemSymbols;
-pragma(msg, serdeGetSerializationKeysRecurse!Annotation.removeSystemSymbols);
+    enum keys = serdeGetSerializationKeysRecurse!T.removeSystemSymbols;
+
     IonSerializer!(nMax * 8, keys, true) serializer;
 
     this(SerdeTarget target) {
@@ -53,12 +53,7 @@ pragma(msg, serdeGetSerializationKeysRecurse!Annotation.removeSystemSymbols);
     }
 
     void put(ref T val) {
-        auto s = val.partialSerialize(this.serializer);
-        auto last = this.serializer.data[s[0] .. $];
-        serializer.putKey("checksum");
-        serializeValue(this.serializer, hashIon(last));
-        serializer.structEnd(s[0]);
-        serializer.annotationWrapperEnd(s[1], s[2]);
+        val.serialize(this.serializer);
     }
 
     auto finalize() {

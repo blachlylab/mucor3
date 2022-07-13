@@ -1,6 +1,7 @@
 module libmucor.atomize.record;
 import mir.ser;
 import mir.ser.interfaces;
+import mir.bignum.integer;
 
 import std.math : isNaN;
 
@@ -11,8 +12,8 @@ import libmucor.atomize.ann;
 import libmucor.atomize.header;
 import libmucor.atomize.serializer;
 
-struct VcfRec {
-    @serdeAnnotation
+struct VcfRequiredFields(bool singleSample, bool singleAlt) {
+
     @serdeKeys("CHROM")
     string chrom;
 
@@ -23,21 +24,79 @@ struct VcfRec {
     @serdeIgnoreOutIf!`a == "."`
     string id;
 
-    @serdeAnnotation
     @serdeKeys("REF")
     string ref_;
 
-    @serdeAnnotation
     @serdeKeys("ALT")
-    string[] alt;
+    static if(singleAlt)
+        string alt;
+    else
+        string[] alt;
 
     @serdeIgnoreOutIf!isNaN
     @serdeKeys("QUAL")
     float qual;
 
-    @serdeAnnotation
     @serdeKeys("FILTER")
     string[] filter;
+
+    static if(singleSample) {
+        string sample;
+    }
+
+    BigInt!2 checksum;
+    
+    void serialize(S)(ref S serializer) {
+        serializer.putCompiletimeKey!"CHROM";
+        serializer.putSymbol(this.chrom);
+
+        serializer.putCompiletimeKey!"POS";
+        serializer.putValue(pos);
+
+        if(this.id != ".") {
+            serializer.putCompiletimeKey!"ID";
+            serializer.putValue(id);
+        }
+
+        serializer.putCompiletimeKey!"REF";
+        serializer.putSymbol(this.ref_);
+
+        serializer.putCompiletimeKey!"ALT";
+        static if(singleAlt){
+            serializer.putSymbol(this.alt);
+        } else {
+            auto l = serializer.listBegin;
+            foreach (ref string key; this.alt)
+            {
+                serializer.putSymbol(key);
+            }
+            serializer.listEnd(l);
+        }
+        
+        if(!isNaN(this.qual)) {
+            serializer.putCompiletimeKey!"QUAL";
+            serializer.putValue(qual);
+        }
+
+        serializer.putCompiletimeKey!"FILTER";
+        auto l2 = serializer.listBegin;
+        foreach (ref string key; filter)
+        {
+            serializer.putSymbol(key);    
+        }
+        serializer.listEnd(l2);
+
+        static if(singleSample){
+            serializer.putCompiletimeKey!"sample";
+            serializer.putSymbol(this.sample);
+        }
+    }
+}
+
+struct VcfRec {
+    alias ReqFields = VcfRequiredFields!(false, false);
+    ReqFields required;
+    alias required this;
 
     @serdeKeys("INFO")
     Info info;
@@ -67,39 +126,21 @@ struct VcfRec {
         this.fmt.parse(rec);
     }
 
-    size_t[3] partialSerialize(S)(ref S serializer) {
-        auto w = serializer.annotationWrapperBegin;
-        serializer.putAnnotation(this.chrom);
-        serializer.putAnnotation(this.ref_);
-        foreach (string key; this.alt)
-        {
-            serializer.putAnnotation(key);
-        }
-
-        foreach (string key; filter)
-        {
-            serializer.putAnnotation(key);    
-        }
-        auto a = serializer.annotationsEnd(w);
+    void serialize(S)(ref S serializer) {
         auto s = serializer.structBegin;
-        serializer.putKey("POS");
-        serializer.putValue(pos);
-
-        if(this.id != ".") {
-            serializer.putKey("ID");
-            serializer.putValue(id);
-        }
-        if(!isNaN(this.qual)) {
-            serializer.putKey("QUAL");
-            serializer.putValue(qual);
-        }
-        serializer.putKey("INFO");
+        this.required.serialize(serializer);
+        
+        serializer.putCompiletimeKey!"INFO";
         info.serialize(serializer);
 
-        serializer.putKey("FORMAT");
+        serializer.putCompiletimeKey!"FORMAT";
         fmt.serialize(serializer);
+    
+        auto last = serializer.data[s .. $];
+        serializer.putCompiletimeKey!"checksum";
 
-        return [s, a, w];
+        serializeValue(serializer, hashIon(last));
+        serializer.structEnd(s);
     }
 }
 
@@ -119,35 +160,10 @@ unittest {
 }
 
 struct VcfRecSingleSample {
-    @serdeAnnotation
-    @serdeKeys("CHROM")
-    string chrom;
-    
-    @serdeKeys("POS")
-    long pos;
-
-    @serdeIgnoreOutIf!`a == "."`
-    @serdeKeys("ID")
-    string id;
-
-    @serdeAnnotation
-    @serdeKeys("REF")
-    string ref_;
-
-    @serdeAnnotation
-    @serdeKeys("ALT")
-    string[] alt;
-
-    @serdeIgnoreOutIf!isNaN
-    @serdeKeys("QUAL")
-    float qual;
-
-    @serdeAnnotation
-    @serdeKeys("FILTER")
-    string[] filter;
-
-    @serdeAnnotation
-    string sample;
+    alias ReqFields = VcfRequiredFields!(true, false);
+    @serdeIgnoreOut
+    ReqFields required;
+    alias required this;
 
     @serdeKeys("INFO")
     Info info;
@@ -172,76 +188,29 @@ struct VcfRecSingleSample {
         this.hdrInfo = rec.hdrInfo;
     }
 
-    size_t[3] partialSerialize(S)(ref S serializer) {
+    void serialize(S)(ref S serializer) {
         auto s = serializer.structBegin;
-        auto w = serializer.annotationWrapperBegin;
-        serializer.putAnnotation(this.chrom);
-        serializer.putAnnotation(this.ref_);
-        foreach (string key; this.alt)
-        {
-            serializer.putAnnotation(key);
-        }
+        this.required.serialize(serializer);
+        
+        serializer.putCompiletimeKey!"INFO";
+        info.serialize(serializer);
 
-        foreach (string key; filter)
-        {
-            serializer.putAnnotation(key);    
-        }
+        serializer.putCompiletimeKey!"FORMAT";
+        fmt.serialize(serializer);
+        
+        auto last = serializer.data[s .. $];
+        serializer.putCompiletimeKey!"checksum";
 
-        serializer.putAnnotation(sample);
-
-        auto a = serializer.annotationsEnd(w);
-
-        serializer.putKey("POS");
-        serializer.putValue(pos);
-
-        if(this.id != ".") {
-            serializer.putKey("ID");
-            serializer.putValue(id);
-        }
-        if(!isNaN(this.qual)) {
-            serializer.putKey("QUAL");
-            serializer.putValue(qual);
-        }
-        serializer.putKey("INFO");
-        serializeValue(serializer, info);
-
-        serializer.putKey("FORMAT");
-        serializeValue(serializer, fmt);
-
-        return [s, a, w];
+        serializeValue(serializer, hashIon(last));
+        serializer.structEnd(s);
     }
 }
 
 struct VcfRecSingleAlt {
-    @serdeAnnotation
-    @serdeKeys("CHROM")
-    string chrom;
-
-    @serdeKeys("POS")
-    long pos;
-
-    @serdeKeys("ID")
-    @serdeIgnoreOutIf!`a == "."`
-    string id;
-
-    @serdeAnnotation
-    @serdeKeys("REF")
-    string ref_;
-
-    @serdeAnnotation
-    @serdeKeys("ALT")
-    string alt;
-
-    @serdeIgnoreOutIf!isNaN
-    @serdeKeys("QUAL")
-    float qual;
-
-    @serdeAnnotation
-    @serdeKeys("FILTER")
-    string[] filter;
-    
-    @serdeAnnotation
-    string sample;
+    alias ReqFields = VcfRequiredFields!(true, true);
+    @serdeIgnoreOut
+    ReqFields required;
+    alias required this;
 
     @serdeKeys("INFO")
     InfoSingleAlt info;
@@ -250,6 +219,8 @@ struct VcfRecSingleAlt {
     FmtSingleAlt fmt;
     @serdeIgnoreOut
     HeaderConfig hdrInfo;
+
+    
 
     this(VcfRecSingleSample rec, size_t altIdx) {
         this.chrom = rec.chrom;
@@ -265,38 +236,21 @@ struct VcfRecSingleAlt {
         this.hdrInfo = rec.hdrInfo;
     }
 
-    size_t[3] partialSerialize(S)(ref S serializer) {
+    void serialize(S)(ref S serializer) {
         auto s = serializer.structBegin;
-        auto w = serializer.annotationWrapperBegin;
-        serializer.putAnnotation(this.chrom);
-        serializer.putAnnotation(this.ref_);
-        serializer.putAnnotation(this.alt);
+        this.required.serialize(serializer);
+        
+        serializer.putCompiletimeKey!"INFO";
+        info.serialize(serializer);
 
-        foreach (string key; filter)
-        {
-            serializer.putAnnotation(key);    
-        }
+        serializer.putCompiletimeKey!"FORMAT";
+        fmt.serialize(serializer);
 
-        serializer.putAnnotation(sample);
-        auto a = serializer.annotationsEnd(w);
-        serializer.putKey("POS");
-        serializer.putValue(pos);
+        auto last = serializer.data[s .. $];
+        serializer.putCompiletimeKey!"checksum";
 
-        if(this.id != ".") {
-            serializer.putKey("ID");
-            serializer.putValue(id);
-        }
-        if(!isNaN(this.qual)) {
-            serializer.putKey("QUAL");
-            serializer.putValue(qual);
-        }
-        serializer.putKey("INFO");
-        serializeValue(serializer, info);
-
-        serializer.putKey("FORMAT");
-        serializeValue(serializer, fmt);
-
-        return [s, a, w];
+        serializeValue(serializer, hashIon(last));
+        serializer.structEnd(s);
     }
 }
 
@@ -309,11 +263,11 @@ unittest {
 
     auto rec = vcf.front;
 
-    auto res1 = `'1'::C::T::PASS::{POS:3000149,QUAL:59.2,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{A:{GT:"0/1",GQ:245},B:{GT:"0/1",GQ:245}}}`;
-    auto res2 = `'1'::C::T::PASS::A::{POS:3000149,QUAL:59.2,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
-    auto res3 = `'1'::C::T::PASS::B::{POS:3000149,QUAL:59.2,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
-    auto res4 = `'1'::C::T::PASS::A::{POS:3000149,QUAL:59.2,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
-    auto res5 = `'1'::C::T::PASS::B::{POS:3000149,QUAL:59.2,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
+    auto res1 = `{CHROM:'1',POS:3000149,REF:C,ALT:[T],QUAL:59.2,FILTER:[PASS],INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{A:{GT:"0/1",GQ:245},B:{GT:"0/1",GQ:245}},checksum:116702227157187429159733716411111476233}`;
+    auto res2 = `{CHROM:'1',POS:3000149,REF:C,ALT:[T],QUAL:59.2,FILTER:[PASS],sample:A,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:114120419578781880823426260576380481928}`;
+    auto res3 = `{CHROM:'1',POS:3000149,REF:C,ALT:[T],QUAL:59.2,FILTER:[PASS],sample:B,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:227748285600011456879942255219674586486}`;
+    auto res4 = `{CHROM:'1',POS:3000149,REF:C,ALT:T,QUAL:59.2,FILTER:[PASS],sample:A,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:292928411491879009096039879562261099202}`;
+    auto res5 = `{CHROM:'1',POS:3000149,REF:C,ALT:T,QUAL:59.2,FILTER:[PASS],sample:B,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:240364230489449894173377117996824884995}`;
     auto ionRec = VcfRec(vcf.vcfhdr);
 
     ionRec.parse(rec);
@@ -336,13 +290,13 @@ unittest {
     vcf.popFront;
     vcf.popFront;
 
-    res1 = `'1'::G::T::C::test::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{A:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},B:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}}`;
-    res2 = `'1'::G::T::C::test::A::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
-    res3 = `'1'::G::T::C::test::B::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
-    res4 = `'1'::G::T::test::A::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
-    res5 = `'1'::G::T::test::B::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
-    auto res6 = `'1'::G::C::test::A::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
-    auto res7 = `'1'::G::C::test::B::{POS:3062914,ID:"idSNP",QUAL:12.6,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
+    res1 = `{CHROM:'1',POS:3062914,ID:"idSNP",REF:G,ALT:[T,C],QUAL:12.6,FILTER:[test],INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{A:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},B:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}},checksum:144303654089158016477123728341599188559}`;
+    res2 = `{CHROM:'1',POS:3062914,ID:"idSNP",REF:G,ALT:[T,C],QUAL:12.6,FILTER:[test],sample:A,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},checksum:276387258333812631626076611871930095480}`;
+    res3 = `{CHROM:'1',POS:3062914,ID:"idSNP",REF:G,ALT:[T,C],QUAL:12.6,FILTER:[test],sample:B,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]},checksum:127405196536215078054678238971055773706}`;
+    res4 = `{CHROM:'1',POS:3062914,ID:"idSNP",REF:G,ALT:T,QUAL:12.6,FILTER:[test],sample:A,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},checksum:128967481164732828514390671464096683031}`;
+    res5 = `{CHROM:'1',POS:3062914,ID:"idSNP",REF:G,ALT:T,QUAL:12.6,FILTER:[test],sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]},checksum:5733435286675665088544885027751668737}`;
+    auto res6 = `{CHROM:'1',POS:3062914,ID:"idSNP",REF:G,ALT:C,QUAL:12.6,FILTER:[test],sample:A,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},checksum:154495088599117863823437921077718263019}`;
+    auto res7 = `{CHROM:'1',POS:3062914,ID:"idSNP",REF:G,ALT:C,QUAL:12.6,FILTER:[test],sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]},checksum:81368008169047247442843775683334764943}`;
     
     rec = vcf.front;
     ionRec.parse(rec);

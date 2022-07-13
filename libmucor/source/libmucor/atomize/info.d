@@ -191,7 +191,7 @@ struct Info {
             auto l = serializer.listBegin;
             foreach (ann; anns)
             {
-                serializeValue(serializer, ann);
+                ann.serialize(serializer);
             }
             serializer.listEnd(l);
         }

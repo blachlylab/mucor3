@@ -101,3 +101,29 @@ unittest {
     import mir.ion.conv;
     writeln(ion2text((cast(ubyte[])read("/tmp/test.ion"))));
 }
+
+unittest {
+    {
+        auto f = File("/tmp/test.ion", "wb");
+        parseVCF("../test/data/vcf_file.vcf", -1, true, true, f);
+    }
+    import std.file : read;
+    import mir.ion.conv;
+    import mir.ion.stream;
+    import mir.ion.value;
+    foreach (i,IonDescribedValue v; IonValueStream((cast(ubyte[])read("/tmp/test.ion"))))
+    {
+        writeln("{");
+        writeln(v.descriptor);
+        if(v.descriptor.type == IonTypeCode.annotations) {
+            IonAnnotations annotations;
+            IonDescribedValue wrapped;
+            v.get!IonAnnotationWrapper.unwrap(annotations, wrapped);
+            foreach(key; annotations) {
+                writeln(i[key]);
+            }
+            writeln(wrapped.descriptor);
+        }
+        writeln("}");
+    }
+}

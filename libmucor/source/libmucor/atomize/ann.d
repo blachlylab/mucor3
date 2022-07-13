@@ -15,7 +15,7 @@ import libmucor.vcfops;
 import libmucor.jsonlops;
 import libmucor.error;
 import libmucor.option;
-import libmucor.atomize.util : enumFromStr;
+import libmucor.atomize.util;
 import mir.ser;
 import mir.ser.interfaces;
 
@@ -138,7 +138,6 @@ enum Effect {
 
 struct Annotation {
     /// Allele (or ALT)
-    @serdeAnnotation
     string allele;
 
     /// Annotation (a.k.a. effect or consequence): Annotated using Sequence Ontology terms. Multiple effects can be concatenated using ‘&’.
@@ -148,22 +147,19 @@ struct Annotation {
     Modifier impact;
 
     /// Gene Name: Common gene name (HGNC).
-    @serdeAnnotation
-    string gene_name;
+    Option!string gene_name;
 
     /// Gene ID: Gene ID
-    string gene_id;
+    Option!string gene_id;
 
     /// Feature type: Which type of feature is in the next field
-    @serdeAnnotation
     string feature_type;
 
     /// Feature ID: Depending on the annotation, this may be: Transcript ID, Motif ID, miRNA, ChipSeq peak, Histone mark, etc.
     string feature_id;
 
     /// Transcript biotype. The bare minimum is at least a description on whether the transcript is {“Coding”, “Noncoding”}. Whenever possible, use ENSEMBL biotypes.
-    @serdeAnnotation
-    string transcript_biotype;
+    Option!string transcript_biotype;
     
     /// Rank / total : Exon or Intron rank / total number of exons or introns.
     Option!long rank; // not required
@@ -225,10 +221,14 @@ struct Annotation {
         this.impact = enumFromStr!Modifier(vals[0]);
 
         vals = vals[2].findSplit("|");
-        this.gene_name = vals[0];
+        if(vals[0] != "") {
+            this.gene_name = Some(vals[0]);
+        }
 
         vals = vals[2].findSplit("|");
-        this.gene_id = vals[0];
+        if(vals[0] != "") {
+            this.gene_id = Some(vals[0]);
+        }
 
         vals = vals[2].findSplit("|");
         this.feature_type = vals[0];
@@ -237,7 +237,9 @@ struct Annotation {
         this.feature_id = vals[0];
 
         vals = vals[2].findSplit("|");
-        this.transcript_biotype = vals[0];
+        if(vals[0] != "") {
+            this.transcript_biotype = Some(vals[0]);
+        }
 
         vals = vals[2].findSplit("|");
         if(vals[0] != "") {
@@ -287,20 +289,113 @@ struct Annotation {
         if(vals[0] != "")
             this.errors_warnings_info = Some(vals[0]);
     }
+
+    void serialize(S)(ref S serializer) {
+        auto s = serializer.structBegin;
+        
+        serializer.putCompiletimeKey!"allele";
+        serializer.putSymbol(this.allele);
+
+        serializer.putCompiletimeKey!"effect";
+        serializeValue(serializer, effect);
+
+        serializer.putCompiletimeKey!"impact";
+        serializeValue(serializer, impact);
+
+        
+        if(!this.gene_name.isNone) {
+            serializer.putCompiletimeKey!"gene_name";
+            serializer.putSymbol(this.gene_name.unwrap);
+        }
+
+        if(!this.gene_id.isNone) {
+            serializer.putCompiletimeKey!"gene_id";
+            serializer.putSymbol(this.gene_id.unwrap);
+        }
+
+        serializer.putCompiletimeKey!"feature_type";
+        serializer.putSymbol(this.feature_type);
+
+        serializer.putCompiletimeKey!"feature_id";
+        serializer.putValue(this.feature_id);
+
+        if(!this.transcript_biotype.isNone) {
+            serializer.putCompiletimeKey!"transcript_biotype";
+            serializer.putSymbol(this.transcript_biotype.unwrap);
+        }
+
+        if(!this.rank.isNone) {
+            serializer.putCompiletimeKey!"rank";
+            serializer.putValue(this.rank.unwrap);
+        }
+
+        if(!this.rtotal.isNone) {
+            serializer.putCompiletimeKey!"rtotal";
+            serializer.putValue(this.rtotal.unwrap);
+        }
+        
+        serializer.putCompiletimeKey!"hgvs_c";
+        serializer.putValue(this.hgvs_c);
+
+        if(!this.hgvs_p.isNone) {
+            serializer.putCompiletimeKey!"hgvs_p";
+            serializer.putValue(this.hgvs_p.unwrap);
+        }
+
+        if(!this.cdna_position.isNone) {
+            serializer.putCompiletimeKey!"cdna_position";
+            serializer.putValue(this.cdna_position.unwrap);
+        }
+        if(!this.cdna_length.isNone) {
+            serializer.putCompiletimeKey!"cdna_length";
+            serializer.putValue(this.cdna_length.unwrap);
+        }
+        
+        if(!this.cds_position.isNone) {
+            serializer.putCompiletimeKey!"cds_position";
+            serializer.putValue(this.cds_position.unwrap);
+        }
+        if(!this.cds_length.isNone) {
+            serializer.putCompiletimeKey!"cds_length";
+            serializer.putValue(this.cds_length.unwrap);
+        }
+
+        if(!this.protein_position.isNone) {
+            serializer.putCompiletimeKey!"protein_position";
+            serializer.putValue(this.protein_position.unwrap);
+        }
+        if(!this.protein_length.isNone) {
+            serializer.putCompiletimeKey!"protein_length";
+            serializer.putValue(this.protein_length.unwrap);
+        }
+
+        if(!this.distance_to_feature.isNone) {
+            serializer.putCompiletimeKey!"distance_to_feature";
+            serializer.putValue(this.distance_to_feature.unwrap);
+        }
+
+        if(!this.errors_warnings_info.isNone) {
+            serializer.putCompiletimeKey!"errors_warnings_info";
+            serializer.putValue(this.errors_warnings_info.unwrap);
+        }
+
+        serializer.structEnd(s);
+    }
+    
 }
 
 unittest{
     string ann = "A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"~
-                "protein_coding||1/6|ENST00000381657.2:c.-21-26C>A|||||,A|intron_variant|MODIFIER"~
-                "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding||1/7|ENST00000381663.3:c.-21-26C>A||"~
+                "protein_coding|1/6|ENST00000381657.2:c.-21-26C>A|||||,A|intron_variant|MODIFIER"~
+                "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding|1/7|ENST00000381663.3:c.-21-26C>A||"~
                 "|||";
     auto anns = Annotations(ann);
     import std.stdio;
     import mir.ser.ion;
     import mir.ion.conv;
     auto parsed = anns.array;
-    assert(serializeIon(parsed[0]).ion2text == `A::PLCXD1::Transcript::protein_coding::{effect:[intron_variant],impact:MODIFIER,gene_id:"ENSG00000182378",feature_id:"ENST00000381657",hgvs_c:"1/6",hgvs_p:"ENST00000381657.2:c.-21-26C>A"}`);
-    assert(serializeIon(parsed[1]).ion2text == `A::PLCXD1::Transcript::protein_coding::{effect:[intron_variant],impact:MODIFIER,gene_id:"ENSG00000182378",feature_id:"ENST00000381663",hgvs_c:"1/7",hgvs_p:"ENST00000381663.3:c.-21-26C>A"}`);
+    assert(serializeIon(parsed[0]).ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381657",transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:"ENST00000381657.2:c.-21-26C>A"}`);
+    assert(serializeIon(parsed[1]).ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381663",transcript_biotype:protein_coding,rank:1,rtotal:7,hgvs_c:"ENST00000381663.3:c.-21-26C>A"}`);
 
     assert(serializeIon(Effect._5_prime_UTR_premature_start_codon_gain_variant).ion2text == "'5_prime_UTR_premature_start_codon_gain_variant'");
     
