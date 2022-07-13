@@ -1,27 +1,30 @@
 module drocks.columnfamily;
 
-import rocksdb.options : rocksdb_options_t, ReadOptions, WriteOptions;
-import rocksdb.iterator : Iterator;
-import rocksdb.database : Database, rocksdb_t, ensureRocks;
-import rocksdb.queryable : Getable, Putable, Removeable;
+import rocksdb;
+
+import drocks.options : ReadOptions, WriteOptions;
+import drocks.iter : Iterator;
+import drocks.database : RocksDB, checkErr;
 
 struct ColumnFamily {
 
-    Database db;
+    RocksDB * db;
     string name;
     rocksdb_column_family_handle_t* cf;
 
-    this(Database db, string name, rocksdb_column_family_handle_t* cf) {
-        this.db = db;
+    @disable this(this);
+
+    this(ref RocksDB db, string name, rocksdb_column_family_handle_t* cf) {
+        this.db = &db;
         this.name = name;
         this.cf = cf;
     }
 
-    Iterator iter(ReadOptions opts = null) {
-        return new Iterator(this.db, this, opts ? opts : this.db.readOptions);
+    Iterator iter(ReadOptions * opts = null) {
+        return Iterator(this.db, &this, opts ? opts : &this.db.readOptions);
     }
 
-    void withIter(void delegate(Iterator) dg, ReadOptions opts = null) {
+    void withIter(void delegate(ref Iterator) dg, ReadOptions * opts = null) {
         Iterator iter = this.iter(opts);
         scope (exit) destroy(iter);
         dg(iter);
@@ -30,50 +33,62 @@ struct ColumnFamily {
     void drop() {
         char* err = null;
         rocksdb_drop_column_family(this.db.db, this.cf, &err);
-        err.ensureRocks();
+        err.checkErr();
     }
 
-    ubyte[][] multiGet(ubyte[][] keys, ReadOptions opts = null) {
-        return this.db.multiGet(keys, this, opts);
+    ref auto opIndex(ubyte[] key)
+    {
+        return this.db.get(key, &this);
     }
 
-    string[] multiGetString(string[] keys, ReadOptions opts = null) {
-        return this.db.multiGetString(keys, this, opts);
+    void opIndexAssign(ubyte[] value, ubyte[] key)
+    {
+        this.db.put(value, key, &this);
     }
 
-    ubyte[] getImpl(ubyte[] key, ColumnFamily family, ReadOptions opts = null) {
-        assert(family == this || family is null);
-        return this.db.getImpl(key, this, opts);
+    void remove(ubyte[] key) {
+        this.db.remove_(key, &this);
     }
 
-    void putImpl(ubyte[] key, ubyte[] value, ColumnFamily family, WriteOptions opts = null) {
-        assert(family == this || family is null);
-        this.db.putImpl(key, value, this, opts);
-    }
+    // ubyte[][] multiGet(ubyte[][] keys, ReadOptions * opts = null) {
+    //     return this.db.multiGet(keys, this, opts);
+    // }
 
-    void removeImpl(ubyte[] key, ColumnFamily family, WriteOptions opts = null) {
-        assert(family == this || family is null);
-        this.db.removeImpl(key, this, opts);
-    }
+    // string[] multiGetString(string[] keys, ReadOptions * opts = null) {
+    //     return this.db.multiGetString(keys, this, opts);
+    // }
+
+    // ubyte[] getImpl(ubyte[] key, ColumnFamily * family, ReadOptions * opts = null) {
+    //     assert(*family == this || family is null);
+    //     return this.db.getImpl(key, this, opts);
+    // }
+
+    // void putImpl(ubyte[] key, ubyte[] value, ColumnFamily * family, WriteOptions * opts = null) {
+    //     assert(*family == this || family is null);
+    //     this.db.putImpl(key, value, this, opts);
+    // }
+
+    // void removeImpl(ubyte[] key, ColumnFamily * family, WriteOptions * opts = null) {
+    //     assert(*family == this || family is null);
+    //     this.db.removeImpl(key, this, opts);
+    // }
 }
 
 unittest {
     import std.stdio : writefln;
-    import std.datetime : benchmark;
+    import std.datetime.stopwatch : benchmark;
     import std.conv : to;
     import std.algorithm.searching : startsWith;
-    import rocksdb.options : DBOptions, CompressionType;
+    import drocks.options : RocksDBOptions, CompressionType;
 
     writefln("Testing Column Families");
 
     // DB Options
-    auto opts = new DBOptions;
+    RocksDBOptions opts;
+    opts.initialize;
     opts.createIfMissing = true;
     opts.errorIfExists = false;
-    opts.compression = CompressionType.NONE;
-
-    // Create the database (if it does not exist)
-    auto db = new Database(opts, "test");
+    opts.compression = CompressionType.None;
 
     string[] columnFamilies = [
         "test",
@@ -83,38 +98,39 @@ unittest {
         "test4",
         "wow",
     ];
+    {
+        // Create the database (if it does not exist)
+        auto db = RocksDB(opts, "test");
 
-    // create a bunch of column families
-    foreach (cf; columnFamilies) {
-        if ((cf in db.columnFamilies) is null) {
-        db.createColumnFamily(cf);
+        // create a bunch of column families
+        foreach (cf; columnFamilies) {
+            if ((cf in db.columnFamilies) is null) {
+                db.createColumnFamily(cf);
+            }
         }
     }
-
-    db.close();
-    db = new Database(opts, "test");
-    scope (exit) destroy(db);
+    auto db = RocksDB(opts, "test");
 
     // Test column family listing
-    assert(Database.listColumnFamilies(opts, "test").length == columnFamilies.length + 1);
+    assert(RocksDB.listColumnFamilies(opts, "test").length == columnFamilies.length + 1);
 
-    void testColumnFamily(ColumnFamily cf, int times) {
+    void testColumnFamily(ref ColumnFamily cf, int times) {
         for (int i = 0; i < times; i++) {
-        cf.putString(cf.name ~ i.to!string, i.to!string);
+            cf[cast(ubyte[])(cf.name ~ i.to!string)] = cast(ubyte[]) i.to!string;
         }
 
         for (int i = 0; i < times; i++) {
-        assert(cf.getString(cf.name ~ i.to!string) == i.to!string);
+            assert(cf[ cast(ubyte[])(cf.name ~ i.to!string)] == cast(ubyte[]) i.to!string);
         }
 
-        cf.withIter((iter) {
-        foreach (key, value; iter) {
-            assert(key.startsWith(cf.name));
-        }
+        cf.withIter((ref iter) {
+            foreach (key, value; iter) {
+                assert(key.startsWith(cf.name));
+            }
         });
     }
 
-    foreach (name, cf; db.columnFamilies) {
+    foreach (name, ref cf; db.columnFamilies) {
         if (name == "default") continue;
 
         writefln("  %s", name);

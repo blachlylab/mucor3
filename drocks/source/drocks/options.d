@@ -1,6 +1,12 @@
 module drocks.options;
 
+import std.string : fromStringz;
+import std.conv : to;
+import core.stdc.stdlib : free;
+
 import rocksdb;
+import drocks.snapshot;
+import drocks.env;
 
 enum CompressionType : int {
     None = 0x0,
@@ -28,12 +34,14 @@ enum ReadTier : int {
 struct WriteOptions {
     rocksdb_writeoptions_t* opts;
 
-    this() {
+    @disable this(this);
+
+    void initialize() {
         this.opts = rocksdb_writeoptions_create();
     }
 
     ~this() {
-        rocksdb_writeoptions_destroy(this.opts);
+        if(opts) rocksdb_writeoptions_destroy(this.opts);
     }
 
     @property void sync(bool v) {
@@ -48,12 +56,14 @@ struct WriteOptions {
 struct ReadOptions {
     rocksdb_readoptions_t* opts;
 
-    this() {
+    @disable this(this);
+
+    void initialize() {
         this.opts = rocksdb_readoptions_create();
     }
 
     ~this() {
-        rocksdb_readoptions_destroy(this.opts);
+       if(opts) rocksdb_readoptions_destroy(this.opts);
     }
 
     @property void verifyChecksums(bool v) {
@@ -81,15 +91,16 @@ struct ReadOptions {
     }
 }
 
-struct DBOptions {
+struct RocksDBOptions {
     rocksdb_options_t* opts;
 
-    this() {
+    @disable this(this);
+    void initialize() {
         this.opts = rocksdb_options_create();
     }
 
     ~this() {
-        rocksdb_options_destroy(this.opts);
+        if(opts) rocksdb_options_destroy(this.opts);
     }
 
     @property void parallelism(int totalThreads) {
@@ -112,7 +123,7 @@ struct DBOptions {
         rocksdb_options_set_paranoid_checks(this.opts, cast(ubyte)value);
     }
 
-    @property void env(Env env) {
+    @property void env(ref Env env) {
         rocksdb_options_set_env(this.opts, env.env);
     }
 
@@ -124,9 +135,9 @@ struct DBOptions {
         rocksdb_options_set_compaction_style(this.opts, style);
     }
 
-    @property void comparator(Comparator cmp) {
-        rocksdb_options_set_comparator(this.opts, cmp.cmp);
-    }
+    // @property void comparator(Comparator cmp) {
+    //     rocksdb_options_set_comparator(this.opts, cmp.cmp);
+    // }
 
     void enableStatistics() {
         rocksdb_options_enable_statistics(this.opts);
@@ -135,7 +146,7 @@ struct DBOptions {
     string getStatisticsString() {
         char* cresult = rocksdb_options_statistics_get_string(this.opts);
         string result = fromStringz(cresult).to!string;
-        cfree(cresult);
+        free(cresult);
         return result;
     }
 }

@@ -1,33 +1,32 @@
 module drocks.iter;
 
+import rocksdb;
+
 import std.conv : to;
 import std.string : fromStringz, toStringz;
 
-import rocksdb.slice : Slice;
-import rocksdb.options : ReadOptions, rocksdb_readoptions_t;
-import rocksdb.database : Database, rocksdb_t;
-import rocksdb.columnfamily : ColumnFamily, rocksdb_column_family_handle_t;
+import drocks.options : ReadOptions;
+import drocks.database : RocksDB;
+import drocks.columnfamily : ColumnFamily;
 
 
 struct Iterator {
     rocksdb_iterator_t* iter;
 
-    @system:
-    nothrow:
-    @nogc:
+    @disable this(this);
 
-    this(Database db, ReadOptions opts) {
+    this(RocksDB * db, ReadOptions * opts) {
         this.iter = rocksdb_create_iterator(db.db, opts.opts);
         this.seekToFirst();
     }
 
-    this(Database db, ColumnFamily family, ReadOptions opts) {
+    this(RocksDB * db, ColumnFamily * family, ReadOptions * opts) {
         this.iter = rocksdb_create_iterator_cf(db.db, opts.opts, family.cf);
         this.seekToFirst();
     }
 
     ~this() {
-        rocksdb_iter_destroy(this.iter);
+        if(iter) rocksdb_iter_destroy(this.iter);
     }
 
     void seekToFirst() {
@@ -65,49 +64,33 @@ struct Iterator {
     bool empty() {
         return !cast(bool)rocksdb_iter_valid(this.iter);
     }
+    
+    auto front() {
+        return [this.key, this.value];
+    }
 
     ubyte[] key() {
         size_t size;
-        immutable char* ckey = rocksdb_iter_key(this.iter, &size);
+        const(char)* ckey = rocksdb_iter_key(this.iter, &size);
         return cast(ubyte[])ckey[0..size];
     }
 
     ubyte[] value() {
         size_t size;
-        immutable char* cvalue = rocksdb_iter_value(this.iter, &size);
+        const(char)* cvalue = rocksdb_iter_value(this.iter, &size);
         return cast(ubyte[])cvalue[0..size];
     }
-
-    Slice valueSlice() {
-        size_t size;
-        immutable char* cvalue = rocksdb_iter_value(this.iter, &size);
-        return Slice(size, cvalue);
-    }
-
-    /*
-    int opApply(scope int delegate(ref string, ref string) dg) {
-        int result = 0;
-        foreach (key, value; this) {
-        result = dg(cast(string)key, cast(string)value);
-        if (result) break;
-        }
-        return result;
-    }
-    */
 
     int opApply(scope int delegate(ubyte[], ubyte[]) dg) {
         int result = 0;
 
-        while (this.valid()) {
-        result = dg(this.key(), this.value());
-        if (result) break;
-        this.next();
+        while (!this.empty()) {
+            result = dg(this.key(), this.value());
+            if (result) break;
+            this.popFront();
         }
 
         return result;
     }
 
-    void close() {
-        destroy(this);
-    }
 }
