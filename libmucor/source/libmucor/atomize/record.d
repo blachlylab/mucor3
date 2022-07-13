@@ -1,5 +1,6 @@
 module libmucor.atomize.record;
 import mir.ser;
+import mir.ser.interfaces;
 
 import std.math : isNaN;
 
@@ -8,6 +9,7 @@ import libmucor.atomize.fmt;
 import libmucor.atomize.info;
 import libmucor.atomize.ann;
 import libmucor.atomize.header;
+import libmucor.atomize.serializer;
 
 struct VcfRec {
     @serdeAnnotation
@@ -63,6 +65,41 @@ struct VcfRec {
         this.filter = rec.filter.split(";");
         this.info.parse(rec);
         this.fmt.parse(rec);
+    }
+
+    size_t[3] partialSerialize(S)(ref S serializer) {
+        auto w = serializer.annotationWrapperBegin;
+        serializer.putAnnotation(this.chrom);
+        serializer.putAnnotation(this.ref_);
+        foreach (string key; this.alt)
+        {
+            serializer.putAnnotation(key);
+        }
+
+        foreach (string key; filter)
+        {
+            serializer.putAnnotation(key);    
+        }
+        auto a = serializer.annotationsEnd(w);
+        auto s = serializer.structBegin;
+        serializer.putKey("POS");
+        serializer.putValue(pos);
+
+        if(this.id != ".") {
+            serializer.putKey("ID");
+            serializer.putValue(id);
+        }
+        if(!isNaN(this.qual)) {
+            serializer.putKey("QUAL");
+            serializer.putValue(qual);
+        }
+        serializer.putKey("INFO");
+        info.serialize(serializer);
+
+        serializer.putKey("FORMAT");
+        fmt.serialize(serializer);
+
+        return [s, a, w];
     }
 }
 
@@ -134,6 +171,45 @@ struct VcfRecSingleSample {
         this.fmt = FmtSingleSample(rec.fmt, samIdx);
         this.hdrInfo = rec.hdrInfo;
     }
+
+    size_t[3] partialSerialize(S)(ref S serializer) {
+        auto s = serializer.structBegin;
+        auto w = serializer.annotationWrapperBegin;
+        serializer.putAnnotation(this.chrom);
+        serializer.putAnnotation(this.ref_);
+        foreach (string key; this.alt)
+        {
+            serializer.putAnnotation(key);
+        }
+
+        foreach (string key; filter)
+        {
+            serializer.putAnnotation(key);    
+        }
+
+        serializer.putAnnotation(sample);
+
+        auto a = serializer.annotationsEnd(w);
+
+        serializer.putKey("POS");
+        serializer.putValue(pos);
+
+        if(this.id != ".") {
+            serializer.putKey("ID");
+            serializer.putValue(id);
+        }
+        if(!isNaN(this.qual)) {
+            serializer.putKey("QUAL");
+            serializer.putValue(qual);
+        }
+        serializer.putKey("INFO");
+        serializeValue(serializer, info);
+
+        serializer.putKey("FORMAT");
+        serializeValue(serializer, fmt);
+
+        return [s, a, w];
+    }
 }
 
 struct VcfRecSingleAlt {
@@ -187,6 +263,40 @@ struct VcfRecSingleAlt {
         this.info = InfoSingleAlt(rec.info, altIdx, this.alt);
         this.fmt = FmtSingleAlt(rec.fmt, altIdx);
         this.hdrInfo = rec.hdrInfo;
+    }
+
+    size_t[3] partialSerialize(S)(ref S serializer) {
+        auto s = serializer.structBegin;
+        auto w = serializer.annotationWrapperBegin;
+        serializer.putAnnotation(this.chrom);
+        serializer.putAnnotation(this.ref_);
+        serializer.putAnnotation(this.alt);
+
+        foreach (string key; filter)
+        {
+            serializer.putAnnotation(key);    
+        }
+
+        serializer.putAnnotation(sample);
+        auto a = serializer.annotationsEnd(w);
+        serializer.putKey("POS");
+        serializer.putValue(pos);
+
+        if(this.id != ".") {
+            serializer.putKey("ID");
+            serializer.putValue(id);
+        }
+        if(!isNaN(this.qual)) {
+            serializer.putKey("QUAL");
+            serializer.putValue(qual);
+        }
+        serializer.putKey("INFO");
+        serializeValue(serializer, info);
+
+        serializer.putKey("FORMAT");
+        serializeValue(serializer, fmt);
+
+        return [s, a, w];
     }
 }
 

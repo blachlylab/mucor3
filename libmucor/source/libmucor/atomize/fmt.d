@@ -4,6 +4,7 @@ import std.algorithm : map, any;
 
 import mir.ser.interfaces;
 import mir.ser;
+import mir.serde;
 
 import dhtslib.vcf;
 import libmucor.khashl;
@@ -11,7 +12,9 @@ import libmucor.atomize.field;
 import libmucor.atomize.header;
 
 struct FmtValues {
+    @serdeIgnore
     FieldValue[] fields;
+    @serdeIgnore
     bool isNull = true;
 
     void reset() {
@@ -28,7 +31,7 @@ struct FmtValues {
         return fields[index];
     }
 
-    void serialize(ISerializer serializer, const(HeaderConfig) * cfg, bool byAllele) const @safe {
+    void serialize(S)(ref S serializer, const(HeaderConfig) * cfg, bool byAllele) {
         if(this.isNull) return;
         auto s = serializer.structBegin;
         foreach (i,val; this.fields)
@@ -51,8 +54,11 @@ struct FmtValues {
  * }
  */
 struct FmtSampleValues {
+    @serdeIgnore
     FmtValues[] byAllele;
+    @serdeIgnore
     FmtValues other;
+    @serdeIgnore
     bool isNull = true;
 
     void reset() {
@@ -64,7 +70,7 @@ struct FmtSampleValues {
         this.other.reset;
     }
 
-    void serialize(ISerializer serializer, const(HeaderConfig) * cfg) const @safe {
+    void serialize(S)(ref S serializer, const(HeaderConfig) * cfg) {
         auto state = serializer.structBegin;
         if(this.byAllele.map!(x => !x.isNull).any){
             serializer.putKey("byAllele");
@@ -92,10 +98,13 @@ struct FmtSampleValues {
  * }
  */
 struct Fmt {
+    @serdeIgnore
     FmtSampleValues[] bySample;
     @serdeIgnoreOut
     Genotype[] genotypes;
+    @serdeIgnore
     const(HeaderConfig) cfg;
+    @serdeIgnore
     size_t numByAlleleFields;
 
     this(HeaderConfig cfg) {
@@ -261,7 +270,7 @@ struct Fmt {
         }
     }
 
-    void serialize(ISerializer serializer) const @safe {
+    void serialize(S)(ref S serializer) {
         auto state = serializer.structBegin;
         
         foreach (i,string key; cfg.samples)
@@ -275,7 +284,9 @@ struct Fmt {
 }
 
 struct FmtSingleSample {
+    @serdeIgnore
     FmtSampleValues sampleValues;
+    @serdeIgnore
     const(HeaderConfig) cfg;
 
     this(Fmt fmt, size_t samIdx) {
@@ -283,14 +294,17 @@ struct FmtSingleSample {
         this.cfg = fmt.cfg;
     }
 
-    void serialize(ISerializer serializer) const @safe {
+    void serialize(ISerializer serializer) {
         this.sampleValues.serialize(serializer, &cfg);
     }
 }
 
 struct FmtSingleAlt {
+    @serdeIgnore
     FmtValues alleleValues;
+    @serdeIgnore
     FmtValues other;
+    @serdeIgnore
     const(HeaderConfig) cfg;
 
     this(FmtSingleSample fmt, size_t altIdx) {
@@ -299,7 +313,7 @@ struct FmtSingleAlt {
         this.cfg = fmt.cfg;
     }
 
-    void serialize(ISerializer serializer) const @safe {
+    void serialize(S)(ref S serializer) {
         auto state = serializer.structBegin;
         foreach (i,val; this.alleleValues.fields)
         {

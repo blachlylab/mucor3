@@ -13,7 +13,7 @@ import dhtslib.coordinates;
 import htslib;
 import libmucor.atomize.record;
 import libmucor.atomize.header;
-
+import libmucor.atomize.serializer;
 
 import libmucor.khashl : khashl;
 import libmucor.jsonlops;
@@ -23,74 +23,79 @@ import std.parallelism : parallel;
 
 import mir.ser.interfaces;
 import mir.ser;
-
-struct VcfIR {
-    string fn;
-    int threads;
-    bool multiSample;
-    bool multiAllele;
-
-    void serialize(ISerializer serializer) {
-        setup_global_pool(threads);
-        //open vcf
-        auto vcf = VCFReader(fn, threads, UnpackLevel.All);
-
-        StopWatch sw;
-        sw.start;
-        int vcf_row_count = 0;
-        int output_count = 0;
-        auto recIR = VcfRec(vcf.vcfhdr);
-        // loop over records and parse
-        auto s = serializer.listBegin;
-        foreach (x; vcf)
-        {
-            recIR.parse(x);
-            vcf_row_count++;
-            if(!multiSample) {
-                for(auto i = 0; i < recIR.hdrInfo.samples.length;i++) {
-                    auto samIR = VcfRecSingleSample(recIR, i);
-                    if(!multiAllele){
-                        for(auto j = 0; j < samIR.alt.length; j++) {
-                            auto aIR = VcfRecSingleAlt(samIR, j);
-                            serializeValue(serializer, aIR);
-                            output_count++;
-                        }
-                    } else {
-                        serializeValue(serializer, samIR);
-                        output_count++;
-                    }
-                }
-            } else {
-                serializeValue(serializer, recIR);
-                output_count++;
-            }
-        }
-        serializer.listEnd(s);
-        if (vcf_row_count > 0)
-        {
-            log_info(__FUNCTION__, "Parsed %,3d records in %d seconds",
-                    vcf_row_count, sw.peek.total!"seconds");
-            log_info(__FUNCTION__, "Output %,3d json objects", output_count);
-            log_info(__FUNCTION__, "Avg. time per VCF record: %d usecs",
-                    sw.peek.total!"usecs" / vcf_row_count);
-        }
-        else
-        log_info(__FUNCTION__, "No records in this file!");
-    }
-}
+import mir.serde : SerdeTarget;
 
 /// Parse VCF to JSONL
 void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, ref File output)
 {
-    auto x = VcfIR(fn, threads, multiSample, multiAllele);
-    import mir.ser.ion;
-    output.rawWrite(serializeIon(x));
+    setup_global_pool(threads);
+    //open vcf
+    auto vcf = VCFReader(fn, threads, UnpackLevel.All);
+
+    StopWatch sw;
+    sw.start;
+    int vcf_row_count = 0;
+    int output_count = 0;
+    auto recIR = VcfRec(vcf.vcfhdr);
+    // loop over records and parse
+    if(multiSample && multiAllele) {
+        auto ser = VcfSerializer!VcfRec(SerdeTarget.ion);
+        foreach (x; vcf)
+        {
+            recIR.parse(x);
+            vcf_row_count++;
+            ser.put(recIR);
+            output_count++;
+        }
+        output.rawWrite(ser.finalize);
+    } else if(!multiSample && multiAllele) {
+        auto ser = VcfSerializer!VcfRecSingleSample(SerdeTarget.ion);
+        foreach (x; vcf)
+        {
+            recIR.parse(x);
+            vcf_row_count++;
+            for(auto i = 0; i < recIR.hdrInfo.samples.length;i++) {
+                auto samIR = VcfRecSingleSample(recIR, i);
+                ser.put(samIR);
+                output_count++;
+            }
+            
+        }
+        output.rawWrite(ser.finalize);
+    } else {
+        auto ser = VcfSerializer!VcfRecSingleAlt(SerdeTarget.ion);
+        foreach (x; vcf)
+        {
+            recIR.parse(x);
+            vcf_row_count++;
+            for(auto i = 0; i < recIR.hdrInfo.samples.length;i++) {
+                auto samIR = VcfRecSingleSample(recIR, i);
+                for(auto j = 0; j < samIR.alt.length; j++) {
+                    auto aIR = VcfRecSingleAlt(samIR, j);
+                    ser.put(aIR);
+                    output_count++;
+                }
+            }
+            
+        }
+        output.rawWrite(ser.finalize);
+    }
+    if (vcf_row_count > 0)
+    {
+        log_info(__FUNCTION__, "Parsed %,3d records in %d seconds",
+                vcf_row_count, sw.peek.total!"seconds");
+        log_info(__FUNCTION__, "Output %,3d json objects", output_count);
+        log_info(__FUNCTION__, "Avg. time per VCF record: %d usecs",
+                sw.peek.total!"usecs" / vcf_row_count);
+    }
+    else
+    log_info(__FUNCTION__, "No records in this file!");
 }
 
 unittest {
     {
         auto f = File("/tmp/test.ion", "wb");
-        parseVCF("../test/data/vcf_file.vcf", -1, false, false, f);
+        parseVCF("../test/data/vcf_file.vcf", -1, true, true, f);
     }
     import std.file : read;
     import mir.ion.conv;

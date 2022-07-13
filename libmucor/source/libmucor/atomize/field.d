@@ -6,6 +6,7 @@ import std.meta;
 import mir.algebraic;
 import mir.ser.interfaces;
 import mir.ser;
+import mir.serde;
 
 alias FieldTypes = Variant!(long, float, long[], float[], bool, string);
 
@@ -18,7 +19,9 @@ template isArrayNotString(T)
 }
 
 struct FieldValue {
+    @serdeIgnore
     FieldTypes data;
+    @serdeIgnore
     bool isNull = true;
 
     void opAssign(T)(T value)
@@ -39,7 +42,7 @@ struct FieldValue {
         )(this.data);
     }
 
-    void serialize(ISerializer serializer) const @safe {
+    void serialize(S)(ref S serializer) {
         match!(
             (x) => serializeValue(serializer, x),
         )(this.data);

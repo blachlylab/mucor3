@@ -2,6 +2,7 @@ module libmucor.atomize.info;
 
 import mir.ser.interfaces;
 import mir.ser;
+import mir.serde;
 
 import dhtslib.vcf;
 import std.string : fromStringz;
@@ -15,7 +16,9 @@ import libmucor.error;
 
 
 struct InfoAlleleValues {
+    @serdeIgnore
     FieldValue[] fields;
+    @serdeIgnore
     bool isNull = true;
 
     void reset() {
@@ -32,7 +35,7 @@ struct InfoAlleleValues {
         return fields[index];
     }
 
-    void serialize(ISerializer serializer, const(HeaderConfig) * cfg, bool byAllele) const @safe {
+    void serialize(S)(ref S serializer, const(HeaderConfig) * cfg, bool byAllele) {
         if(this.isNull) return;
         auto s = serializer.structBegin;
         foreach (i,val; this.fields)
@@ -49,10 +52,16 @@ struct InfoAlleleValues {
 }
 
 struct Info {
+    Annotation _dummy;
+    @serdeIgnore
     InfoAlleleValues[] byAllele;
+    @serdeIgnore
     FieldValue[] other;
+    @serdeIgnore
     Annotations[] annFields;
+    @serdeIgnore
     const(HeaderConfig) cfg;
+    @serdeIgnore
     size_t numByAlleleFields;
 
     this(HeaderConfig cfg) {
@@ -157,7 +166,7 @@ struct Info {
         }
     }
 
-    void serialize(ISerializer serializer) {
+    void serialize(S)(ref S serializer) {
         auto state = serializer.structBegin;
         if(this.byAllele.map!(x => !x.isNull).any){
             serializer.putKey("byAllele");
@@ -191,10 +200,16 @@ struct Info {
 }
 
 struct InfoSingleAlt {
+    Annotation _dummy;
+    @serdeIgnore
     InfoAlleleValues alleleValues;
+    @serdeIgnore
     FieldValue[] other;
+    @serdeIgnore
     Annotations[] annFields;
+    @serdeIgnore
     const(HeaderConfig) cfg;
+    @serdeIgnore
     string allele;
 
     this(Info info, size_t altIdx, string allele) {
@@ -205,7 +220,7 @@ struct InfoSingleAlt {
         this.cfg = info.cfg;
     }
 
-    void serialize(ISerializer serializer) {
+    void serialize(S)(ref S serializer) {
         auto state = serializer.structBegin;
         foreach (i,val; this.alleleValues.fields)
         {
