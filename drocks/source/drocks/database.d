@@ -189,6 +189,11 @@ struct RocksDB {
         this.put(value, key, &this.columnFamilies[familyName]);
     }
 
+    void opIndexOpAssign(string op: "~")(ubyte[] value, ubyte[] key)
+    {
+        this.merge(value, key, null);
+    }
+
     void put(ubyte[] value, ubyte[] key, ColumnFamily * family = null) {
         char* err;
         if(family) {
@@ -237,6 +242,32 @@ struct RocksDB {
                 &err);
         }
 
+        err.checkErr();
+    }
+
+    void merge(ubyte[] value, ubyte[] key, ColumnFamily * family = null) {
+        char* err;
+
+        if (family) {
+            rocksdb_merge_cf(
+                this.db,
+                this.writeOptions.opts,
+                family.cf,
+                cast(char*)key.ptr,
+                key.length,
+                cast(char*)value.ptr,
+                value.length,
+                &err);
+        } else {
+            rocksdb_merge(
+                this.db,
+                this.writeOptions.opts,
+                cast(char*)key.ptr,
+                key.length,
+                cast(char*)value.ptr,
+                value.length,
+                &err);
+        }
         err.checkErr();
     }
 

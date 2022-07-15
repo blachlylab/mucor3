@@ -135,6 +135,10 @@ struct RocksDBOptions {
         rocksdb_options_set_compaction_style(this.opts, style);
     }
 
+    @property void setMergeOperator(rocksdb_mergeoperator_t * op) {
+        rocksdb_options_set_merge_operator(this.opts, op);
+    }
+
     // @property void comparator(Comparator cmp) {
     //     rocksdb_options_set_comparator(this.opts, cmp.cmp);
     // }

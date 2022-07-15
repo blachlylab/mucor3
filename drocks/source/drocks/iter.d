@@ -15,6 +15,11 @@ struct Iterator {
 
     @disable this(this);
 
+    this(ref return scope Iterator rhs) {
+        this.iter = rhs.iter;
+        rhs.iter = null;
+    }
+
     this(RocksDB * db, ReadOptions * opts) {
         this.iter = rocksdb_create_iterator(db.db, opts.opts);
         this.seekToFirst();

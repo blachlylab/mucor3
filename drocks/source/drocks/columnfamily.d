@@ -50,6 +50,11 @@ struct ColumnFamily {
         this.db.remove_(key, &this);
     }
 
+    void opIndexOpAssign(string op: "~")(ubyte[] value, ubyte[] key)
+    {
+        this.merge(value, key, &this);
+    }
+
     // ubyte[][] multiGet(ubyte[][] keys, ReadOptions * opts = null) {
     //     return this.db.multiGet(keys, this, opts);
     // }
