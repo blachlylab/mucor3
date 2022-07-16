@@ -1,10 +1,13 @@
 module drocks.columnfamily;
 
 import rocksdb;
+import option;
+import std.format;
+import std.string;
 
 import drocks.options : ReadOptions, WriteOptions;
 import drocks.iter : Iterator;
-import drocks.database : RocksDB, checkErr;
+import drocks.database : RocksDB, convertErr, RocksResult, RocksError;
 
 struct ColumnFamily {
 
@@ -30,10 +33,15 @@ struct ColumnFamily {
         dg(iter);
     }
 
-    void drop() {
+    RocksError drop() {
+        RocksError ret;
         char* err = null;
         rocksdb_drop_column_family(this.db.db, this.cf, &err);
-        err.checkErr();
+        if(err)
+            ret = Err(format("Error: %s", fromStringz(err)));
+        else
+            ret = Ok(null);
+        return ret;
     }
 
     ref auto opIndex(ubyte[] key)
@@ -52,7 +60,7 @@ struct ColumnFamily {
 
     void opIndexOpAssign(string op: "~")(ubyte[] value, ubyte[] key)
     {
-        this.merge(value, key, &this);
+        this.db.merge(value, key, &this);
     }
 
     // ubyte[][] multiGet(ubyte[][] keys, ReadOptions * opts = null) {
@@ -125,7 +133,7 @@ unittest {
         }
 
         for (int i = 0; i < times; i++) {
-            assert(cf[ cast(ubyte[])(cf.name ~ i.to!string)] == cast(ubyte[]) i.to!string);
+            assert(cf[ cast(ubyte[])(cf.name ~ i.to!string)].unwrap.unwrap == cast(ubyte[]) i.to!string);
         }
 
         cf.withIter((ref iter) {

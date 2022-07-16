@@ -40,27 +40,11 @@ char* AppendFullMerge(
     size_t* new_value_length
 ) {
     import core.stdc.stdio;
-    printf("full merge\n");
-    fprintf(stderr, "\nDumping full_merge_fn params:\n");
-    fprintf(stderr, "key: %.*s\n", cast(int)key_length, key);
-    fprintf(stderr, "existing value: %.*s\n", cast(int)existing_value_length, existing_value);
-    fprintf(stderr, "operands (%d):\n", num_operands);
-    fprintf(stderr, "operands (%d):\n", operands_list_length);
-    fprintf(stderr, "operands (%d):\n", operands_list_length[0]);
-    fprintf(stderr, "state (%d):\n", (cast(merge_operator_state*)state).val);
     auto sum = 0;
     for(int i = 0; i < num_operands; i++) {
-        fprintf(stderr, "\t%.*s\n", cast(int)operands_list_length[i], operands_list[i]);
-        fprintf(stderr, "\t%d\n", cast(int)operands_list_length[i]);
         sum += operands_list_length[i];
     }
-    printf("sum: %d\n", sum);
     auto newLen = existing_value_length + sum;
-    // if(newLen == existing_value_length) {
-    //     *success = 0;
-    //     return null;
-    // }
-    printf("new len: %d\n", newLen);
     *new_value_length = newLen;
     auto ret = (cast(char*)malloc(newLen))[0..newLen];
     size_t start = 0;
@@ -86,18 +70,8 @@ char* AppendPartialMerge(
     size_t* new_value_length
 ) {
     import core.stdc.stdio;
-    printf("partial merge\n");
-
-    fprintf(stderr, "\nDumping partial_merge_fn params:\n");
-    fprintf(stderr, "key: %.*s\n", cast(int)key_length, key);
-    fprintf(stderr, "operands (%d):\n", num_operands);
-    fprintf(stderr, "state (%d):\n", (cast(merge_operator_state*)state).val);
     auto newLen = 0;
     for(auto i = 0; i < num_operands; i++) {
-        auto s = cast(char*)operands_list[i];
-        while(*s)
-            printf("%02x", cast(uint) *s++);
-        printf("\n");
         newLen += operands_list_length[i];
     }
     *new_value_length = newLen;
@@ -156,13 +130,17 @@ unittest {
 
     // Test string putting and getting
     db[cast(ubyte[])"key"] = cast(ubyte[])"value";
-    assert(db[cast(ubyte[]) "key"] == cast(ubyte[]) "value");
+    assert(db[cast(ubyte[]) "key"].unwrap.unwrap == cast(ubyte[]) "value");
     db[cast(ubyte[])"key"] = cast(ubyte[])"value2";
-    assert(db[cast(ubyte[]) "key"] == cast(ubyte[]) "value2");
+    assert(db[cast(ubyte[]) "key"].unwrap.unwrap == cast(ubyte[]) "value2");
 
-    db[cast(ubyte[])"key2"] ~= db[cast(ubyte[])"value3"];
-    db[cast(ubyte[])"key2"] ~= db[cast(ubyte[])"value4"];
-    import std.stdio;
-    writeln(cast(string)(db[cast(ubyte[]) "key2"]));
-    assert(db[cast(ubyte[]) "key2"] == cast(ubyte[]) "value2value3");
+    db.remove(cast(ubyte[])"key2");
+    db[cast(ubyte[])"key"] ~= cast(ubyte[])"value3";
+    db[cast(ubyte[])"key"] ~= cast(ubyte[])"value4";
+
+    db[cast(ubyte[])"key2"] ~= cast(ubyte[])"value3";
+    db[cast(ubyte[])"key2"] ~= cast(ubyte[])"value4";
+    
+    assert(db[cast(ubyte[]) "key"].unwrap.unwrap == cast(ubyte[]) "value2value3value4");
+    assert(db[cast(ubyte[]) "key2"].unwrap.unwrap == cast(ubyte[]) "value3value4");
 }

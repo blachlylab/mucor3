@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/option
+option.so
+option.dylib
+option.dll
+option.a
+option.lib
+option-test-*
+*.exe
+*.o
+*.obj
+*.lst

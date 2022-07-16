@@ -6,5 +6,10 @@
 	"description": "Bindings to RocksDB",
 	"license": "MIT",
 	"name": "drocks",
-	"libs": ["rocksdb"]
+	"libs": ["rocksdb"],
+	"dependencies": {
+		"option" : {
+			"path": "../option"
+		}
+	}
 }
