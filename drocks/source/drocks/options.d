@@ -5,6 +5,7 @@ import std.conv : to;
 import core.stdc.stdlib : free;
 
 import rocksdb;
+import drocks.memory;
 import drocks.snapshot;
 import drocks.env;
 
@@ -31,17 +32,16 @@ enum ReadTier : int {
     Persisted = 0x2,
 }
 
+alias WriteOptPtr = SafePtr!(rocksdb_writeoptions_t, rocksdb_writeoptions_destroy); 
 struct WriteOptions {
-    rocksdb_writeoptions_t* opts;
+    WriteOptPtr opts;
 
-    @disable this(this);
-
-    void initialize() {
-        this.opts = rocksdb_writeoptions_create();
+    this(this) {
+        this.opts = opts;
     }
 
-    ~this() {
-        if(opts) rocksdb_writeoptions_destroy(this.opts);
+    void initialize() {
+        this.opts = WriteOptPtr(rocksdb_writeoptions_create());
     }
 
     @property void sync(bool v) {
@@ -52,18 +52,16 @@ struct WriteOptions {
         rocksdb_writeoptions_disable_WAL(this.opts, cast(int)v);
     }
 }
-
+alias ReadOptPtr = SafePtr!(rocksdb_readoptions_t, rocksdb_readoptions_destroy);
 struct ReadOptions {
-    rocksdb_readoptions_t* opts;
+    ReadOptPtr opts;
 
-    @disable this(this);
-
-    void initialize() {
-        this.opts = rocksdb_readoptions_create();
+    this(this) {
+        this.opts = opts;
     }
 
-    ~this() {
-       if(opts) rocksdb_readoptions_destroy(this.opts);
+    void initialize() {
+        this.opts = ReadOptPtr(rocksdb_readoptions_create());
     }
 
     @property void verifyChecksums(bool v) {
@@ -91,16 +89,16 @@ struct ReadOptions {
     }
 }
 
+alias RocksOptionsPtr = SafePtr!(rocksdb_options_t, rocksdb_options_destroy);
 struct RocksDBOptions {
-    rocksdb_options_t* opts;
+    RocksOptionsPtr opts;
 
-    @disable this(this);
-    void initialize() {
-        this.opts = rocksdb_options_create();
+    this(this) {
+        this.opts = opts;
     }
 
-    ~this() {
-        if(opts) rocksdb_options_destroy(this.opts);
+    void initialize() {
+        this.opts = RocksOptionsPtr(rocksdb_options_create());
     }
 
     @property void parallelism(int totalThreads) {

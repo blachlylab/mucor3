@@ -1,10 +1,13 @@
 module libmucor.invertedindex;
-public import libmucor.invertedindex.store;
-public import libmucor.invertedindex.metadata;
-public import libmucor.invertedindex.binaryindex;
+import libmucor.invertedindex.record;
+import libmucor.invertedindex.store;
+import libmucor.invertedindex.hash;
+
+import mir.ion.value;
+import mir.ion.conv;
 
 import std.algorithm.setops;
-import std.algorithm : sort, uniq, map, std_filter = filter, joiner, each,
+import std.algorithm : sort, uniq, map, filter, joiner, each,
     cartesianProduct, reduce;
 import std.range : iota, takeExactly;
 import std.array : array, replace;
@@ -16,12 +19,10 @@ import std.file : exists;
 import std.exception : enforce;
 
 import asdf : deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
-import libmucor.wideint : uint128;
 import libmucor.jsonlops.jsonvalue;
 import libmucor.query.eval;
 
 import libmucor.khashl;
-import std.digest.md : MD5Digest, toHexString;
 import libmucor.error;
 import libmucor.query;
 import std.sumtype;
@@ -32,183 +33,25 @@ char sep = '/';
 
 struct InvertedIndex
 {
-    BinaryIndexReader* bidxReader;
-    BinaryIndexWriter* bidxWriter;
+    InvertedIndexStore store;
 
-    khashlSet!(const(char)[]) * fields;
-    this(string prefix, bool write, ulong cacheSize = 8192, ulong smallsMax = 128)
+    this(string prefix)
     {
-        if (!write)
-        {
-            this.bidxReader = new BinaryIndexReader(prefix);
-        }
-        else
-        {
-            import std.file: mkdirRecurse, exists;
-            if(!prefix.exists)
-                mkdirRecurse(prefix);
-            this.bidxWriter = new BinaryIndexWriter(prefix, cacheSize, smallsMax);
-        }
-    }
-
-    auto addQueryFilter(string queryStr) {
-        import std.array: split;
-        assert(this.bidxWriter);
-        auto q = Query(queryStr);
-        this.fields = getQueryFields(q.expr, null);
-        log_info(__FUNCTION__, "Indexing only fields specified in query: %s", (*this.fields).byKey.array);
-        foreach (key; this.fields.byKey.array)
-        {
-            auto arr = key.split(sep);
-            const(char)[] field;
-            foreach(v; arr){
-                field ~= v;
-                this.fields.insert(field);
-                field ~= sep;
-            }
-        }
-        log_info(__FUNCTION__, "Indexing only fields specified in query: %s", (*this.fields).byKey.array);
-    }
-
-    void close()
-    {
-        if (this.bidxReader)
-            this.bidxReader.close;
-        if (this.bidxWriter)
-            this.bidxWriter.close;
-    }
-
-    auto recordMd5s()
-    {
-        return this.bidxReader.sums;
+        this.store = InvertedIndexStore(prefix);
     }
     
-    void addJsonObject(Asdf root)
+    void insert(const(char[])[] symbolTable, IonDescribedValue val)
     {
-        if(fields) addJsonObjectFieldKeys(root);
-        else addJsonObjectAllKeys(root);
+        assert(val.descriptor.type == IonTypeCode.struct_);
+        IonStruct obj;
+        val.get(obj);
+        this.store.insert(obj.withSymbols(symbolTable));
     }
 
-    void addJsonObjectAllKeys(Asdf root)
+    khashlSet!(uint128) * allIds()
     {
-        import std.container : DList;
-        import libmucor.invertedindex.queue;
-        alias AsdfKeyValue = Tuple!(const(char)[], Asdf);
-        Queue!(AsdfKeyValue) queue; 
-        uint128 md5;
-
-        if (root["md5"] == Asdf.init)
-            log_err(__FUNCTION__, "record with no md5");
-        auto m = root["md5"].deserializeAsdf!string;
-        root["md5"].remove;
-        md5.fromHexString(m);
-        
-        if(root.kind != Asdf.Kind.object) log_err(__FUNCTION__,  "Expected JSON Object not: %s", root.kind);
-        foreach (kv; root.byKeyValue)
-        {
-            queue.push(AsdfKeyValue(kv.key, kv.value));
-        }
-        while(!queue.empty) {
-            AsdfKeyValue val = queue.pop;
-            // writeln(val[0]," ", val[1]);
-            final switch(val[1].kind) {
-                case Asdf.Kind.object:
-                    foreach (kv; val[1].byKeyValue)
-                    {
-                        queue.push(AsdfKeyValue(val[0] ~ sep ~ kv.key,kv.value));
-                    }
-                    break;
-                case Asdf.Kind.array:
-                    foreach (e; val[1].byElement)
-                    {
-                        queue.push(AsdfKeyValue(val[0],e));
-                    }
-                    break;
-                case Asdf.Kind.string:
-                    this.bidxWriter.insert(val[0], JSONValue(val[1]));
-                    break;
-                case Asdf.Kind.number:
-                    this.bidxWriter.insert(val[0], JSONValue(val[1]));
-                    break;
-                case Asdf.Kind.null_:
-                    continue;
-                case Asdf.Kind.true_:
-                    this.bidxWriter.insert(val[0], JSONValue(true));
-                    break;
-                case Asdf.Kind.false_:
-                    this.bidxWriter.insert(val[0], JSONValue(false));
-                    break;
-            }
-        }
-        assert(md5 != uint128(0));
-        this.bidxWriter.sums.write(md5);
-        this.bidxWriter.numSums++;
-    }
-    
-    void addJsonObjectFieldKeys(Asdf root)
-    {
-        import std.container : DList;
-        import libmucor.invertedindex.queue;
-        alias AsdfKeyValue = Tuple!(const(char)[], Asdf);
-        Queue!(AsdfKeyValue) queue; 
-        uint128 md5;
-
-        if (root["md5"] == Asdf.init)
-            log_err(__FUNCTION__, "record with no md5");
-        auto m = root["md5"].deserializeAsdf!string;
-        root["md5"].remove;
-        md5.fromHexString(m);
-        if(root.kind != Asdf.Kind.object) log_err(__FUNCTION__,  "Expected JSON Object not: %s", root.kind);
-        foreach (kv; root.byKeyValue)
-        {
-            queue.push(AsdfKeyValue(kv.key, kv.value));
-        }
-        while(!queue.empty) {
-            AsdfKeyValue val = queue.pop;
-            // writeln(val[0]," ", val[1]);
-            if(!(val[0] in *fields)) continue;
-            final switch(val[1].kind) {
-                case Asdf.Kind.object:
-                    foreach (kv; val[1].byKeyValue)
-                    {
-                        queue.push(AsdfKeyValue(val[0] ~ sep ~ kv.key,kv.value));
-                    }
-                    break;
-                case Asdf.Kind.array:
-                    foreach (e; val[1].byElement)
-                    {
-                        queue.push(AsdfKeyValue(val[0],e));
-                    }
-                    break;
-                case Asdf.Kind.string:
-                    this.bidxWriter.insert(val[0], JSONValue(val[1]));
-                    break;
-                case Asdf.Kind.number:
-                    this.bidxWriter.insert(val[0], JSONValue(val[1]));
-                    break;
-                case Asdf.Kind.null_:
-                    continue;
-                case Asdf.Kind.true_:
-                    this.bidxWriter.insert(val[0], JSONValue(true));
-                    break;
-                case Asdf.Kind.false_:
-                    this.bidxWriter.insert(val[0], JSONValue(false));
-                    break;
-            }
-        }
-        assert(md5 != uint128(0));
-        this.bidxWriter.sums.write(md5);
-        this.bidxWriter.numSums++;
-    }
-
-    khashlSet!(ulong) * allIds()
-    {
-        auto ret = new khashlSet!(ulong);
-        foreach (k; iota(0, this.bidxReader.sums.length))
-        {
-            ret.insert(k);
-        }
-        return ret;
+        return this.store.records.byKeyValue
+        .map!(x => x[0]).collect;
         // return this.recordMd5s;
     }
 
@@ -223,21 +66,19 @@ struct InvertedIndex
         {
             auto hash = getKeyHash(key);
             // writefln("%x",hash);
-            if (!(hash in this.bidxReader.seenKeys))
-                log_err(__FUNCTION__, " key %s is not found", key);
-            ret = [hash];
-            if (ret.length == 0)
-            {
-                log_warn(__FUNCTION__, "Warning: Key %s was not found in index!", keycopy);
+            if (!this.store.checkKey(key)) {
+                return [];
+            } else {
+                ret = [hash];
             }
         }
         else
         {
             key = key.replace("*", ".*");
             auto reg = regex("^" ~ key ~ "$");
-            ret = this.bidxReader
+            ret = this.store
                 .getKeysWithId
-                .std_filter!(x => !(x[0].matchFirst(reg).empty))
+                .filter!(x => !(x[0].matchFirst(reg).empty))
                 .map!(x => x[1])
                 .array;
             if (ret.length == 0)
@@ -250,62 +91,56 @@ struct InvertedIndex
         return ret;
     }
 
-    khashlSet!(ulong) * query(T)(const(char)[] key, T value)
+    khashlSet!(uint128) * query(T)(const(char)[] key, T value)
     {
         auto matchingFields = getFields(key);
-        auto matchingValues = this.bidxReader.jsonStore.filter([value]);
         return reduce!unionIds(
-                new khashlSet!ulong,
-                cartesianProduct(matchingFields, matchingValues).map!(x => combineHash(x[0], x[1]))
-                    .map!(x => this.bidxReader.idCache.getIds(x))
+                new khashlSet!uint128,
+                matchingFields.map!(x => this.store.filterSingle(x, value))
+                    .filter!(x => !x.isNone)
+                    .map!(x => x.unwrap.collect())
             );
     }
 
-    khashlSet!(ulong) * queryRange(T)(const(char)[] key, T first, T second)
+    khashlSet!(uint128) * queryRange(T)(const(char)[] key, T first, T second)
     {
         auto matchingFields = getFields(key);
-        auto matchingValues = this.bidxReader.jsonStore.filterRange([
-            first, second
-        ]);
         return reduce!unionIds(
-                new khashlSet!ulong,
-                cartesianProduct(matchingFields, matchingValues).map!(x => combineHash(x[0], x[1]))
-                .map!(x => this.bidxReader.idCache.getIds(x))
+                new khashlSet!uint128,
+                matchingFields
+                    .map!(x => this.store.filterRange(x, [first, second]).collect())
             );
     }
 
-    auto getMatchingValues(T)(T val, string op)
+    auto getMatchingValues(T)(uint128 kh, T val, string op)
     {
         switch (op)
         {
         case ">=":
-            return this.bidxReader.jsonStore.filterOp!(">=", T)(val);
+            return this.store.filterOp!(">=", T)(kh, val);
         case ">":
-            return this.bidxReader.jsonStore.filterOp!(">", T)(val);
+            return this.store.filterOp!(">", T)(kh, val);
         case "<":
-            return this.bidxReader.jsonStore.filterOp!("<", T)(val);
+            return this.store.filterOp!("<", T)(kh, val);
         case "<=":
-            return this.bidxReader.jsonStore.filterOp!("<=", T)(val);
+            return this.store.filterOp!("<=", T)(kh, val);
         default:
             log_err(__FUNCTION__, "%s operator is not valid here", op);
             throw new Exception("An error has occured");
         }
     }
 
-    khashlSet!(ulong) * queryOp(T)(const(char)[] key, T val, string op)
+    khashlSet!(uint128) * queryOp(T)(const(char)[] key, T val, string op)
     {
         import std.traits : ReturnType;
         import std.algorithm : mean;
 
         log_info(__FUNCTION__, "fetching ids for query: %s %s %s", key, op, val.to!string);
         auto matchingFields = getFields(key).array;
-        auto matchingValues = getMatchingValues(val, op).array;
-        auto combinations = cartesianProduct(matchingFields, matchingValues).array;
-        log_debug(__FUNCTION__, "fields (%d) and values (%d) collected: %d combinations", matchingFields.length, matchingValues.length, combinations.length);
-        khashlSet!(ulong)*[] ids = new khashlSet!(ulong) * [combinations.length];
-        foreach (i, comb; parallel(combinations))
+        khashlSet!(uint128)*[] ids = new khashlSet!(uint128) * [matchingFields.length];
+        foreach (i, kh; parallel(matchingFields))
         {
-            ids[i] = this.bidxReader.idCache.getIds(combineHash(comb[0], comb[1]));
+            ids[i] = this.getMatchingValues(kh, val, op).collect;
         }
         auto ret = taskPool.reduce!unionIds(ids,1);
         log_info(__FUNCTION__, "%d ids fetched for query: %s %s %s", ret.count, key, op, val.to!string);
@@ -313,16 +148,11 @@ struct InvertedIndex
     }
 
 
-    khashlSet!(ulong) * queryNOT(khashlSet!(ulong) * values)
+    khashlSet!(uint128) * queryNOT(khashlSet!(uint128) * values)
     {
         auto r = this.allIds;
         (*r) -= (*values);
         return r;
-    }
-
-    uint128[] convertIds(khashlSet!(ulong) * ids)
-    {
-        return ids.byKey.map!(x => this.bidxReader.sums[x]).array;
     }
 
     auto opBinaryRight(string op)(InvertedIndex lhs)
@@ -359,7 +189,7 @@ struct InvertedIndex
         }
         else
             static assert(false, "Op not implemented");
-    }
+    }    
 }
 
 unittest
@@ -369,25 +199,34 @@ unittest
     import std.array : array;
     import htslib.hts_log;
     import std.file: mkdirRecurse;
+    import mir.ion.conv;
+    import mir.ion.stream;
 
+    uint128[] checksums;
+    ubyte[] data;
     hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
     {
-        mkdirRecurse("/tmp/test_idx");
-        auto idx = new InvertedIndex("/tmp/test_idx", true);
-        idx.addJsonObject(`{"test":"hello", "test2":"foo","test3":1}`.parseJson.spookyhashObject);
-        idx.addJsonObject(`{"test":"world", "test2":"bar","test3":2}`.parseJson.spookyhashObject);
-        idx.addJsonObject(`{"test":"world", "test4":"baz","test3":3}`.parseJson.spookyhashObject);
-        idx.close;
+        auto idx = InvertedIndex("/tmp/test_idx_1");
+        checksums ~= uint128.fromHexString("271eea785e564a5d8c8099556c93b5a4");
+        checksums ~= uint128.fromHexString("7dc8741714834d2b9fffdb315e07b6bd");
+        checksums ~= uint128.fromHexString("68c07c663e854421bccd1dbe8fe6a388");
+        data ~= cast(ubyte[])(`{test:"hello",test2:"foo",test3:1,checksum:`~checksums[0].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test:"world",test2:"bar",test3:2,checksum:`~checksums[1].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test:"world",test4:"baz",test3:3,checksum:`~checksums[2].toString~`}`).text2ion;
+        foreach (symTable, val; IonValueStream(data))
+        {
+            idx.insert(symTable, val);
+        }
     }
     {
-        auto idx = InvertedIndex("/tmp/test_idx", false);
-        assert(idx.bidxReader.sums.length == 3);
+        import libmucor.invertedindex.hash;
+        auto idx = InvertedIndex("/tmp/test_idx_1");
         // writeln(idx.bidxReader.getKeysWithId.map!(x => x[0]));
-        assert(idx.query("test2", "foo").byKey.array == [0]);
-        assert(idx.queryRange("test3", 1, 3).byKey.array == [0, 1]);
-        idx.close;
+        assert(idx.query("test2", "foo").byKey.array == [checksums[0]]);
+        assert(idx.queryRange("test3", 1, 3).byKey.array == [checksums[0], checksums[1]]);
     }
-
+    import std.file;
+    rmdirRecurse("/tmp/test_idx_1");
 }
 
 unittest
@@ -396,33 +235,37 @@ unittest
     import libmucor.jsonlops.basic : spookyhashObject;
     import std.array : array;
     import htslib.hts_log;
+    import mir.ion.conv;
+    import mir.ion.stream;
 
+    uint128[] checksums;
+    ubyte[] data;
     hts_set_log_level(htsLogLevel.HTS_LOG_INFO);
     set_log_level(LogLevel.Info);
     {
-        auto idx = new InvertedIndex("/tmp/test_idx", true);
-        idx.addJsonObject(
-                `{"test":"hello", "test2":{"foo": "bar"}, "test3":1}`.parseJson.spookyhashObject);
-        idx.addJsonObject(
-                `{"test":"world", "test2":"baz",          "test3":2}`.parseJson.spookyhashObject);
-        idx.addJsonObject(
-                `{"test":"worl",                          "test3":3, "test4":{"foo": "bar"}}`
-                .parseJson.spookyhashObject);
-        idx.addJsonObject(
-                `{"test":"hi",                            "test3":4, "test4":"baz"}`
-                .parseJson.spookyhashObject);
-        idx.addJsonObject(
-                `{"test":"bye",                           "test3":5, "test4":"bar"}`
-                .parseJson.spookyhashObject);
-        idx.addJsonObject(
-                `{"test":"hello",                         "test3":6, "test4":{"foo": "baz"}}`
-                .parseJson.spookyhashObject);
-        idx.addJsonObject(`{"test":"hello",               "test3":7, "test4":{"foo": ["baz", "bar"]}}`
-                .parseJson.spookyhashObject);
-        idx.addJsonObject(
-                `{"test":"hello world",                   "test3":8, "test4":{"foo": "?"}}`
-                .parseJson.spookyhashObject);
-        idx.close;
+        checksums ~= uint128.fromHexString("271eea785e564a5d8c8099556c93b5a4");
+        checksums ~= uint128.fromHexString("7dc8741714834d2b9fffdb315e07b6bd");
+        checksums ~= uint128.fromHexString("68c07c663e854421bccd1dbe8fe6a388");
+        checksums ~= uint128.fromHexString("47b7423e77814ab7b96d3cfa70ae6fa8");
+        checksums ~= uint128.fromHexString("c4366b54a241429980ab6e6bd813f8d8");
+        checksums ~= uint128.fromHexString("5edd465728d24f70b27540b3b24a97a3");
+        checksums ~= uint128.fromHexString("c35c7fba59054a728ae54ea7ade538e5");
+        checksums ~= uint128.fromHexString("239ef3ec18e848c38a2a8876993b8edf");
+        
+        data ~= cast(ubyte[])(`{test:"hello",test2:{foo:bar},test3:1,checksum:`~checksums[0].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test:"world",test2:baz,test3:2,checksum:`~checksums[1].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test:"worl",test3:3,test4:{foo:bar},checksum:`~checksums[2].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test:"hi",test3:4,test4:baz,checksum:`~checksums[3].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test:"bye",test3:5,test4:bar,checksum:`~checksums[4].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test:"hello",test3:6,test4:{foo:baz},checksum:`~checksums[5].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test:"hello",test3:7,test4:{foo:[baz,bar]},checksum:`~checksums[6].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test:"hello world",test3:8,test4:{foo:"?"},checksum:`~checksums[7].toString~`}`).text2ion;
+
+        auto idx = InvertedIndex("/tmp/test_idx_2");
+        foreach (symTable, val; IonValueStream(data))
+        {
+            idx.insert(symTable, val);
+        }
     }
     {
         auto q1 = Query("test = hello");
@@ -442,28 +285,36 @@ unittest
         auto q15 = Query("(test = (world | worl | hi | bye)) & (test4/foo = (bar & baz))");
         auto q16 = Query("(test = hello) & (test4/foo = (bar & baz))");
 
-        auto idx = new InvertedIndex("/tmp/test_idx", false);
-
-        assert(idx.bidxReader.sums.length == 8);
-
-        assert(q1.evaluate(idx).byKey.array == [0, 6, 5]);
-        assert(q2.evaluate(idx).byKey.array == [7]);
-        assert(q3.evaluate(idx).byKey.array == [4, 2, 1, 3]);
-        assert(q4.evaluate(idx).byKey.array == [7, 4, 6, 5, 3]);
-        assert(q5.evaluate(idx).byKey.array == [7, 2, 4, 6, 5, 3]);
-        assert(q6.evaluate(idx).byKey.array == [0, 2, 1]);
-        assert(q7.evaluate(idx).byKey.array == [0, 1]);
-        assert(q8.evaluate(idx).byKey.array == [2, 4, 3]);
-        assert(q9.evaluate(idx).byKey.array == [2, 6, 5]);
-        assert(q10.evaluate(idx).byKey.array == [6]);
-        assert(q11.evaluate(idx).byKey.array == [2, 6, 4]);
-        assert(q12.evaluate(idx).byKey.array == [3, 6, 5]);
-        assert(q13.evaluate(idx).byKey.array == [0, 2, 4, 6]);
-        assert(q14.evaluate(idx).byKey.array == [5]);
-        assert(q15.evaluate(idx).byKey.array == []);
-        assert(q16.evaluate(idx).byKey.array == [6]);
-        idx.close;
+        auto idx = InvertedIndex("/tmp/test_idx_2");
+        auto a = q1.evaluate(idx);
+        auto b = [checksums[0], checksums[6], checksums[5]].collect;
+        foreach (key; a.byKey)
+        {
+            if(!(key in *b)) writeln("notfound:",key);
+        }
+        foreach (key; b.byKey)
+        {
+            if(!(key in *a)) writeln("notfound:",key);
+        }
+        assert(*(q1.evaluate(idx)) == *([checksums[0], checksums[6], checksums[5]].collect));
+        assert(*q2.evaluate(idx) == *([checksums[7]].collect));
+        assert(*q3.evaluate(idx) == *([checksums[4], checksums[2], checksums[1], checksums[3]].collect));
+        assert(*q4.evaluate(idx) == *([checksums[7], checksums[4], checksums[6], checksums[5], checksums[3]].collect));
+        assert(*q5.evaluate(idx) == *([checksums[7], checksums[2], checksums[4], checksums[6], checksums[5], checksums[3]].collect));
+        assert(*q6.evaluate(idx) == *([checksums[0], checksums[2], checksums[1]].collect));
+        assert(*q7.evaluate(idx) == *([checksums[0], checksums[1]].collect));
+        assert(*q8.evaluate(idx) == *([checksums[2], checksums[4], checksums[3]].collect));
+        assert(*q9.evaluate(idx) == *([checksums[2], checksums[6], checksums[5]].collect));
+        assert(*q10.evaluate(idx) == *([checksums[6]].collect));
+        assert(*q11.evaluate(idx) == *([checksums[2], checksums[6], checksums[4]].collect));
+        assert(*q12.evaluate(idx) == *([checksums[3], checksums[6], checksums[5]].collect));
+        assert(*q13.evaluate(idx) == *([checksums[0], checksums[2], checksums[4], checksums[6]].collect));
+        assert(*q14.evaluate(idx) == *([checksums[5]].collect));
+        assert(*q15.evaluate(idx) == *(new khashlSet!uint128()));
+        assert(*q16.evaluate(idx) == *([checksums[6]].collect));
     }
+    import std.file;
+    rmdirRecurse("/tmp/test_idx_2");
 
 }
 
@@ -474,20 +325,36 @@ unittest
     import libmucor.jsonlops.basic : spookyhashObject;
     import std.array : array;
     import htslib.hts_log;
+    import mir.ion.conv;
+    import mir.ion.stream;
 
+    uint128[] checksums;
+    ubyte[] data;
     hts_set_log_level(htsLogLevel.HTS_LOG_INFO);
     set_log_level(LogLevel.Info);
     {
-        auto idx = new InvertedIndex("/tmp/test_idx", true);
-        idx.addJsonObject(`{"test1":0.4,      "test2":-1e-2, "test3":1}`.parseJson.spookyhashObject);
-        idx.addJsonObject(`{"test1":0.1,      "test2":-1e-3, "test3":10}`.parseJson.spookyhashObject);
-        idx.addJsonObject(`{"test1":0.8,      "test2":-1e-4, "test3":10000}`.parseJson.spookyhashObject);
-        idx.addJsonObject(`{"test1":1.2,      "test2":-1e-5, "test3":2}`.parseJson.spookyhashObject);
-        idx.addJsonObject(`{"test1":0.2,      "test2":-1e-6, "test3":40.0}`.parseJson.spookyhashObject);
-        idx.addJsonObject(`{"test1":0.001,    "test2":-1e-7, "test3":42}`.parseJson.spookyhashObject);
-        idx.addJsonObject(`{"test1":0.000001, "test2":-1e-8, "test3":50}`.parseJson.spookyhashObject);
-        idx.addJsonObject(`{"test1":-0.2,     "test2":-1e-9, "test3":97}`.parseJson.spookyhashObject);
-        idx.close;
+        checksums ~= uint128.fromHexString("271eea785e564a5d8c8099556c93b5a4");
+        checksums ~= uint128.fromHexString("7dc8741714834d2b9fffdb315e07b6bd");
+        checksums ~= uint128.fromHexString("68c07c663e854421bccd1dbe8fe6a388");
+        checksums ~= uint128.fromHexString("47b7423e77814ab7b96d3cfa70ae6fa8");
+        checksums ~= uint128.fromHexString("c4366b54a241429980ab6e6bd813f8d8");
+        checksums ~= uint128.fromHexString("5edd465728d24f70b27540b3b24a97a3");
+        checksums ~= uint128.fromHexString("c35c7fba59054a728ae54ea7ade538e5");
+        checksums ~= uint128.fromHexString("239ef3ec18e848c38a2a8876993b8edf");
+
+        auto idx = InvertedIndex("/tmp/test_idx_3");
+        data ~= cast(ubyte[])(`{test1:0.4,test2:-1e-2,test3:1,checksum:`~checksums[0].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test1:0.1,test2:-1e-3,test3:10,checksum:`~checksums[1].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test1:0.8,test2:-1e-4,test3:10000,checksum:`~checksums[2].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test1:1.2,test2:-1e-5,test3:2,checksum:`~checksums[3].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test1:0.2,test2:-1e-6,test3:40.0,checksum:`~checksums[4].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test1:0.001,test2:-1e-7,test3:42,checksum:`~checksums[5].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test1:0.000001,test2:-1e-8,test3:50,checksum:`~checksums[6].toString~`}`).text2ion;
+        data ~= cast(ubyte[])(`{test1:-0.2,test2:-1e-9,test3:97,checksum:`~checksums[7].toString~`}`).text2ion;
+        foreach (symTable, val; IonValueStream(data))
+        {
+            idx.insert(symTable, val);
+        }
     }
     {
         auto q1 = Query("test1 = 0.4");
@@ -506,26 +373,26 @@ unittest
         auto q14 = Query("test3 <= 10");
         auto q15 = Query("test3 <= 10.0");
 
-        auto idx = new InvertedIndex("/tmp/test_idx", false);
-
-        assert(idx.bidxReader.sums.length == 8);
-
-        assert(q1.evaluate(idx).byKey.array == [0]);
-        assert(q2.evaluate(idx).byKey.array == [0, 2, 4, 3]);
-        assert(q3.evaluate(idx).byKey.array == [7, 6, 5]);
-        assert(q4.evaluate(idx).byKey.array == [0, 2, 4, 1, 3]);
-        assert(q5.evaluate(idx).byKey.array == [6, 1, 5, 7]);
-        assert(q6.evaluate(idx).byKey.array == []);
-        assert(q7.evaluate(idx).byKey.array == [2, 4, 6, 1, 5, 3, 7]);
-        assert(q8.evaluate(idx).byKey.array == [2, 4, 6, 5, 7]);
-        assert(q9.evaluate(idx).byKey.array == [2, 4, 6, 5, 7]);
-        assert(q10.evaluate(idx).byKey.array == [2, 4, 6, 1, 5, 7]);
-        assert(q11.evaluate(idx).byKey.array == [2, 4, 6, 1, 5, 7]);
-        assert(q12.evaluate(idx).byKey.array == [0, 3]);
-        assert(q13.evaluate(idx).byKey.array == [0, 3]);
-        assert(q14.evaluate(idx).byKey.array == [0, 1, 3]);
-        assert(q15.evaluate(idx).byKey.array == [0, 1, 3]);
-        idx.close;
+        auto idx = InvertedIndex("/tmp/test_idx_3");
+        assert(*q1.evaluate(idx) == *([checksums[0]].collect));
+        
+        assert(*q2.evaluate(idx) == *([checksums[0], checksums[2], checksums[4], checksums[3]].collect));
+        assert(*q3.evaluate(idx) == *([checksums[7], checksums[6], checksums[5]].collect));
+        assert(*q4.evaluate(idx) == *([checksums[0], checksums[2], checksums[4], checksums[1], checksums[3]].collect));
+        assert(*q5.evaluate(idx) == *([checksums[6], checksums[1], checksums[5], checksums[7]].collect));
+        assert(*q6.evaluate(idx) == *(new khashlSet!uint128()));
+        assert(*q7.evaluate(idx) == *([checksums[2], checksums[4], checksums[6], checksums[1], checksums[5], checksums[3], checksums[7]].collect));
+        assert(*q8.evaluate(idx) == *([checksums[2], checksums[4], checksums[6], checksums[5], checksums[7]].collect));
+        assert(*q9.evaluate(idx) == *([checksums[2], checksums[4], checksums[6], checksums[5], checksums[7]].collect));
+        assert(*q10.evaluate(idx) == *([checksums[2], checksums[4], checksums[6], checksums[1], checksums[5], checksums[7]].collect));
+        assert(*q11.evaluate(idx) == *([checksums[2], checksums[4], checksums[6], checksums[1], checksums[5], checksums[7]].collect));
+        assert(*q12.evaluate(idx) == *([checksums[0], checksums[3]].collect));
+        assert(*q13.evaluate(idx) == *([checksums[0], checksums[3]].collect));
+        assert(*q14.evaluate(idx) == *([checksums[0], checksums[1], checksums[3]].collect));
+        assert(*q15.evaluate(idx) == *([checksums[0], checksums[1], checksums[3]].collect));
     }
+
+    import std.file;
+    rmdirRecurse("/tmp/test_idx_3");
 
 }

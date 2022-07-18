@@ -2,6 +2,7 @@ module drocks.snapshot;
 
 import rocksdb;
 import drocks.database;
+import drocks.memory;
 
 struct Snapshot {
     RocksDB * db;

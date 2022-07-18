@@ -5,7 +5,7 @@ import std.array : array;
 import std.digest.md : MD5Digest, toHexString;
 import std.format: format;
 import libmucor.spookyhash;
-import libmucor.invertedindex.store: SEED3, SEED4;
+import libmucor.invertedindex.hash: SEED3, SEED4;
 import libmucor.wideint;
 
 import asdf;

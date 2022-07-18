@@ -44,20 +44,20 @@ struct Option(T) {
     }
 
     /// unwrap to inner val
-    auto unwrap() @safe {
+    auto unwrap() {
         assert(!this.isNone, "Tried to unwrap None option");
         return this.val;
     }
 
     /// check if equals another result
-    bool opEquals(Option!T val) const {
+    bool opEquals(const Option!T val) const {
         if(!isNone && !val.isNone) return this.val == val.val;
         else if(isNone && val.isNone) return true;
         else return false;
     }
 
     /// check if equals Some!T
-    bool opEquals(SomeType!T value) const {
+    bool opEquals(const SomeType!T value) const {
         if(isNone) return false;
         else return this.val == value;
     }
@@ -171,26 +171,26 @@ struct Result(V, E) {
         return this.err;
     }
 
-    auto unwrap() @safe {
+    auto unwrap() {
         assert(!this.isErr, this.err.toString);
         return this.value;
     }
 
     /// check if equals another result
-    bool opEquals(Result!(V, E) val) const {
+    bool opEquals(const Result!(V, E) val) const {
         if(isErr && val.isErr) return this.err == err;
         else if(!isErr && !val.isErr) return this.value == val.value;
         else return false;
     }
 
     /// check if equals Ok!T
-    bool opEquals(OkType!V val) const {
+    bool opEquals(const OkType!V val) const {
         if(isErr) return false;
         else return this.value == val;
     }
 
     /// check if equals None
-    bool opEquals(ErrType!E err) const
+    bool opEquals(const ErrType!E err) const
     {
         if(isErr) return this.err == err;
         else return false;
@@ -214,7 +214,7 @@ static assert(!isResult!(string));
 template map(alias fun) {
     auto map(T)(T val) {
         static if(isOption!T) {
-            alias rt = ReturnType!(fun!T);
+            alias rt = ReturnType!(fun!(OptionValueType!T));
             Option!rt ret;
             if(val.isNone) {
                 ret = None;

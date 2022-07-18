@@ -23,11 +23,21 @@ struct ColumnFamily {
         this.cf = cf;
     }
 
-    Iterator iter(ReadOptions * opts = null) {
-        return Iterator(this.db, &this, opts ? opts : &this.db.readOptions);
+    Iterator iter() {
+        return Iterator(this.db, &this, this.db.readOptions);
     }
 
-    void withIter(void delegate(ref Iterator) dg, ReadOptions * opts = null) {
+    Iterator iter(ReadOptions opts) {
+        return Iterator(this.db, &this, opts);
+    }
+
+    void withIter(void delegate(ref Iterator) dg) {
+        Iterator iter = this.iter();
+        scope (exit) destroy(iter);
+        dg(iter);
+    }
+
+    void withIter(void delegate(ref Iterator) dg, ReadOptions opts) {
         Iterator iter = this.iter(opts);
         scope (exit) destroy(iter);
         dg(iter);
@@ -113,7 +123,7 @@ unittest {
     ];
     {
         // Create the database (if it does not exist)
-        auto db = RocksDB(opts, "test");
+        auto db = RocksDB(opts, "/tmp/test_rocksdb_cf");
 
         // create a bunch of column families
         foreach (cf; columnFamilies) {
@@ -122,10 +132,10 @@ unittest {
             }
         }
     }
-    auto db = RocksDB(opts, "test");
+    auto db = RocksDB(opts, "/tmp/test_rocksdb_cf");
 
     // Test column family listing
-    assert(RocksDB.listColumnFamilies(opts, "test").length == columnFamilies.length + 1);
+    assert(RocksDB.listColumnFamilies(opts, "/tmp/test_rocksdb_cf").length == columnFamilies.length + 1);
 
     void testColumnFamily(ref ColumnFamily cf, int times) {
         for (int i = 0; i < times; i++) {
@@ -149,4 +159,6 @@ unittest {
         writefln("  %s", name);
         testColumnFamily(cf, 1000);
     }
+    import std.file;
+    rmdirRecurse("/tmp/test_rocksdb_cf");
 }

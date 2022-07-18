@@ -2,10 +2,9 @@ module libmucor.invertedindex.record;
 
 import std.traits;
 import std.typecons : tuple;
-import std.algorithm : map;
+import std.algorithm : std_map = map;
 
 import libmucor.hts_endian;
-import libmucor.spookyhash;
 import option;
 
 import drocks.database;
@@ -14,12 +13,28 @@ import drocks.env;
 import drocks.options;
 
 import mir.bignum.integer;
-import mir.ion.value;
 import mir.ser.ion;
 import core.stdc.stdlib : free;
 
 alias uint128 = BigInt!2;
 alias uint256 = BigInt!4;
+
+size_t toHash(uint128 x) nothrow @safe
+{
+    ulong p = 0x5555555555555555; // pattern of alternating 0 and 1
+    ulong c = 17316035218449499591; // random uneven integer constant; 
+    ulong tmp = p * (x.data[0] ^ (x.data[0] >> 32));
+    auto hash = c * (tmp ^ (tmp >> 32));
+    return hash ^ (x.data[1] + c);
+}
+
+size_t toHash(uint256 x) nothrow @safe
+{
+    auto hi = uint128(x.data[0..2]);
+    auto lo = uint128(x.data[2..4]);
+
+    return uint128([hi.toHash, lo.toHash]).toHash;
+}
 
 struct RecordStore(K, V) {
     ColumnFamily * family;
@@ -28,9 +43,10 @@ struct RecordStore(K, V) {
         this.family = family;
     }
 
-    auto opIndex(K key)
+    Result!(Option!(V), string) opIndex(K key)
     {
-        return deserialize!V((*this.family)[serialize(key)].unwrap.unwrap);
+        alias innerFun = (Option!(ubyte[]) x) => x.map!(y => deserialize!V(y));
+        return (*this.family)[serialize(key)].map!(x => innerFun(x));
     }
 
     auto opIndexAssign(V value, K key)
@@ -41,20 +57,20 @@ struct RecordStore(K, V) {
     static if(isArray!V && !isSomeString!V) {
         auto opIndexOpAssign(string op: "~")(ForeachType!V value, K key)
         {
-            return (*this.family)[serialize(key)] ~= serialize(value);
+            this.family.opIndexOpAssign!op(serialize(value), serialize(key));
         }
     }
 
     auto byKeyValue() {
         auto r = this.family.iter;
-        return r.map!(x => tuple(deserialize!K(x[0]), deserialize!V(x[0])));
+        return r.std_map!(x => tuple(deserialize!(K,true)(x[0]), deserialize!(V,true)(x[1])));
     }
 }
 
 alias Hash2IonStore = RecordStore!(uint128, immutable(ubyte)[]);
 alias String2HashStore = RecordStore!(const(char)[], uint128);
 alias Long2HashStore = RecordStore!(long, uint128);
-alias Float2HashStore = RecordStore!(float, uint128);
+alias Float2HashStore = RecordStore!(double, uint128);
 alias KVIndex = RecordStore!(uint256, uint128[]);
 
 alias IonData = immutable(ubyte)[];
@@ -125,14 +141,13 @@ T deserialize(T, bool useGC = false)(ubyte[] val)
             le_to_u64(val.ptr + 8),
             le_to_u64(val.ptr + 16),
             le_to_u64(val.ptr + 24)]);
-    } else static if(isArray!T){
-        alias E = ForeachType!T;
-        ret.length = val.length / E.sizeof;
-
-        for(auto i = 0; i < val.length; i += E.sizeof){
-            ret ~= deserialize!E(val[i .. i + E.sizeof]);
+    } else static if(is(T == uint128[])){
+        ret.length = val.length / 16;
+        auto p = val.ptr;
+        for(auto i = 0; i < ret.length; i++){
+            ret[i] = uint128([le_to_u64(p), le_to_u64(p + 8)]);
+            p += 16;
         }
-
     } else static assert(0);
 
     if(!useGC) free(val.ptr);
@@ -168,7 +183,9 @@ unittest {
     import std.datetime.stopwatch : benchmark;
     import drocks.env;
     import drocks.options;
+    import drocks.merge;
     import mir.ion.conv;
+    import libmucor.invertedindex.hash;
 
     writefln("Testing Data stores");
 
@@ -182,11 +199,13 @@ unittest {
     opts.createIfMissing = true;
     opts.errorIfExists = false;
     opts.compression = CompressionType.None;
+    opts.setMergeOperator(createAppendMergeOperator);
     opts.env = env;
     import std.file;
     
     auto db = RocksDB(opts, "/tmp/test_store");
     auto records = Hash2IonStore(db.createColumnFamily("records").unwrap);
+    auto idx = KVIndex(db.createColumnFamily("idx").unwrap);
 
     // Test string putting and getting
     auto h1 = uint128.fromHexString("c688402c66d84855a3a0ecb87240fc09");
@@ -197,236 +216,17 @@ unittest {
     records[h2] =`{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`.text2ion;
     records[h3] =`{key1:test3,key3:[1]}`.text2ion;
 
-    assert(records[h1].ion2text == `{key1:test,key2:1.2,key3:[1,2],key4:"test"}`);
-    assert(records[h2].ion2text == `{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`);
-    assert(records[h3].ion2text == `{key1:test3,key3:[1]}`);
+    assert(records[h1].unwrap.unwrap.ion2text == `{key1:test,key2:1.2,key3:[1,2],key4:"test"}`);
+    assert(records[h2].unwrap.unwrap.ion2text == `{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`);
+    assert(records[h3].unwrap.unwrap.ion2text == `{key1:test3,key3:[1]}`);
+    idx[combineHash(getKeyHash("key1"), getValueHash("test"))] ~= h1;
+    idx[combineHash(getKeyHash("key1"), getValueHash("test2"))] ~= h2;
+    idx[combineHash(getKeyHash("key1"), getValueHash("test3"))] ~= h3;
 
+    assert(idx[combineHash(getKeyHash("key1"), getValueHash("test"))].unwrap.unwrap == [h1]);
+    assert(idx[combineHash(getKeyHash("key1"), getValueHash("test2"))].unwrap.unwrap == [h2]);
+    assert(idx[combineHash(getKeyHash("key1"), getValueHash("test3"))].unwrap.unwrap == [h3]);
+
+    import std.file;
     rmdirRecurse("/tmp/test_store");
-}
-
-uint128 getKeyHash(const(char)[] key)
-{
-    uint128 ret;
-    ret.data[0] = SEED2;
-    ret.data[1] = SEED4;
-    SpookyHash.Hash128(key.ptr, key.length, &ret.data[0], &ret.data[1]);
-    return ret;
-}
-
-enum SEED1 = 0x48e9a84eeeb9f629;
-enum SEED2 = 0x2e1869d4e0b37fcb;
-enum SEED3 = 0xb5b35cb029261cef;
-enum SEED4 = 0x34095e180ababeec;
-uint128 getValueHash(T)(T val)
-{
-    static if(isBoolean!T) {
-        uint128 ret;
-        auto v = cast(ulong) x;
-        ret.data[0] = SEED1;
-        ret.data[1] = SEED2;
-        SpookyHash.Hash128(&v, 8, &ret.data[0], &ret.data[1]);
-        return ret;
-    } else static if(isIntegral!T) {
-        uint128 ret;
-        auto v = cast(ulong) val;
-        ret.data[0] = SEED2;
-        ret.data[1] = SEED3;
-        SpookyHash.Hash128(&v, 8, &ret.data[0], &ret.data[1]);
-        return ret;
-    } else static if(isFloatingPoint!T) {
-        uint128 ret;
-        ret.data[0] = SEED1;
-        ret.data[1] = SEED3;
-        SpookyHash.Hash128(&val, T.sizeof, &ret.data[0], &ret.data[1]);
-        return ret;
-    } else static if(isSomeString!T) {
-        uint128 ret;
-        ret.data[0] = SEED1;
-        ret.data[1] = SEED4;
-        SpookyHash.Hash128(val.ptr, val.length, &ret.data[0], &ret.data[1]);
-        return ret;
-    } else static assert(0);
-}
-
-uint256 combineHash(uint128 a, uint128 b)
-{
-    uint256 v;
-    v.data[0..2] = a.data[];
-    v.data[2..4] = b.data[];
-    return v;
-}
-
-struct InvertedIndexStore {
-    RocksDB db;
-    Hash2IonStore records;
-    String2HashStore keys;
-    String2HashStore strings;
-    Long2HashStore longs;
-    Float2HashStore floats;
-    KVIndex idx;
-
-    this(string dbfn) {
-        Env env;
-        env.initialize;
-        env.backgroundThreads = 2;
-        env.highPriorityBackgroundThreads = 1;
-
-        RocksDBOptions opts;
-        opts.initialize;
-        opts.createIfMissing = true;
-        opts.errorIfExists = false;
-        opts.compression = CompressionType.None;
-        opts.env = env;
-        this.db = RocksDB(opts, "/tmp/test_store");
-        auto cf = "records" in this.db.columnFamilies;
-        if(cf) {
-            this.records = Hash2IonStore(&this.db.columnFamilies["records"]);
-            this.keys = String2HashStore(&this.db.columnFamilies["keys"]);
-            this.strings = String2HashStore(&this.db.columnFamilies["strings"]);
-            this.longs = Long2HashStore(&this.db.columnFamilies["longs"]);
-            this.floats = Float2HashStore(&this.db.columnFamilies["floats"]);
-            this.idx = KVIndex(&this.db.columnFamilies["idx"]);
-        } else {
-            this.records = Hash2IonStore(this.db.createColumnFamily("records").unwrap);
-            this.keys = String2HashStore(this.db.createColumnFamily("keys").unwrap);
-            this.strings = String2HashStore(this.db.createColumnFamily("strings").unwrap);
-            this.longs = Long2HashStore(this.db.createColumnFamily("longs").unwrap);
-            this.floats = Float2HashStore(this.db.createColumnFamily("floats").unwrap);
-            this.idx = KVIndex(this.db.createColumnFamily("idx").unwrap);
-        }
-    }
-
-    void insert(ref IonStructWithSymbols data) {
-        IonInt hashValue; 
-        auto err = data["checksum"].get(hashValue);
-        assert(err == IonErrorCode.none);
-
-        uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
-
-        this.records[hash] = serializeIon(data);
-
-        foreach (key,value; data)
-        {
-
-        }
-    }
-
-    void insertIonValue(const(char)[] key, IonDescribedValue value, const(char[])[] symbolTable, uint128 checksum) {
-        if(key == "checksum") return;
-        final switch(value.descriptor.type) {
-            case IonTypeCode.null_:
-                return;
-            case IonTypeCode.bool_:
-                debug assert(0, "We don't handle bool values yet");
-                else return;
-            case IonTypeCode.uInt:
-                IonInt val;
-                auto err = value.get(val);
-                assert(err == IonErrorCode.none);
-
-                auto l = val.get!long;
-                auto vh = getValueHash(l);
-                auto kh = getKeyHash(key);
-
-                this.longs[l] = vh;
-                this.idx[combineHash(kh, vh)] ~= checksum;
-                this.keys[key] = kh;
-                return;
-
-            case IonTypeCode.nInt:
-                IonNInt val;
-                auto err = value.get(val);
-                assert(err == IonErrorCode.none);
-
-                auto l = val.get!long;
-                auto vh = getValueHash(l);
-                auto kh = getKeyHash(key);
-
-                this.longs[l] = vh;
-                this.idx[combineHash(kh, vh)] ~= checksum;
-                this.keys[key] = kh;
-                return;
-
-            case IonTypeCode.float_:
-                IonFloat val;
-                auto err = value.get(val);
-                assert(err == IonErrorCode.none);
-
-                auto f = val.get!float;
-                auto vh = getValueHash(f);
-                auto kh = getKeyHash(key);
-
-                this.floats[f] = vh;
-                this.idx[combineHash(kh, vh)] ~= checksum;
-                this.keys[key] = kh;
-                return;
-            case IonTypeCode.decimal:
-                debug assert(0, "We don't handle ion decimal values");
-                else return;
-            case IonTypeCode.symbol:
-                IonSymbolID val;
-                auto err = value.get(val);
-                assert(err == IonErrorCode.none);
-
-                auto i = val.get;
-                auto s = symbolTable[i];
-                auto vh = getValueHash(s);
-                auto kh = getKeyHash(key);
-
-                this.strings[s] = vh;
-                this.idx[combineHash(kh, vh)] ~= checksum;
-                this.keys[key] = kh;
-                return;
-            case IonTypeCode.string:
-                const(char)[] val;
-                auto err = value.get(val);
-                assert(err == IonErrorCode.none);
-
-                auto vh = getValueHash(val);
-                auto kh = getKeyHash(key);
-
-                this.strings[val] = vh;
-                this.idx[combineHash(kh, vh)] ~= checksum;
-                this.keys[key] = kh;
-                return;
-            case IonTypeCode.clob:
-                debug assert(0, "We don't handle ion clob values");
-                else return;
-            case IonTypeCode.blob:
-                debug assert(0, "We don't handle ion blob values");
-                else return;
-            case IonTypeCode.timestamp:
-                debug assert(0, "We don't handle ion timestamp values");
-                else return;
-            case IonTypeCode.list:
-                IonList vals;
-                auto err = value.get(vals);
-                assert(err == IonErrorCode.none);
-
-                foreach (val; vals)
-                {
-                    this.insertIonValue(key, val, symbolTable, checksum);
-                }
-                return;
-            case IonTypeCode.sexp:
-                debug assert(0, "We don't handle ion sexp values");
-                else return;
-            case IonTypeCode.struct_:
-                IonStruct obj;
-                IonStructWithSymbols objWSym;
-                auto err = value.get(obj);
-                assert(err == IonErrorCode.none);
-
-                objWSym = obj.withSymbols(symbolTable);
-
-                foreach (k, v; objWSym)
-                {
-                    this.insertIonValue(key ~ "/" ~ k, v, symbolTable, checksum);
-                }
-                return;
-            case IonTypeCode.annotations:
-                debug assert(0, "We don't handle ion annotations");
-                else return;
-        }
-    }
 }

@@ -1,12 +1,18 @@
 module drocks.env;
 
 import rocksdb;
+import drocks.memory;
 
+alias EnvPtr = SafePtr!(rocksdb_env_t, rocksdb_env_destroy);
 struct Env {
-    rocksdb_env_t* env;
+    EnvPtr env;
 
     void initialize() {
-        this.env = rocksdb_create_default_env();
+        this.env = EnvPtr(rocksdb_create_default_env());
+    }
+
+    this(this) { 
+        this.env = env;
     }
 
     this(rocksdb_env_t* env) {
@@ -15,10 +21,6 @@ struct Env {
 
     static Env createMemoryEnv() {
         return Env(rocksdb_create_mem_env());
-    }
-
-    ~this() {
-        if(env) rocksdb_env_destroy(this.env);
     }
 
     void joinAll() {

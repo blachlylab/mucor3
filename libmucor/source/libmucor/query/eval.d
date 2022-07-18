@@ -15,9 +15,10 @@ import libmucor.query.util;
 import libmucor.query.tokens;
 import libmucor.khashl;
 import libmucor.invertedindex;
+import libmucor.invertedindex.record;
 import libmucor.error;
 
-khashlSet!(ulong) * evaluateQuery(QueryExpr * queryExpr, InvertedIndex* idx, string lastKey = "")
+khashlSet!(uint128) * evaluateQuery(QueryExpr * queryExpr, ref InvertedIndex idx, string lastKey = "")
 {
     auto matchBasic = (BasicQueryExpr x, string lk) => x.match!(
         (Value x) {
@@ -42,7 +43,7 @@ khashlSet!(ulong) * evaluateQuery(QueryExpr * queryExpr, InvertedIndex* idx, str
             final switch (x.op)
             {
                 case KeyOp.Exists:
-                    return new khashlSet!(ulong)(); /// TODO: complete
+                    return new khashlSet!(uint128)(); /// TODO: complete
             }
         }
     );
@@ -101,7 +102,7 @@ khashlSet!(const(char)[]) * getQueryFields(QueryExpr * queryExpr, khashlSet!(con
     );
 }
 
-khashlSet!(ulong) * queryValue(const(char)[] key, Value value, InvertedIndex* idx)
+khashlSet!(uint128) * queryValue(const(char)[] key, Value value, ref InvertedIndex idx)
 {
 
     return (*value.expr).match!((bool x) => idx.query(key, x),
@@ -111,7 +112,7 @@ khashlSet!(ulong) * queryValue(const(char)[] key, Value value, InvertedIndex* id
             (LongRange x) => idx.queryRange(key, x[0], x[1]),);
 }
 
-khashlSet!(ulong) * queryOpValue(const(char)[] key, Value value, InvertedIndex* idx, string op)
+khashlSet!(uint128) * queryOpValue(const(char)[] key, Value value, ref InvertedIndex idx, string op)
 {
     alias f = tryMatch!((long x) { return idx.queryOp!long(key, x, op); }, (double x) {
         return idx.queryOp!double(key, x, op);
@@ -119,17 +120,17 @@ khashlSet!(ulong) * queryOpValue(const(char)[] key, Value value, InvertedIndex* 
     return f(*value.expr);
 }
 
-khashlSet!(ulong) * unionIds(khashlSet!(ulong) * a, khashlSet!(ulong) * b){
+khashlSet!(uint128) * unionIds(khashlSet!(uint128) * a, khashlSet!(uint128) * b){
     (*a) |= (*b);
     return a;
 }
 
-khashlSet!(ulong) * intersectIds(khashlSet!(ulong) * a, khashlSet!(ulong) * b){
+khashlSet!(uint128) * intersectIds(khashlSet!(uint128) * a, khashlSet!(uint128) * b){
     (*a) &= (*b);
     return a;
 }
 
-khashlSet!(ulong) * negateIds(khashlSet!(ulong) * a, khashlSet!(ulong) * b){
+khashlSet!(uint128) * negateIds(khashlSet!(uint128) * a, khashlSet!(uint128) * b){
     (*a) |= (*b);
     return a;
 }

@@ -5,6 +5,7 @@ import rocksdb;
 import drocks.options;
 import drocks.columnfamily;
 import drocks.iter;
+import drocks.memory;
 
 import option;
 
@@ -28,7 +29,7 @@ struct RocksDB {
 
     rocksdb_t* db;
 
-    RocksDBOptions * opts;
+    RocksDBOptions opts;
     WriteOptions writeOptions;
     ReadOptions readOptions;
 
@@ -36,9 +37,9 @@ struct RocksDB {
 
     @disable this(this);
 
-    this(ref RocksDBOptions opts, string path, RocksDBOptions[string] columnFamilies = null) {
+    this(RocksDBOptions opts, string path, RocksDBOptions[string] columnFamilies = null) {
         char* err = null;
-        this.opts = &opts;
+        this.opts = opts;
 
         string[] existingColumnFamilies;
 
@@ -103,11 +104,25 @@ struct RocksDB {
         }
     }
 
-    RocksResult!(ColumnFamily *) createColumnFamily(string name, RocksDBOptions * opts = null) {
+    RocksResult!(ColumnFamily *) createColumnFamily(string name) {
         RocksResult!(ColumnFamily *) ret;
         char* err = null;
 
-        auto cfh = rocksdb_create_column_family(this.db, (opts ? opts : this.opts).opts, toStringz(name), &err);
+        auto cfh = rocksdb_create_column_family(this.db, this.opts.opts, toStringz(name), &err);
+        if(err) {
+            ret = Err(format("Error: %s", fromStringz(err)));
+        } else {
+            this.columnFamilies[name] = ColumnFamily(this, name, cfh);
+            ret = Ok(&this.columnFamilies[name]);
+        }
+
+        return ret;
+    }
+    RocksResult!(ColumnFamily*) createColumnFamily(string name, RocksDBOptions opts) {
+        RocksResult!(ColumnFamily*) ret;
+        char* err = null;
+
+        auto cfh = rocksdb_create_column_family(this.db, opts.opts, toStringz(name), &err);
         if(err) {
             ret = Err(format("Error: %s", fromStringz(err)));
         } else {
@@ -118,7 +133,7 @@ struct RocksDB {
         return ret;
     }
 
-    static string[] listColumnFamilies(ref RocksDBOptions opts, string path) {
+    static string[] listColumnFamilies(RocksDBOptions opts, string path) {
         char* err = null;
         size_t numColumnFamilies;
 
@@ -391,11 +406,15 @@ struct RocksDB {
     //     err.checkErr();
     // }
 
-    Iterator iter(ReadOptions * opts = null) {
-        return Iterator(&this, opts ? opts : &this.readOptions);
+    Iterator iter() {
+        return Iterator(&this, this.readOptions);
     }
 
-    void withIter(void delegate(ref Iterator) dg, ReadOptions * opts = null) {
+    Iterator iter(ReadOptions opts) {
+        return Iterator(&this, opts);
+    }
+
+    void withIter(void delegate(ref Iterator) dg, ReadOptions opts) {
         Iterator iter = this.iter(opts);
         scope (exit) destroy(iter);
         dg(iter);
@@ -428,7 +447,7 @@ unittest {
     opts.compression = CompressionType.None;
     opts.env = env;
 
-    auto db = RocksDB(opts, "test");
+    auto db = RocksDB(opts, "/tmp/test_rocksdb");
 
     // Test string putting and getting
     db[cast(ubyte[])"key"] = cast(ubyte[])"value";
@@ -503,4 +522,7 @@ unittest {
     }
     assert(found);
     assert(keyCount == 100001);
+
+    import std.file;
+    rmdirRecurse("/tmp/test_rocksdb");
 }

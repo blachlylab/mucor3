@@ -126,7 +126,7 @@ unittest {
     opts.env = env;
     opts.setMergeOperator(createAppendMergeOperator());
 
-    auto db = RocksDB(opts, "merge");
+    auto db = RocksDB(opts, "/tmp/test_rocksdb_merge");
 
     // Test string putting and getting
     db[cast(ubyte[])"key"] = cast(ubyte[])"value";
@@ -134,7 +134,6 @@ unittest {
     db[cast(ubyte[])"key"] = cast(ubyte[])"value2";
     assert(db[cast(ubyte[]) "key"].unwrap.unwrap == cast(ubyte[]) "value2");
 
-    db.remove(cast(ubyte[])"key2");
     db[cast(ubyte[])"key"] ~= cast(ubyte[])"value3";
     db[cast(ubyte[])"key"] ~= cast(ubyte[])"value4";
 
@@ -143,4 +142,7 @@ unittest {
     
     assert(db[cast(ubyte[]) "key"].unwrap.unwrap == cast(ubyte[]) "value2value3value4");
     assert(db[cast(ubyte[]) "key2"].unwrap.unwrap == cast(ubyte[]) "value3value4");
+
+    import std.file;
+    rmdirRecurse("/tmp/test_rocksdb_merge");
 }

@@ -24,11 +24,12 @@ module libmucor.khashl;
 */
 
 import std.traits : isNumeric, isSomeString, isSigned, hasMember, isArray;
+import std.range : ElementType;
 import core.stdc.stdint; // uint32_t, etc.
 import core.memory; // GC
 
 import asdf;
-import libmucor.wideint;
+import libmucor.invertedindex.record : uint256, uint128, toHash;
 import libmucor.jsonlops.jsonvalue : JSONValue;
 import std.sumtype : match;
 
@@ -376,6 +377,19 @@ pragma(inline, true):
                 static assert(0, "op not implemented");
             }
         }
+
+        auto opEquals(const(kh_t) other) const {
+            foreach (key; this.byKey)
+            {
+                if(!(key in other)) return false;
+            }
+
+            foreach (key; other.byKey)
+            {
+                if(!(key in this)) return false;
+            }
+            return true;
+        }
     }
 
     /// Return an InputRange over the keys.
@@ -695,6 +709,19 @@ template kh_hash(T)
             return cast(khint_t) k;
         }
 
+        auto kh_hash_func(T)(const(T) key) if (is(T == uint256))
+        {
+            ulong k = key.toHash;
+            k = ~k + (k << 21);
+            k = k ^ k >> 24;
+            k = (k + (k << 3)) + (k << 8);
+            k = k ^ k >> 14;
+            k = (k + (k << 2)) + (k << 4);
+            k = k ^ k >> 28;
+            k = k + (k << 31);
+            return cast(khint_t) k;
+        }
+
         khint_t kh_hash_str(const(char)* s)
         {
             khint_t h = cast(khint_t)*s;
@@ -737,6 +764,15 @@ template kh_hash(T)
     } // end pragma(inline, true)
 } // end template kh_hash
 
+auto collect(R)(R range) {
+    khashlSet!(ElementType!R) * set = new khashlSet!(ElementType!R);
+    foreach (e; range)
+    {
+        set.insert(e);
+    }
+    return set;
+}
+
 /// In order to take advantage of cached-hashes
 /// our equality function will actually take the bucket type as opposed to just the key.
 /// This allows it to access both the store hash and the key itself.
@@ -761,6 +797,14 @@ template kh_equal(T, bool cached)
 
         bool kh_hash_equal(T)(const(T) a, const(T) b)
                 if (is(typeof(__traits(getMember, T, "key")) == uint128))
+        {
+            /// There is no benefit to caching hashes for integer keys (I think)
+            static assert(cached == false, "No reason to cache hash for integer keys");
+            return (a.key == b.key);
+        }
+
+        bool kh_hash_equal(T)(const(T) a, const(T) b)
+                if (is(typeof(__traits(getMember, T, "key")) == uint256))
         {
             /// There is no benefit to caching hashes for integer keys (I think)
             static assert(cached == false, "No reason to cache hash for integer keys");

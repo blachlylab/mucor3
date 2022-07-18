@@ -8,30 +8,23 @@ import std.string : fromStringz, toStringz;
 import drocks.options : ReadOptions;
 import drocks.database : RocksDB;
 import drocks.columnfamily : ColumnFamily;
-
+import drocks.memory;
 
 struct Iterator {
-    rocksdb_iterator_t* iter;
+    SafePtr!(rocksdb_iterator_t, rocksdb_iter_destroy) iter;
 
-    @disable this(this);
-
-    this(ref return scope Iterator rhs) {
-        this.iter = rhs.iter;
-        rhs.iter = null;
+    this(this) {
+        this.iter = iter;
     }
 
-    this(RocksDB * db, ReadOptions * opts) {
+    this(RocksDB * db, ReadOptions opts) {
         this.iter = rocksdb_create_iterator(db.db, opts.opts);
         this.seekToFirst();
     }
 
-    this(RocksDB * db, ColumnFamily * family, ReadOptions * opts) {
+    this(RocksDB * db, ColumnFamily * family, ReadOptions opts) {
         this.iter = rocksdb_create_iterator_cf(db.db, opts.opts, family.cf);
         this.seekToFirst();
-    }
-
-    ~this() {
-        if(iter) rocksdb_iter_destroy(this.iter);
     }
 
     void seekToFirst() {

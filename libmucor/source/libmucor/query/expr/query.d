@@ -132,7 +132,7 @@ struct Query {
         );
     }
 
-    auto evaluate(InvertedIndex * idx) {
+    auto evaluate(ref InvertedIndex idx) {
         return evaluateQuery(this.expr, idx);
     }
 
