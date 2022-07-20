@@ -10,7 +10,8 @@ import libmucor.atomize.fmt;
 import libmucor.atomize.info;
 import libmucor.atomize.ann;
 import libmucor.atomize.header;
-import libmucor.atomize.serializer;
+import libmucor.atomize.serde.ser;
+import libmucor.atomize.serde;
 
 struct VcfRequiredFields(bool singleSample, bool singleAlt) {
 
@@ -46,22 +47,22 @@ struct VcfRequiredFields(bool singleSample, bool singleAlt) {
 
     BigInt!2 checksum;
     
-    void serialize(S)(ref S serializer) {
-        serializer.putCompiletimeKey!"CHROM";
-        serializer.putSymbol(this.chrom);
+    void serialize(ref VcfRecordSerializer serializer) {
+        serializer.putSharedKey("CHROM");
+        serializer.putValue(this.chrom);
 
-        serializer.putCompiletimeKey!"POS";
+        serializer.putSharedKey("POS");
         serializer.putValue(pos);
 
         if(this.id != ".") {
-            serializer.putCompiletimeKey!"ID";
+            serializer.putSharedKey("ID");
             serializer.putValue(id);
         }
 
-        serializer.putCompiletimeKey!"REF";
+        serializer.putSharedKey("REF");
         serializer.putSymbol(this.ref_);
 
-        serializer.putCompiletimeKey!"ALT";
+        serializer.putSharedKey("ALT");
         static if(singleAlt){
             serializer.putSymbol(this.alt);
         } else {
@@ -74,21 +75,21 @@ struct VcfRequiredFields(bool singleSample, bool singleAlt) {
         }
         
         if(!isNaN(this.qual)) {
-            serializer.putCompiletimeKey!"QUAL";
+            serializer.putSharedKey("QUAL");
             serializer.putValue(qual);
         }
 
-        serializer.putCompiletimeKey!"FILTER";
+        serializer.putSharedKey("FILTER");
         auto l2 = serializer.listBegin;
         foreach (ref string key; filter)
         {
-            serializer.putSymbol(key);    
+            serializer.putSharedSymbol(key);    
         }
         serializer.listEnd(l2);
 
         static if(singleSample){
-            serializer.putCompiletimeKey!"sample";
-            serializer.putSymbol(this.sample);
+            serializer.putSharedKey("sample");
+            serializer.putSharedSymbol(this.sample);
         }
     }
 }
@@ -126,37 +127,22 @@ struct VcfRec {
         this.fmt.parse(rec);
     }
 
-    void serialize(S)(ref S serializer) {
+    void serialize(ref VcfRecordSerializer serializer) {
         auto s = serializer.structBegin;
         this.required.serialize(serializer);
         
-        serializer.putCompiletimeKey!"INFO";
+        serializer.putSharedKey("INFO");
         info.serialize(serializer);
 
-        serializer.putCompiletimeKey!"FORMAT";
+        serializer.putSharedKey("FORMAT");
         fmt.serialize(serializer);
     
-        auto last = serializer.data[s .. $];
-        serializer.putCompiletimeKey!"checksum";
+        auto last = serializer.serializer.data[s .. $];
+        serializer.putSharedKey("checksum");
 
-        serializeValue(serializer, hashIon(last));
+        serializeValue(serializer.serializer, hashIon(last));
         serializer.structEnd(s);
     }
-}
-
-unittest {
-    import mir.ser.ion;
-    import mir.ion.conv;
-    import std.stdio;
-
-    VcfRec rec;
-    rec.chrom = "chr1";
-    rec.pos = 1;
-    rec.id = ".";
-    rec.qual = 1.0;
-    rec.filter = ["Test", "notpass"];
-
-    writeln(serializeIon(rec).ion2text);
 }
 
 struct VcfRecSingleSample {
@@ -188,20 +174,20 @@ struct VcfRecSingleSample {
         this.hdrInfo = rec.hdrInfo;
     }
 
-    void serialize(S)(ref S serializer) {
+    void serialize(ref VcfRecordSerializer serializer) {
         auto s = serializer.structBegin;
         this.required.serialize(serializer);
         
-        serializer.putCompiletimeKey!"INFO";
+        serializer.putSharedKey("INFO");
         info.serialize(serializer);
 
-        serializer.putCompiletimeKey!"FORMAT";
+        serializer.putSharedKey("FORMAT");
         fmt.serialize(serializer);
         
-        auto last = serializer.data[s .. $];
-        serializer.putCompiletimeKey!"checksum";
+        auto last = serializer.serializer.data[s .. $];
+        serializer.putSharedKey("checksum");
 
-        serializeValue(serializer, hashIon(last));
+        serializeValue(serializer.serializer, hashIon(last));
         serializer.structEnd(s);
     }
 }
@@ -236,31 +222,31 @@ struct VcfRecSingleAlt {
         this.hdrInfo = rec.hdrInfo;
     }
 
-    void serialize(S)(ref S serializer) {
+    void serialize(ref VcfRecordSerializer serializer) {
         auto s = serializer.structBegin;
         this.required.serialize(serializer);
         
-        serializer.putCompiletimeKey!"INFO";
+        serializer.putSharedKey("INFO");
         info.serialize(serializer);
 
-        serializer.putCompiletimeKey!"FORMAT";
+        serializer.putSharedKey("FORMAT");
         fmt.serialize(serializer);
 
-        auto last = serializer.data[s .. $];
-        serializer.putCompiletimeKey!"checksum";
+        auto last = serializer.serializer.data[s .. $];
+        serializer.putSharedKey("checksum");
 
-        serializeValue(serializer, hashIon(last));
+        serializeValue(serializer.serializer, hashIon(last));
         serializer.structEnd(s);
     }
 }
 
 unittest {
-    import mir.ser.ion;
-    import mir.ion.conv;
     import std.stdio;
+    import libmucor.atomize.serde;
 
     auto vcf = VCFReader("../test/data/vcf_file.vcf",-1, UnpackLevel.All);
 
+    auto hdrInfo = HeaderConfig(vcf.vcfhdr);
     auto rec = vcf.front;
 
     auto res1 = `{CHROM:'1',POS:3000149,REF:C,ALT:[T],QUAL:59.2,FILTER:[PASS],INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{A:{GT:"0/1",GQ:245},B:{GT:"0/1",GQ:245}},checksum:116702227157187429159733716411111476233}`;
@@ -272,18 +258,18 @@ unittest {
 
     ionRec.parse(rec);
     
-    assert(serializeIon(ionRec).ion2text == res1);
+    assert(serializeVcfToIon(ionRec, hdrInfo).vcfIonToText == res1);
 
     {
         auto ionRecSS1 = VcfRecSingleSample(ionRec, 0);
-        assert(serializeIon(ionRecSS1).ion2text == res2);
+        assert(serializeVcfToIon(ionRecSS1).vcfIonToText == res2);
         auto ionRecSS2 = VcfRecSingleSample(ionRec, 1);
-        assert(serializeIon(ionRecSS2).ion2text == res3);
+        assert(serializeVcfToIon(ionRecSS2).vcfIonToText == res3);
 
         auto ionRecSA1 = VcfRecSingleAlt(ionRecSS1, 0);
-        assert(serializeIon(ionRecSA1).ion2text == res4);
+        assert(serializeVcfToIon(ionRecSA1).vcfIonToText == res4);
         auto ionRecSA2 = VcfRecSingleAlt(ionRecSS2, 0);
-        assert(serializeIon(ionRecSA2).ion2text == res5);
+        assert(serializeVcfToIon(ionRecSA2).vcfIonToText == res5);
     }
 
     vcf.popFront;
@@ -300,23 +286,23 @@ unittest {
     
     rec = vcf.front;
     ionRec.parse(rec);
-    assert(serializeIon(ionRec).ion2text == res1);
+    assert(serializeVcfToIon(ionRec).vcfIonToText == res1);
 
     auto ionRecSS1 = VcfRecSingleSample(ionRec, 0);
-    assert(serializeIon(ionRecSS1).ion2text == res2);
+    assert(serializeVcfToIon(ionRecSS1).vcfIonToText == res2);
 
     auto ionRecSS2 = VcfRecSingleSample(ionRec, 1);
-    assert(serializeIon(ionRecSS2).ion2text == res3);
+    assert(serializeVcfToIon(ionRecSS2).vcfIonToText == res3);
 
     auto ionRecSA1 = VcfRecSingleAlt(ionRecSS1, 0);
-    assert(serializeIon(ionRecSA1).ion2text == res4);
+    assert(serializeVcfToIon(ionRecSA1).vcfIonToText == res4);
 
     auto ionRecSA2 = VcfRecSingleAlt(ionRecSS2, 0);
-    assert(serializeIon(ionRecSA2).ion2text == res5);
+    assert(serializeVcfToIon(ionRecSA2).vcfIonToText == res5);
 
     auto ionRecSA3 = VcfRecSingleAlt(ionRecSS1, 1);
-    assert(serializeIon(ionRecSA3).ion2text == res6);
+    assert(serializeVcfToIon(ionRecSA3).vcfIonToText == res6);
 
     auto ionRecSA4 = VcfRecSingleAlt(ionRecSS2, 1);
-    assert(serializeIon(ionRecSA4).ion2text == res7);
+    assert(serializeVcfToIon(ionRecSA4).vcfIonToText == res7);
 }

@@ -67,6 +67,7 @@ struct HeaderConfig
     bool[] isInfo;
     
     string[] samples;
+    string[] filters;
 
     this(VCFHeader header) {
         this.isAnn.length = header.hdr.n[HeaderDictTypes.Id];
@@ -83,6 +84,9 @@ struct HeaderConfig
         for (auto i = 0; i < header.hdr.nhrec; i++)
         {
             auto hrec = HeaderRecord(header.hdr.hrec[i]);
+            if(hrec.recType == HeaderRecordType.Filter){
+                this.filters ~= hrec.getID().idup;
+            }
             if(!(hrec.recType == HeaderRecordType.Info || hrec.recType == HeaderRecordType.Format)) continue;
             auto idx = hm[hrec.getID];
             switch(hrec.lenthType) {

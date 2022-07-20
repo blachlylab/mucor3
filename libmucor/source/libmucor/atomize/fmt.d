@@ -10,6 +10,7 @@ import dhtslib.vcf;
 import libmucor.khashl;
 import libmucor.atomize.field;
 import libmucor.atomize.header;
+import libmucor.atomize.serde.ser;
 
 struct FmtValues {
     @serdeIgnore
@@ -31,16 +32,16 @@ struct FmtValues {
         return fields[index];
     }
 
-    void serialize(S)(ref S serializer, const(HeaderConfig) * cfg, bool byAllele) {
+    void serialize(ref VcfRecordSerializer serializer, const(HeaderConfig) * cfg, bool byAllele) {
         if(this.isNull) return;
         auto s = serializer.structBegin;
         foreach (i,val; this.fields)
         {
             if(val.isNull) continue;
             if(byAllele)
-                serializer.putKey(cfg.fmts.byAllele.names[i]);
+                serializer.putSharedKey(cfg.fmts.byAllele.names[i]);
             else
-                serializer.putKey(cfg.fmts.other.names[i]);
+                serializer.putSharedKey(cfg.fmts.other.names[i]);
             val.serialize(serializer);
         }
         serializer.structEnd(s);
@@ -70,10 +71,10 @@ struct FmtSampleValues {
         this.other.reset;
     }
 
-    void serialize(S)(ref S serializer, const(HeaderConfig) * cfg) {
+    void serialize(ref VcfRecordSerializer serializer, const(HeaderConfig) * cfg) {
         auto state = serializer.structBegin;
         if(this.byAllele.map!(x => !x.isNull).any){
-            serializer.putKey("byAllele");
+            serializer.putSharedKey("byAllele");
             auto state2 = serializer.listBegin;
             foreach (i,v; this.byAllele)
             {
@@ -85,7 +86,7 @@ struct FmtSampleValues {
         foreach (i,val; this.other.fields)
         {
             if(val.isNull) continue;
-            serializer.putKey(cfg.fmts.other.names[i]);
+            serializer.putSharedKey(cfg.fmts.other.names[i]);
             val.serialize(serializer);
         }
         serializer.structEnd(state);
@@ -270,13 +271,13 @@ struct Fmt {
         }
     }
 
-    void serialize(S)(ref S serializer) {
+    void serialize(ref VcfRecordSerializer serializer) {
         auto state = serializer.structBegin;
         
         foreach (i,string key; cfg.samples)
         {
             if(this.bySample[i].isNull) continue;   
-            serializer.putKey(key);
+            serializer.putSharedKey(key);
             this.bySample[i].serialize(serializer, &cfg);
         }
         serializer.structEnd(state);
@@ -313,18 +314,18 @@ struct FmtSingleAlt {
         this.cfg = fmt.cfg;
     }
 
-    void serialize(S)(ref S serializer) {
+    void serialize(ref VcfRecordSerializer serializer) {
         auto state = serializer.structBegin;
         foreach (i,val; this.alleleValues.fields)
         {
             if(val.isNull) continue;
-            serializer.putKey(cfg.fmts.byAllele.names[i]);
+            serializer.putSharedKey(cfg.fmts.byAllele.names[i]);
             val.serialize(serializer);
         }
         foreach (i,val; this.other.fields)
         {
             if(val.isNull) continue;
-            serializer.putKey(cfg.fmts.other.names[i]);
+            serializer.putSharedKey(cfg.fmts.other.names[i]);
             val.serialize(serializer);
         }
         

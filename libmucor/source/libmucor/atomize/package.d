@@ -13,7 +13,7 @@ import dhtslib.coordinates;
 import htslib;
 import libmucor.atomize.record;
 import libmucor.atomize.header;
-import libmucor.atomize.serializer;
+import libmucor.atomize.serde.ser;
 
 import libmucor.khashl : khashl;
 import libmucor.jsonlops;
@@ -38,32 +38,28 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, ref Fi
     int output_count = 0;
     auto recIR = VcfRec(vcf.vcfhdr);
     // loop over records and parse
+    auto ser = VcfSerializer(output, recIR.hdrInfo, SerdeTarget.ion);
     if(multiSample && multiAllele) {
-        auto ser = VcfSerializer!VcfRec(SerdeTarget.ion);
         foreach (x; vcf)
         {
             recIR.parse(x);
             vcf_row_count++;
-            ser.put(recIR);
+            ser.putRecord(recIR);
             output_count++;
         }
-        output.rawWrite(ser.finalize);
     } else if(!multiSample && multiAllele) {
-        auto ser = VcfSerializer!VcfRecSingleSample(SerdeTarget.ion);
         foreach (x; vcf)
         {
             recIR.parse(x);
             vcf_row_count++;
             for(auto i = 0; i < recIR.hdrInfo.samples.length;i++) {
                 auto samIR = VcfRecSingleSample(recIR, i);
-                ser.put(samIR);
+                ser.putRecord(samIR);
                 output_count++;
             }
             
         }
-        output.rawWrite(ser.finalize);
     } else {
-        auto ser = VcfSerializer!VcfRecSingleAlt(SerdeTarget.ion);
         foreach (x; vcf)
         {
             recIR.parse(x);
@@ -72,13 +68,12 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, ref Fi
                 auto samIR = VcfRecSingleSample(recIR, i);
                 for(auto j = 0; j < samIR.alt.length; j++) {
                     auto aIR = VcfRecSingleAlt(samIR, j);
-                    ser.put(aIR);
+                    ser.putRecord(aIR);
                     output_count++;
                 }
             }
             
         }
-        output.rawWrite(ser.finalize);
     }
     if (vcf_row_count > 0)
     {
@@ -99,31 +94,20 @@ unittest {
     }
     import std.file : read;
     import mir.ion.conv;
-    writeln(ion2text((cast(ubyte[])read("/tmp/test.ion"))));
-}
-
-unittest {
+    import mir.ser.text;
+    import libmucor.atomize.serde.deser;
+    
+    auto f = File("/tmp/test.ion");
+    auto rdr = VcfIonDeserializer(f);
+    
+    foreach (rec; rdr)
     {
-        auto f = File("/tmp/test.ion", "wb");
-        parseVCF("../test/data/vcf_file.vcf", -1, true, true, f);
-    }
-    import std.file : read;
-    import mir.ion.conv;
-    import mir.ion.stream;
-    import mir.ion.value;
-    foreach (i,IonDescribedValue v; IonValueStream((cast(ubyte[])read("/tmp/test.ion"))))
-    {
-        writeln("{");
-        writeln(v.descriptor);
-        if(v.descriptor.type == IonTypeCode.annotations) {
-            IonAnnotations annotations;
-            IonDescribedValue wrapped;
-            v.get!IonAnnotationWrapper.unwrap(annotations, wrapped);
-            foreach(key; annotations) {
-                writeln(i[key]);
-            }
-            writeln(wrapped.descriptor);
+        auto r = rec.unwrap;
+        writeln(cast(string)r.ionStruct.data);
+        writeln(r);
+        foreach(k,v; r){
+            writeln(k,":", v);
         }
-        writeln("}");
+        writeln(vcfIonToText(r));    
     }
 }

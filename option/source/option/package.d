@@ -9,7 +9,7 @@ enum None = null;
 /// Indicate a some option
 /// dummy type
 struct SomeType(T) {
-    private T val;
+    T val;
     alias val this;
 }
 

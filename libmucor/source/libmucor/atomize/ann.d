@@ -16,8 +16,11 @@ import libmucor.jsonlops;
 import libmucor.error;
 import libmucor.option;
 import libmucor.atomize.util;
+import libmucor.atomize.serde;
+import libmucor.atomize.serde.ser;
 import mir.ser;
 import mir.ser.interfaces;
+import mir.serde : serdeGetSerializationKeysRecurse;
 
 /// Structured VCF String field 
 /// List of objects
@@ -290,92 +293,97 @@ struct Annotation {
             this.errors_warnings_info = Some(vals[0]);
     }
 
-    void serialize(S)(ref S serializer) {
+    void serialize(ref VcfRecordSerializer serializer) {
         auto s = serializer.structBegin;
         
-        serializer.putCompiletimeKey!"allele";
+        serializer.putSharedKey("allele");
         serializer.putSymbol(this.allele);
 
-        serializer.putCompiletimeKey!"effect";
-        serializeValue(serializer, effect);
-
-        serializer.putCompiletimeKey!"impact";
-        serializeValue(serializer, impact);
-
+        serializer.putSharedKey("effect");
+        auto l = serializer.listBegin;
+        foreach (e; effect)
+        {
+            serializer.putSharedSymbol(enumToString(e));    
+        }
+        serializer.listEnd(l);
         
+
+        serializer.putSharedKey("impact");
+        serializer.putSharedSymbol(enumToString(impact));
+
         if(!this.gene_name.isNone) {
-            serializer.putCompiletimeKey!"gene_name";
+            serializer.putSharedKey("gene_name");
             serializer.putSymbol(this.gene_name.unwrap);
         }
 
         if(!this.gene_id.isNone) {
-            serializer.putCompiletimeKey!"gene_id";
+            serializer.putSharedKey("gene_id");
             serializer.putSymbol(this.gene_id.unwrap);
         }
 
-        serializer.putCompiletimeKey!"feature_type";
+        serializer.putSharedKey("feature_type");
         serializer.putSymbol(this.feature_type);
 
-        serializer.putCompiletimeKey!"feature_id";
+        serializer.putSharedKey("feature_id");
         serializer.putValue(this.feature_id);
 
         if(!this.transcript_biotype.isNone) {
-            serializer.putCompiletimeKey!"transcript_biotype";
+            serializer.putSharedKey("transcript_biotype");
             serializer.putSymbol(this.transcript_biotype.unwrap);
         }
 
         if(!this.rank.isNone) {
-            serializer.putCompiletimeKey!"rank";
+            serializer.putSharedKey("rank");
             serializer.putValue(this.rank.unwrap);
         }
 
         if(!this.rtotal.isNone) {
-            serializer.putCompiletimeKey!"rtotal";
+            serializer.putSharedKey("rtotal");
             serializer.putValue(this.rtotal.unwrap);
         }
         
-        serializer.putCompiletimeKey!"hgvs_c";
+        serializer.putSharedKey("hgvs_c");
         serializer.putValue(this.hgvs_c);
 
         if(!this.hgvs_p.isNone) {
-            serializer.putCompiletimeKey!"hgvs_p";
+            serializer.putSharedKey("hgvs_p");
             serializer.putValue(this.hgvs_p.unwrap);
         }
 
         if(!this.cdna_position.isNone) {
-            serializer.putCompiletimeKey!"cdna_position";
+            serializer.putSharedKey("cdna_position");
             serializer.putValue(this.cdna_position.unwrap);
         }
         if(!this.cdna_length.isNone) {
-            serializer.putCompiletimeKey!"cdna_length";
+            serializer.putSharedKey("cdna_length");
             serializer.putValue(this.cdna_length.unwrap);
         }
         
         if(!this.cds_position.isNone) {
-            serializer.putCompiletimeKey!"cds_position";
+            serializer.putSharedKey("cds_position");
             serializer.putValue(this.cds_position.unwrap);
         }
         if(!this.cds_length.isNone) {
-            serializer.putCompiletimeKey!"cds_length";
+            serializer.putSharedKey("cds_length");
             serializer.putValue(this.cds_length.unwrap);
         }
 
         if(!this.protein_position.isNone) {
-            serializer.putCompiletimeKey!"protein_position";
+            serializer.putSharedKey("protein_position");
             serializer.putValue(this.protein_position.unwrap);
         }
         if(!this.protein_length.isNone) {
-            serializer.putCompiletimeKey!"protein_length";
+            serializer.putSharedKey("protein_length");
             serializer.putValue(this.protein_length.unwrap);
         }
 
         if(!this.distance_to_feature.isNone) {
-            serializer.putCompiletimeKey!"distance_to_feature";
+            serializer.putSharedKey("distance_to_feature");
             serializer.putValue(this.distance_to_feature.unwrap);
         }
 
         if(!this.errors_warnings_info.isNone) {
-            serializer.putCompiletimeKey!"errors_warnings_info";
+            serializer.putSharedKey("errors_warnings_info");
             serializer.putValue(this.errors_warnings_info.unwrap);
         }
 
@@ -385,6 +393,7 @@ struct Annotation {
 }
 
 unittest{
+    import libmucor.atomize.serde.deser;
     string ann = "A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"~
                 "protein_coding|1/6|ENST00000381657.2:c.-21-26C>A|||||,A|intron_variant|MODIFIER"~
                 "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding|1/7|ENST00000381663.3:c.-21-26C>A||"~
@@ -394,9 +403,10 @@ unittest{
     import mir.ser.ion;
     import mir.ion.conv;
     auto parsed = anns.array;
-    assert(serializeIon(parsed[0]).ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381657",transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:"ENST00000381657.2:c.-21-26C>A"}`);
-    assert(serializeIon(parsed[1]).ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381663",transcript_biotype:protein_coding,rank:1,rtotal:7,hgvs_c:"ENST00000381663.3:c.-21-26C>A"}`);
+    enum annFields = serdeGetSerializationKeysRecurse!Annotation.removeSystemSymbols;
+    assert(serializeVcfToIon(parsed[0], annFields).vcfIonToText == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381657",transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:"ENST00000381657.2:c.-21-26C>A"}`);
+    assert(serializeVcfToIon(parsed[1], annFields).vcfIonToText == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381663",transcript_biotype:protein_coding,rank:1,rtotal:7,hgvs_c:"ENST00000381663.3:c.-21-26C>A"}`);
 
-    assert(serializeIon(Effect._5_prime_UTR_premature_start_codon_gain_variant).ion2text == "'5_prime_UTR_premature_start_codon_gain_variant'");
+    // assert(serializeVcfToIon(Effect._5_prime_UTR_premature_start_codon_gain_variant).ion2text == "'5_prime_UTR_premature_start_codon_gain_variant'");
     
 }

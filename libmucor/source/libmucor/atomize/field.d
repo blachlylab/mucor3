@@ -8,6 +8,8 @@ import mir.ser.interfaces;
 import mir.ser;
 import mir.serde;
 
+import libmucor.atomize.serde.ser;
+
 alias FieldTypes = Variant!(long, float, long[], float[], bool, string);
 
 template isArrayNotString(T)
@@ -42,9 +44,9 @@ struct FieldValue {
         )(this.data);
     }
 
-    void serialize(S)(ref S serializer) {
+    void serialize(ref VcfRecordSerializer serializer) {
         match!(
-            (x) => serializeValue(serializer, x),
+            (x) => serializeValue(serializer.serializer, x),
         )(this.data);
     }
 
