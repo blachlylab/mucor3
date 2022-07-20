@@ -103,11 +103,6 @@ unittest {
     foreach (rec; rdr)
     {
         auto r = rec.unwrap;
-        writeln(cast(string)r.ionStruct.data);
-        writeln(r);
-        foreach(k,v; r){
-            writeln(k,":", v);
-        }
         writeln(vcfIonToText(r));    
     }
 }

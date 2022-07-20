@@ -17,6 +17,7 @@ import libmucor.atomize.serde.deser : parseValue;
 struct SymbolTable {
     ScopedBuffer!(const(char)[]) symbolTableBuffer = void;
     const(char[])[] table;
+    const(ubyte)[] data;
 
     @trusted pure nothrow createFromHeaderConfig(ref HeaderConfig hdrInfo) {
         IonSymbolTable!false tmptable;
@@ -30,6 +31,7 @@ struct SymbolTable {
         tmptable.insert("FILTER");
         tmptable.insert("INFO");
         tmptable.insert("checksum");
+        tmptable.insert("sample");
         if(hdrInfo.fmts.byAllele.names.length > 0 || hdrInfo.fmts.other.names.length > 0)
             tmptable.insert("FORMAT");
         foreach (f; hdrInfo.filters){
@@ -78,7 +80,7 @@ struct SymbolTable {
         auto d = cast(const(ubyte)[])tmptable.data;
         auto err = this.loadSymbolTable(d);
         assert(!err, ionErrorMsg(err));
-        return tmptable;
+        this.data = tmptable.data;
     }
 
     @trusted pure nothrow createFromStrings(string[] symbols) {
@@ -102,7 +104,7 @@ struct SymbolTable {
         auto d = cast(const(ubyte)[]) tmptable.data;
         auto err = this.loadSymbolTable(d);
         assert(!err, ionErrorMsg(err));
-        return tmptable;
+        this.data = tmptable.data;
     }
 
     /// scraped and modified from here: 

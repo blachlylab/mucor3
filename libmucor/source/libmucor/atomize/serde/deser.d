@@ -8,11 +8,14 @@ import mir.appender: ScopedBuffer;
 import mir.ion.symbol_table;
 import mir.ion.stream;
 
-import libmucor.atomize.serde.symbols;
+import libmucor.atomize.serde;
 
 import option;
 import std.stdio;
 
+/// mixin for trying to parse ion data
+/// if we encounter unexpectedEndOfData error, 
+/// increase the buffer and try to reparse
 template tryRead(string ins, string handleError = "assert(!error, ionErrorMsg(error))") {
     enum tryRead = "
     error = "~ ins~";     
@@ -28,9 +31,23 @@ template tryRead(string ins, string handleError = "assert(!error, ionErrorMsg(er
     "~handleError~";";
 }
 
+
+/// Deserialize VCF ion
+/// Data is laid out as such:
+/// 
+/// [ ion prefix ]
+/// [ shared symbol table ]
+///
+///  stream of ion data: [ 
+///     [ ion prefix ]
+///     [ local symbol table ]
+///     [ ion data ]        
+/// ]
+///     
 struct VcfIonDeserializer {
     File inFile;
     SymbolTable sharedSymbolTable;
+
     size_t bufferSize;
     const(ubyte)[] buffer;
     const(ubyte)[] bufferView;
@@ -51,6 +68,7 @@ struct VcfIonDeserializer {
         this.popFront;
     }
 
+    /// set up buffer, read first chunk, and validate version/ionPrefix
     void initialize() {
         buffer.length = bufferSize;
 
@@ -61,6 +79,7 @@ struct VcfIonDeserializer {
         this.bufferView = this.buffer;
     }
 
+    /// set up buffer, read first chunk, and validate version/ionPrefix
     Result!(IonStructWithSymbols, string) front() {
         Result!(IonStructWithSymbols, string) ret;
         if(error) ret = Err(ionErrorMsg(error));
@@ -109,15 +128,11 @@ auto vcfIonToText(const(ubyte)[] data){
     IonStruct obj;
 
     auto d = data;
-    writeln(d);
     error = readVersion(d);
-    writeln(d);
     if(error) throw new Exception(ionErrorMsg(error));
     error = sharedSymbolTable.loadSymbolTable(d);
-    writeln(d);
     if(error) throw new Exception(ionErrorMsg(error));
     error = readVersion(d);
-    writeln(d);
     if(error) throw new Exception(ionErrorMsg(error));
     error = localSymbols.loadSymbolTable(d);
     if(error) throw new Exception(ionErrorMsg(error));
