@@ -31,6 +31,22 @@ template tryRead(string ins, string handleError = "assert(!error, ionErrorMsg(er
     "~handleError~";";
 }
 
+struct VcfIonRecord {
+    
+    SymbolTable * sharedSymbolTable;
+    
+    SymbolTable * localSymbols;
+
+    IonStructWithSymbols obj;
+
+    this(ref SymbolTable sst, ref SymbolTable lst, ref IonStructWithSymbols val) {
+        this.sharedSymbolTable = &sst;
+        this.localSymbols = &lst;
+        this.obj = val;
+    }
+
+    alias obj this;
+}
 
 /// Deserialize VCF ion
 /// Data is laid out as such:
@@ -54,7 +70,7 @@ struct VcfIonDeserializer {
     bool eof;
     IonErrorCode error;
 
-    IonStructWithSymbols frontVal;
+    VcfIonRecord frontVal;
 
     this(File inFile, size_t bufferSize = 4096){
 
@@ -80,8 +96,8 @@ struct VcfIonDeserializer {
     }
 
     /// set up buffer, read first chunk, and validate version/ionPrefix
-    Result!(IonStructWithSymbols, string) front() {
-        Result!(IonStructWithSymbols, string) ret;
+    Result!(VcfIonRecord, string) front() {
+        Result!(VcfIonRecord, string) ret;
         if(error) ret = Err(ionErrorMsg(error));
         else ret = Ok(frontVal);
         return ret;
@@ -107,7 +123,9 @@ struct VcfIonDeserializer {
         if(_expect(error, false))
             return;
 
-        this.frontVal = obj.withSymbols(this.sharedSymbolTable.table ~ localSymbols.table);
+        auto objWsym = obj.withSymbols(this.sharedSymbolTable.table ~ localSymbols.table);
+
+        this.frontVal = VcfIonRecord(this.sharedSymbolTable, localSymbols, objWsym);
         
     }
 

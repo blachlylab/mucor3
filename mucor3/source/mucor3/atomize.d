@@ -3,7 +3,7 @@ import std.stdio;
 import std.getopt;
 import std.parallelism;
 
-import libmucor.vcfops.vcf : parseVCF;
+import libmucor.atomize: parseVCF;
 import libmucor.error;
 
 bool multiSample;
@@ -25,13 +25,11 @@ one-to-one VCF record representation, use the -s and -m flags.
 
 void atomize(string[] args)
 {
-    auto res = getopt(args, config.bundling, "threads|t",
-            "extra threads for parsing the VCF file", &threads, "multi-sample|s",
-            "don't split (and duplicate) records by sample", &multiSample,
-            "multi-allelic|m",
-            "don't split (and duplicate) records by sample",
-            &multiAllelic, "annotation|a", "split (and duplicate) records by annotation (also sets -m flag)",
-            &splitAnnotations, "flatten|f", "flatten sub-objects", &flatten);
+    auto res = getopt(args, config.bundling, 
+        "threads|t", "extra threads for parsing the VCF file", &threads, 
+        "multi-sample|s", "don't split (and duplicate) records by sample", &multiSample,
+        "multi-allelic|m", "don't split (and duplicate) records by sample", &multiAllelic,
+        "flatten|f", "flatten sub-objects", &flatten);
 
     if (res.helpWanted | (args.length < 2))
     {
@@ -43,8 +41,5 @@ void atomize(string[] args)
     {
         log_warn(__FUNCTION__, "using -a also splits by allele");
     }
-
-    ubyte con = (cast(ubyte)(flatten) << 3) | (cast(ubyte)(!multiSample) << 2) | (
-            cast(ubyte)(!multiAllelic) << 1) | cast(ubyte)(splitAnnotations);
-    parseVCF(args[1], threads, con, stdout);
+    parseVCF(args[1], threads, multiSample, multiAllelic, stdout);
 }

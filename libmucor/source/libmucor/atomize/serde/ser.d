@@ -129,10 +129,25 @@ struct VcfSerializer {
         this.target = target;
     }
 
+    this(const(ubyte)[] sharedSymbolData, SerdeTarget target) {
+        this.sharedSymbols.loadSymbolTable(sharedSymbolData);
+        this.target = target;
+    }
+
+    this(File outfile, const(ubyte)[] sharedSymbolData, SerdeTarget target) {
+        this.outfile = outfile;
+        this.sharedSymbols.loadSymbolTable(sharedSymbolData);
+        this.target = target;
+    }
+
     void putRecord(T)(ref T val) {
         auto serializer = VcfRecordSerializer(this.sharedSymbolTable, this.sharedSymbols.table.length, target);
         val.serialize(serializer);
         outfile.rawWrite(serializer.finalize);
+    }
+
+    void putData(const(ubyte)[] d) {
+        outfile.rawWrite(d);
     }
 
     void writeSharedTable() {

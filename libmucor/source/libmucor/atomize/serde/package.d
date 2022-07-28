@@ -8,6 +8,8 @@ public import libmucor.atomize.serde.ser;
 public import libmucor.atomize.serde.deser;
 public import libmucor.atomize.serde.symbols;
 
+public import mir.serde : SerdeTarget;
+
 size_t SEED1 = 0x48e9a84eeeb9f629;
 size_t SEED2 = 0x2e1869d4e0b37fcb;
 

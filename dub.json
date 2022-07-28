@@ -9,15 +9,18 @@
     "targetType": "none",
     "subPackages": [
         "./libmucor/",
-        "./mucor3/"
+        "./mucor3/",
+		"./option/"
     ],
 	"sourcePaths": [
         "./libmucor/",
-        "./mucor3/"
+        "./mucor3/",
+		"./option/"
     ],
 	"importPaths": [
         "./libmucor/",
-        "./mucor3/"
+        "./mucor3/",
+		"./option/"
     ],
 	"dependencies": {
 		"asdf": "~>0.7.8",

@@ -2,6 +2,7 @@ module libmucor.invertedindex.store;
 
 import libmucor.invertedindex.record;
 import libmucor.error;
+import libmucor.atomize.serde;
 import option;
 import drocks.database;
 import drocks.env;
@@ -64,6 +65,14 @@ struct InvertedIndexStore {
         this.db[serialize("keys")] = serialize(this.keys.byKey.array);
     }
 
+    void storeSharedSymbolTable(ref VcfIonDeserializer deserializer){
+        this.db[serialize("sharedTable")] = deserializer.sharedSymbolTable.toBytes;
+    }
+
+    auto getSharedSymbolTable(){
+        return this.db[serialize("sharedTable")];
+    }
+    
     void insert(IonStructWithSymbols data) {
         IonInt hashValue;
         if(_expect(!("checksum" in data), false)) {
@@ -75,6 +84,25 @@ struct InvertedIndexStore {
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
 
         this.records[hash] = serializeIon(data);
+
+        foreach (key,value; data)
+        {
+            insertIonValue(key, value, data.symbolTable, hash);
+        }
+    }
+
+    void insert(ref VcfIonRecord rec) {
+        auto data = rec.obj;
+        IonInt hashValue;
+        if(_expect(!("checksum" in data), false)) {
+            log_err(__FUNCTION__, "record with no md5");
+        }
+        auto err = data["checksum"].get(hashValue);
+        assert(err == IonErrorCode.none);
+
+        uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
+
+        this.records[hash] = cast(immutable(ubyte)[])(ionPrefix ~ rec.localSymbols.data ~ data.ionStruct.data);
 
         foreach (key,value; data)
         {

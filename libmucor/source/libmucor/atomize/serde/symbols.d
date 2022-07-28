@@ -80,7 +80,6 @@ struct SymbolTable {
         auto d = cast(const(ubyte)[])tmptable.data;
         auto err = this.loadSymbolTable(d);
         assert(!err, ionErrorMsg(err));
-        this.data = tmptable.data;
     }
 
     @trusted pure nothrow createFromStrings(string[] symbols) {
@@ -104,13 +103,13 @@ struct SymbolTable {
         auto d = cast(const(ubyte)[]) tmptable.data;
         auto err = this.loadSymbolTable(d);
         assert(!err, ionErrorMsg(err));
-        this.data = tmptable.data;
     }
 
     /// scraped and modified from here: 
     @trusted pure nothrow @nogc
     scope IonErrorCode loadSymbolTable(ref const(ubyte)[] d)
     {
+        this.data = d;
         symbolTableBuffer.initialize;
 
         void resetSymbolTable()
@@ -244,6 +243,17 @@ struct SymbolTable {
     ref auto opIndex(size_t index)
     {
         return this.table[index];
+    }
+
+    auto toBytes() {
+        IonSymbolTable!true tmptable;
+        tmptable.initialize;
+        foreach (const(char[]) key; this.table)
+        {
+            tmptable.insert(key);
+        }
+        tmptable.finalize;
+        return cast(const(ubyte)[]) tmptable.data;
     }
 
 }

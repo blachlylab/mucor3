@@ -9,7 +9,7 @@ import std.range;
 import dhtslib.vcf;
 import dhtslib.gff;
 import libmucor.error;
-import libmucor.vcfops.fields;
+import libmucor.atomize.ann;
 
 
 /// Tags that are penalized in the Principal Isoform score
@@ -160,22 +160,23 @@ struct PrincipalScore {
 }
 
 /// Filter annotation to principal isoform
-void filterAnnotationToPrincipalIsoform(VCFRecord rec, string annotationFile, string infoField = "ANN", string annField = "feature_id", string[] annFieldNames = ANN_FIELDS) {
+void filterAnnotationToPrincipalIsoform(VCFRecord rec, string annotationFile, string infoField = "ANN") {
 
     auto infos = rec.getInfos;
     auto field = infoField in infos;
     if(field is null) return;
 
     auto region = GFF3Reader(annotationFile, rec.chrom, rec.coordinates);
-    auto anns = Annotations((*field).to!string, annFieldNames);
+    auto anns = Annotations((*field).to!string);
 
-    auto featureNames = anns.filter!(x => !x[annField].isNull).map!(x => x[annField].value[0]).array;
+    auto featureNames = anns.map!(x => x.feature_id).array;
     auto matchingRecords = region.filter!(rec => featureNames.countUntil(rec["ID"]) != -1).array;
     
     auto scores = matchingRecords.map!(x => PrincipalScore(x).combinedScore).array;
     auto bestIdx = scores.maxIndex;
     if(bestIdx == -1) {
-        auto newAnn = anns[0].original;
+        log_warn(__FUNCTION__, "Couldn't choose best isoform for record at %s: %d", rec.chrom, rec.pos.pos);
+        auto newAnn = anns.getRange.front;
         rec.addInfo(infoField, newAnn);
         return;
     }
@@ -185,7 +186,7 @@ void filterAnnotationToPrincipalIsoform(VCFRecord rec, string annotationFile, st
     foreach (i, f; featureNames)
     {
         if(f == best["ID"]) {
-            newAnn = anns[i].original;
+            newAnn = anns.getRange.drop(i).front;
             break;
         }
     }

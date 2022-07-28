@@ -11,13 +11,17 @@
 		"libmucor":{
 			"path": "../libmucor"
 		},
-		"progress": "~>5.0.1"
+		"progress": "~>5.0.1",
+		"drocks": {
+			"path": "../drocks"
+		},
 	},
 	"targetPath": "../bin",
 	"configurations": [
 		{
 			"name": "standard",
-			"targetType": "executable"
+			"targetType": "executable",
+			"libs": ["rocksdb"]
 		},
 		{
 			"name": "SSE4",

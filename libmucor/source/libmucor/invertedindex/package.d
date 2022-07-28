@@ -20,6 +20,7 @@ import std.exception : enforce;
 import asdf : deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.jsonlops.jsonvalue;
 import libmucor.query.eval;
+import libmucor.atomize.serde : VcfIonRecord;
 
 import libmucor.khashl;
 import libmucor.error;
@@ -47,11 +48,20 @@ struct InvertedIndex
         this.store.insert(obj.withSymbols(symbolTable));
     }
 
+    void insert(ref VcfIonRecord rec)
+    {
+        this.store.insert(rec);
+    }
+
     khashlSet!(uint128) * allIds()
     {
         return this.store.records.byKeyValue
         .map!(x => x[0]).collect;
         // return this.recordMd5s;
+    }
+
+    auto convertIdsToIon(khashlSet!(uint128) * ids) {
+        return this.store.getIonObjects(ids.byKey());
     }
 
     const(char[])[] getFields(const(char)[] key)

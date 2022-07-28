@@ -6,7 +6,6 @@ import core.sync.mutex : Mutex;
 import progress;
 import std.stdio;
 import dhtslib.vcf;
-import libmucor.vcfops;
 import libmucor.jsonlops.basic : getAllKeys;
 import libmucor.error;
 import libmucor.khashl;

@@ -14,15 +14,14 @@ public import libmucor.query;
 import asdf : deserializeAsdf = deserialize, parseJsonByLine, Asdf;
 import libmucor.wideint : uint128;
 import libmucor.khashl;
-import libmucor.error;
+import libmucor.atomize.serde;
 import libmucor: setup_global_pool;
 import std.algorithm.searching : balancedParens;
 import std.getopt;
 import core.stdc.stdlib: exit;
 import libmucor.query;
 
-auto query(R)(R range, InvertedIndex* idx, string queryStr)
-        if (is(ElementType!R == Asdf))
+auto query(ref File outfile, ref InvertedIndex idx, string queryStr)
 {
     StopWatch sw;
     sw.start;
@@ -38,38 +37,29 @@ auto query(R)(R range, InvertedIndex* idx, string queryStr)
     sw.stop;
     log_info(__FUNCTION__, "%d records matched your query", idxs.count);
 
-    khashlSet!(uint128) selectedSums;
-    foreach (key; idx.convertIds(idxs))
+    auto serializer = VcfSerializer(outfile, idx.store.getSharedSymbolTable.unwrap.unwrap, SerdeTarget.ion);
+    serializer.writeSharedTable;
+    foreach (d; idx.convertIdsToIon(idxs))
     {
-        selectedSums.insert(key);
+        serializer.putData(d);
     }
-
-    return range.filter!((line) {
-        // auto i = x.index;
-        // auto line = x.value;
-        uint128 a;
-        a.fromHexString(deserializeAsdf!string(line["md5"]));
-        // assert(idx.recordMd5s[i] ==  a);
-        return a in selectedSums ? true : false;
-    });
 }
 
-void index(R)(R range, string prefix, ulong fsize, ulong ssize, string query_str) if (is(ElementType!R == Asdf))
+void index(ref VcfIonDeserializer range, string prefix)
 {
-    InvertedIndex* idx = new InvertedIndex(prefix, true, fsize, ssize);
-    if(query_str != "")
-        idx.addQueryFilter(query_str);
+    InvertedIndex idx = InvertedIndex(prefix);
+    idx.store.storeSharedSymbolTable(range);
     StopWatch sw;
     sw.start;
     auto count = 0;
-    foreach (line; range)
+    foreach (rec; range)
     {
-        idx.addJsonObject(line);
+        auto r = rec.unwrap;
+        idx.insert(r);
         count++;
     }
     // assert(count == idx.recordMd5s.length,"number of md5s doesn't match number of records");
-    idx.close;
-
+    
     sw.stop;
     log_info(__FUNCTION__, "Indexed %d records in %d secs", count, sw.peek.total!"seconds");
     log_info(__FUNCTION__, "Avg time to index record: %f usecs",
@@ -111,19 +101,15 @@ void query_main(string[] args)
     StopWatch sw;
     sw.start;
 
-    InvertedIndex* idx = new InvertedIndex(prefix, false);
+    InvertedIndex idx = InvertedIndex(prefix);
     // auto idxs = idx.fields[args[1]].filter(args[2..$]);
     // float[] range = [args[2].to!float,args[3].to!float];
     log_info(__FUNCTION__, "Time to load index: %s seconds", sw.peek.total!"seconds");
-    log_info(__FUNCTION__, "%d records in index", idx.recordMd5s.length);
+    // log_info(__FUNCTION__, "%d records in index", idx.recordMd5s.length);
     sw.stop;
     sw.reset;
     sw.start;
-    foreach (obj; args[1 .. $].map!(x => File(x).byChunk(4096)
-            .parseJsonByLine).joiner.query(idx, query_str))
-    {
-        writeln(obj);
-    }
+    query(stdout, idx, query_str);
     log_info(__FUNCTION__, "Time to query/filter records: %s seconds", sw.peek.total!"seconds");
     // parseQuery("(key1:val1 AND key2:(val2 OR val3 OR val4) AND key3:1-2) OR key4:val4 OR key5:(val5 AND val6)",idx);
     // parseQuery("key1:val1 AND key2:(val2 OR val3) AND key4:val4 AND key5:(val5 OR val6)",idx);
@@ -135,9 +121,7 @@ void index_main(string[] args)
     auto res = getopt(args, config.bundling,
             "threads|t", "threads for running mucor", &threads,
             config.required,
-            "prefix|p", "index output prefix", &prefix, 
-            "file-cache-size|f", "number of highly used files kept open", &fileCacheSize,
-            "ids-cache-size|i", "number of ids that can be stored per key before a file is opened", &smallsSize,
+            "prefix|p", "index output prefix", &prefix,
             "query|q", "only index data that pertains to a specific query", &query_str);
     setup_global_pool(threads);
 
@@ -155,10 +139,7 @@ void index_main(string[] args)
     StopWatch sw;
 
     // set_log_level(LogLevel.Trace);
-
-    args[1 .. $]
-        .map!(x => File(x).byChunk(4096).parseJsonByLine.map!(x => Asdf(x.data.dup)))
-        .joiner
-        .index(prefix, fileCacheSize, smallsSize, query_str);
+    auto data = VcfIonDeserializer(File(args[1]));
+    index(data, prefix);
 
 }

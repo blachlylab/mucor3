@@ -11,7 +11,6 @@ import std.conv : to;
 import dhtslib.vcf;
 import dhtslib.coordinates;
 import asdf : deserializeAsdf = deserialize, Asdf, AsdfNode, serializeToAsdf;
-import libmucor.vcfops;
 import libmucor.jsonlops;
 import mucor3.varquery;
 
