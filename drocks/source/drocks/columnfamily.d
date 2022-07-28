@@ -54,21 +54,21 @@ struct ColumnFamily {
         return ret;
     }
 
-    ref auto opIndex(ubyte[] key)
+    ref auto opIndex(const(ubyte)[] key)
     {
         return this.db.get(key, &this);
     }
 
-    void opIndexAssign(ubyte[] value, ubyte[] key)
+    void opIndexAssign(const(ubyte)[] value, const(ubyte)[] key)
     {
         this.db.put(value, key, &this);
     }
 
-    void remove(ubyte[] key) {
+    void remove(const(ubyte)[] key) {
         this.db.remove_(key, &this);
     }
 
-    void opIndexOpAssign(string op: "~")(ubyte[] value, ubyte[] key)
+    void opIndexOpAssign(string op: "~")(const(ubyte)[] value, const(ubyte)[] key)
     {
         this.db.merge(value, key, &this);
     }

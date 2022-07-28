@@ -160,17 +160,17 @@ struct RocksDB {
         return result;
     }
 
-    ref auto opIndex(ubyte[] key)
+    ref auto opIndex(const(ubyte)[] key)
     {
         return this.get(key);
     }
 
-    ref auto opIndex(ubyte[] key, string familyName)
+    ref auto opIndex(const(ubyte)[] key, string familyName)
     {
         return this.get(key, &this.columnFamilies[familyName]);
     }
 
-    RocksResult!(Option!(ubyte[])) get(ubyte[] key, ColumnFamily * family = null) {
+    RocksResult!(Option!(ubyte[])) get(const(ubyte)[] key, ColumnFamily * family = null) {
         RocksResult!(Option!(ubyte[])) ret;
         size_t len;
         char* err;
@@ -210,22 +210,22 @@ struct RocksDB {
         return ret;
     }
 
-    RocksError opIndexAssign(ubyte[] value, ubyte[] key)
+    RocksError opIndexAssign(const(ubyte)[] value, const(ubyte)[] key)
     {
         return this.put(value, key);
     }
 
-    RocksError opIndexAssign(ubyte[] value, ubyte[] key, string familyName)
+    RocksError opIndexAssign(const(ubyte)[] value, const(ubyte)[] key, string familyName)
     {
         return this.put(value, key, &this.columnFamilies[familyName]);
     }
 
-    RocksError opIndexOpAssign(string op: "~")(ubyte[] value, ubyte[] key)
+    RocksError opIndexOpAssign(string op: "~")(const(ubyte)[] value, const(ubyte)[] key)
     {
         return this.merge(value, key, null);
     }
 
-    RocksError put(ubyte[] value, ubyte[] key, ColumnFamily * family = null) {
+    RocksError put(const(ubyte)[] value, const(ubyte)[] key, ColumnFamily * family = null) {
         RocksError ret;
         ret = Ok(null);
         char* err;
@@ -248,15 +248,15 @@ struct RocksDB {
         return ret;
     }
 
-    RocksError remove(ubyte[] key, string familyName) {
+    RocksError remove(const(ubyte)[] key, string familyName) {
         return this.remove_(key, &this.columnFamilies[familyName]);
     }
 
-    RocksError remove(ubyte[] key) {
+    RocksError remove(const(ubyte)[] key) {
         return this.remove_(key, null);
     }
 
-    RocksError remove_(ubyte[] key, ColumnFamily * family = null) {
+    RocksError remove_(const(ubyte)[] key, ColumnFamily * family = null) {
         RocksError ret;
         ret = Ok(null);
         char* err;
@@ -281,7 +281,7 @@ struct RocksDB {
         return ret;
     }
 
-    RocksError merge(ubyte[] value, ubyte[] key, ColumnFamily * family = null) {
+    RocksError merge(const(ubyte)[] value, const(ubyte)[] key, ColumnFamily * family = null) {
         RocksError ret;
         ret = Ok(null);
         char* err;
