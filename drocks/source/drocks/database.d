@@ -407,11 +407,11 @@ struct RocksDB {
     // }
 
     Iterator iter() {
-        return Iterator(&this, this.readOptions);
+        return Iterator(&this, &this.readOptions);
     }
 
-    Iterator iter(ReadOptions opts) {
-        return Iterator(&this, opts);
+    Iterator iter(ref ReadOptions opts) {
+        return Iterator(&this, &opts);
     }
 
     void withIter(void delegate(ref Iterator) dg, ReadOptions opts) {
@@ -432,6 +432,8 @@ unittest {
     import std.stdio : writefln;
     import std.datetime.stopwatch : benchmark;
     import drocks.env : Env;
+    import std.file;
+    import std.path;
 
     writefln("Testing Database");
 
@@ -447,6 +449,9 @@ unittest {
     opts.compression = CompressionType.None;
     opts.env = env;
 
+    if("/tmp/test_rocksdb".exists)
+        rmdirRecurse("/tmp/test_rocksdb");
+    
     auto db = RocksDB(opts, "/tmp/test_rocksdb");
 
     // Test string putting and getting
@@ -522,7 +527,4 @@ unittest {
     }
     assert(found);
     assert(keyCount == 100001);
-
-    import std.file;
-    rmdirRecurse("/tmp/test_rocksdb");
 }

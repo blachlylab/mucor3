@@ -24,11 +24,11 @@ struct ColumnFamily {
     }
 
     Iterator iter() {
-        return Iterator(this.db, &this, this.db.readOptions);
+        return Iterator(this.db, &this.db.readOptions, &this);
     }
 
-    Iterator iter(ReadOptions opts) {
-        return Iterator(this.db, &this, opts);
+    Iterator iter(ref ReadOptions opts) {
+        return Iterator(this.db, &opts, &this);
     }
 
     void withIter(void delegate(ref Iterator) dg) {
@@ -103,7 +103,12 @@ unittest {
     import std.conv : to;
     import std.algorithm.searching : startsWith;
     import drocks.options : RocksDBOptions, CompressionType;
+    import std.file;
+    import std.path;
 
+    if("/tmp/test_rocksdb_cf".exists)
+        rmdirRecurse("/tmp/test_rocksdb_cf");
+    
     writefln("Testing Column Families");
 
     // DB Options
@@ -159,6 +164,4 @@ unittest {
         writefln("  %s", name);
         testColumnFamily(cf, 1000);
     }
-    import std.file;
-    rmdirRecurse("/tmp/test_rocksdb_cf");
 }
