@@ -1,7 +1,6 @@
 module libmucor.invertedindex;
 import libmucor.invertedindex.record;
 import libmucor.invertedindex.store;
-import libmucor.invertedindex.hash;
 
 import mir.ion.value;
 import mir.ion.conv;
@@ -55,21 +54,19 @@ struct InvertedIndex
         // return this.recordMd5s;
     }
 
-    uint128[] getFields(const(char)[] key)
+    const(char[])[] getFields(const(char)[] key)
     {
         import std.regex : matchFirst, regex;
 
         auto keycopy = key.idup;
-        uint128[] ret;
+        const(char[])[] ret;
         auto wildcard = key.indexOf('*');
         if (wildcard == -1)
         {
-            auto hash = getKeyHash(key);
-            // writefln("%x",hash);
-            if (!this.store.checkKey(key)) {
+            if (!(key in this.store.keys)) {
                 return [];
             } else {
-                ret = [hash];
+                ret = [key];
             }
         }
         else
@@ -77,9 +74,9 @@ struct InvertedIndex
             key = key.replace("*", ".*");
             auto reg = regex("^" ~ key ~ "$");
             ret = this.store
-                .getKeysWithId
-                .filter!(x => !(x[0].matchFirst(reg).empty))
-                .map!(x => x[1])
+                .keys
+                .byKey
+                .filter!(x => !(x.matchFirst(reg).empty))
                 .array;
             if (ret.length == 0)
             {
@@ -112,18 +109,18 @@ struct InvertedIndex
             );
     }
 
-    auto getMatchingValues(T)(uint128 kh, T val, string op)
+    auto getMatchingValues(T)(const(char)[] key, T val, string op)
     {
         switch (op)
         {
         case ">=":
-            return this.store.filterOp!(">=", T)(kh, val);
+            return this.store.filterOp!(">=", T)(key, val);
         case ">":
-            return this.store.filterOp!(">", T)(kh, val);
+            return this.store.filterOp!(">", T)(key, val);
         case "<":
-            return this.store.filterOp!("<", T)(kh, val);
+            return this.store.filterOp!("<", T)(key, val);
         case "<=":
-            return this.store.filterOp!("<=", T)(kh, val);
+            return this.store.filterOp!("<=", T)(key, val);
         default:
             log_err(__FUNCTION__, "%s operator is not valid here", op);
             throw new Exception("An error has occured");
@@ -195,18 +192,22 @@ struct InvertedIndex
 unittest
 {
     import asdf;
-    import libmucor.jsonlops.basic : spookyhashObject;
     import std.array : array;
     import htslib.hts_log;
     import std.file: mkdirRecurse;
     import mir.ion.conv;
     import mir.ion.stream;
+    import std.path;
+    import std.file;
+
+    auto dbname = "/tmp/test_idx_1";
+    if(dbname.exists) rmdirRecurse(dbname);
 
     uint128[] checksums;
     ubyte[] data;
     hts_set_log_level(htsLogLevel.HTS_LOG_DEBUG);
     {
-        auto idx = InvertedIndex("/tmp/test_idx_1");
+        auto idx = InvertedIndex(dbname);
         checksums ~= uint128.fromHexString("271eea785e564a5d8c8099556c93b5a4");
         checksums ~= uint128.fromHexString("7dc8741714834d2b9fffdb315e07b6bd");
         checksums ~= uint128.fromHexString("68c07c663e854421bccd1dbe8fe6a388");
@@ -219,24 +220,26 @@ unittest
         }
     }
     {
-        import libmucor.invertedindex.hash;
-        auto idx = InvertedIndex("/tmp/test_idx_1");
+        auto idx = InvertedIndex(dbname);
         // writeln(idx.bidxReader.getKeysWithId.map!(x => x[0]));
         assert(idx.query("test2", "foo").byKey.array == [checksums[0]]);
         assert(idx.queryRange("test3", 1, 3).byKey.array == [checksums[0], checksums[1]]);
     }
-    import std.file;
-    rmdirRecurse("/tmp/test_idx_1");
+    
 }
 
 unittest
 {
     import asdf;
-    import libmucor.jsonlops.basic : spookyhashObject;
     import std.array : array;
     import htslib.hts_log;
     import mir.ion.conv;
     import mir.ion.stream;
+    import std.path;
+    import std.file;
+
+    auto dbname = "/tmp/test_idx_2";
+    if(dbname.exists) rmdirRecurse(dbname);
 
     uint128[] checksums;
     ubyte[] data;
@@ -261,7 +264,7 @@ unittest
         data ~= cast(ubyte[])(`{test:"hello",test3:7,test4:{foo:[baz,bar]},checksum:`~checksums[6].toString~`}`).text2ion;
         data ~= cast(ubyte[])(`{test:"hello world",test3:8,test4:{foo:"?"},checksum:`~checksums[7].toString~`}`).text2ion;
 
-        auto idx = InvertedIndex("/tmp/test_idx_2");
+        auto idx = InvertedIndex(dbname);
         foreach (symTable, val; IonValueStream(data))
         {
             idx.insert(symTable, val);
@@ -285,7 +288,7 @@ unittest
         auto q15 = Query("(test = (world | worl | hi | bye)) & (test4/foo = (bar & baz))");
         auto q16 = Query("(test = hello) & (test4/foo = (bar & baz))");
 
-        auto idx = InvertedIndex("/tmp/test_idx_2");
+        auto idx = InvertedIndex(dbname);
         auto a = q1.evaluate(idx);
         auto b = [checksums[0], checksums[6], checksums[5]].collect;
         foreach (key; a.byKey)
@@ -313,8 +316,6 @@ unittest
         assert(*q15.evaluate(idx) == *(new khashlSet!uint128()));
         assert(*q16.evaluate(idx) == *([checksums[6]].collect));
     }
-    import std.file;
-    rmdirRecurse("/tmp/test_idx_2");
 
 }
 
@@ -322,11 +323,15 @@ unittest
 unittest
 {
     import asdf;
-    import libmucor.jsonlops.basic : spookyhashObject;
     import std.array : array;
     import htslib.hts_log;
     import mir.ion.conv;
     import mir.ion.stream;
+    import std.path;
+    import std.file;
+
+    auto dbname = "/tmp/test_idx_3";
+    if(dbname.exists) rmdirRecurse(dbname);
 
     uint128[] checksums;
     ubyte[] data;
@@ -342,7 +347,7 @@ unittest
         checksums ~= uint128.fromHexString("c35c7fba59054a728ae54ea7ade538e5");
         checksums ~= uint128.fromHexString("239ef3ec18e848c38a2a8876993b8edf");
 
-        auto idx = InvertedIndex("/tmp/test_idx_3");
+        auto idx = InvertedIndex(dbname);
         data ~= cast(ubyte[])(`{test1:0.4,test2:-1e-2,test3:1,checksum:`~checksums[0].toString~`}`).text2ion;
         data ~= cast(ubyte[])(`{test1:0.1,test2:-1e-3,test3:10,checksum:`~checksums[1].toString~`}`).text2ion;
         data ~= cast(ubyte[])(`{test1:0.8,test2:-1e-4,test3:10000,checksum:`~checksums[2].toString~`}`).text2ion;
@@ -373,15 +378,15 @@ unittest
         auto q14 = Query("test3 <= 10");
         auto q15 = Query("test3 <= 10.0");
 
-        auto idx = InvertedIndex("/tmp/test_idx_3");
+        auto idx = InvertedIndex(dbname);
+        import std.algorithm : map, countUntil;
         assert(*q1.evaluate(idx) == *([checksums[0]].collect));
-        
         assert(*q2.evaluate(idx) == *([checksums[0], checksums[2], checksums[4], checksums[3]].collect));
         assert(*q3.evaluate(idx) == *([checksums[7], checksums[6], checksums[5]].collect));
         assert(*q4.evaluate(idx) == *([checksums[0], checksums[2], checksums[4], checksums[1], checksums[3]].collect));
         assert(*q5.evaluate(idx) == *([checksums[6], checksums[1], checksums[5], checksums[7]].collect));
-        assert(*q6.evaluate(idx) == *(new khashlSet!uint128()));
-        assert(*q7.evaluate(idx) == *([checksums[2], checksums[4], checksums[6], checksums[1], checksums[5], checksums[3], checksums[7]].collect));
+        assert(*q6.evaluate(idx) == *([checksums[7], checksums[5], checksums[1], checksums[6], checksums[4], checksums[2], checksums[3]].collect));
+        assert(*q7.evaluate(idx) == *(new khashlSet!uint128()));
         assert(*q8.evaluate(idx) == *([checksums[2], checksums[4], checksums[6], checksums[5], checksums[7]].collect));
         assert(*q9.evaluate(idx) == *([checksums[2], checksums[4], checksums[6], checksums[5], checksums[7]].collect));
         assert(*q10.evaluate(idx) == *([checksums[2], checksums[4], checksums[6], checksums[1], checksums[5], checksums[7]].collect));

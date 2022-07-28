@@ -1,7 +1,6 @@
 module libmucor.invertedindex.store;
 
 import libmucor.invertedindex.record;
-import libmucor.invertedindex.hash;
 import libmucor.error;
 import option;
 import drocks.database;
@@ -17,15 +16,13 @@ import std.traits;
 import mir.ion.value;
 import mir.ser.ion;
 import mir.utility;
+import libmucor.khashl;
 
 struct InvertedIndexStore {
     RocksDB db;
     Hash2IonStore records;
-    String2HashStore keys;
-    String2HashStore strings;
-    Long2HashStore longs;
-    Float2HashStore floats;
     KVIndex idx;
+    khashlSet!(const(char)[]) keys;
 
     this(string dbfn) {
         Env env;
@@ -44,19 +41,27 @@ struct InvertedIndexStore {
         auto cf = "records" in this.db.columnFamilies;
         if(cf) {
             this.records = Hash2IonStore(&this.db.columnFamilies["records"]);
-            this.keys = String2HashStore(&this.db.columnFamilies["keys"]);
-            this.strings = String2HashStore(&this.db.columnFamilies["strings"]);
-            this.longs = Long2HashStore(&this.db.columnFamilies["longs"]);
-            this.floats = Float2HashStore(&this.db.columnFamilies["floats"]);
             this.idx = KVIndex(&this.db.columnFamilies["idx"]);
+            getIonKeys;
         } else {
             this.records = Hash2IonStore(this.db.createColumnFamily("records").unwrap);
-            this.keys = String2HashStore(this.db.createColumnFamily("keys").unwrap);
-            this.strings = String2HashStore(this.db.createColumnFamily("strings").unwrap);
-            this.longs = Long2HashStore(this.db.createColumnFamily("longs").unwrap);
-            this.floats = Float2HashStore(this.db.createColumnFamily("floats").unwrap);
             this.idx = KVIndex(this.db.createColumnFamily("idx").unwrap);
         }
+    }
+    ~this(){
+        this.storeIonKeys;
+    }
+
+    /// load string keys from db that have been observed in data
+    /// i.e INFO/ANN, CHROM, POS, ...
+    auto getIonKeys() {
+        this.keys = *deserialize!(const(char)[][])(this.db[serialize("keys")].unwrap.unwrap).collect;
+    }
+
+    /// store string keys into db that have been observed in data
+    /// i.e INFO/ANN, CHROM, POS, ...
+    auto storeIonKeys() {
+        this.db[serialize("keys")] = serialize(this.keys.byKey.array);
     }
 
     void insert(IonStructWithSymbols data) {
@@ -79,6 +84,7 @@ struct InvertedIndexStore {
 
     void insertIonValue(const(char)[] key, IonDescribedValue value, const(char[])[] symbolTable, uint128 checksum) {
         if(key == "checksum") return;
+        this.keys.insert(key);
         final switch(value.descriptor.type) {
             case IonTypeCode.null_:
                 return;
@@ -91,12 +97,9 @@ struct InvertedIndexStore {
                 assert(err == IonErrorCode.none);
 
                 auto l = val.get!long;
-                auto vh = getValueHash(l);
-                auto kh = getKeyHash(key);
+                auto k = CompositeKey(key, l);
 
-                this.longs[l] = vh;
-                this.idx[combineHash(kh, vh)] ~= checksum;
-                this.keys[key] = kh;
+                this.idx[k] ~= checksum;
                 return;
 
             case IonTypeCode.nInt:
@@ -105,12 +108,9 @@ struct InvertedIndexStore {
                 assert(err == IonErrorCode.none);
 
                 auto l = val.get!long;
-                auto vh = getValueHash(l);
-                auto kh = getKeyHash(key);
+                auto k = CompositeKey(key, l);
 
-                this.longs[l] = vh;
-                this.idx[combineHash(kh, vh)] ~= checksum;
-                this.keys[key] = kh;
+                this.idx[k] ~= checksum;
                 return;
 
             case IonTypeCode.float_:
@@ -119,12 +119,9 @@ struct InvertedIndexStore {
                 assert(err == IonErrorCode.none);
 
                 auto f = val.get!double;
-                auto vh = getValueHash(f);
-                auto kh = getKeyHash(key);
+                auto k = CompositeKey(key, f);
 
-                this.floats[f] = vh;
-                this.idx[combineHash(kh, vh)] ~= checksum;
-                this.keys[key] = kh;
+                this.idx[k] ~= checksum;
                 return;
             case IonTypeCode.decimal:
                 IonDecimal val;
@@ -132,12 +129,9 @@ struct InvertedIndexStore {
                 assert(err == IonErrorCode.none);
 
                 auto f = val.get!double;
-                auto vh = getValueHash(f);
-                auto kh = getKeyHash(key);
+                auto k = CompositeKey(key, f);
 
-                this.floats[f] = vh;
-                this.idx[combineHash(kh, vh)] ~= checksum;
-                this.keys[key] = kh;
+                this.idx[k] ~= checksum;
                 return;
             case IonTypeCode.symbol:
                 IonSymbolID val;
@@ -146,24 +140,18 @@ struct InvertedIndexStore {
 
                 auto i = val.get;
                 auto s = symbolTable[i];
-                auto vh = getValueHash(s);
-                auto kh = getKeyHash(key);
+                auto k = CompositeKey(key, s);
 
-                this.strings[s] = vh;
-                this.idx[combineHash(kh, vh)] ~= checksum;
-                this.keys[key] = kh;
+                this.idx[k] ~= checksum;
                 return;
             case IonTypeCode.string:
                 const(char)[] val;
                 auto err = value.get(val);
                 assert(err == IonErrorCode.none);
 
-                auto vh = getValueHash(val);
-                auto kh = getKeyHash(key);
+                auto k = CompositeKey(key, val);
 
-                this.strings[val] = vh;
-                this.idx[combineHash(kh, vh)] ~= checksum;
-                this.keys[key] = kh;
+                this.idx[k] ~= checksum;
                 return;
             case IonTypeCode.clob:
                 debug assert(0, "We don't handle ion clob values");
@@ -206,59 +194,22 @@ struct InvertedIndexStore {
         }
     }
 
-    bool checkKey(const(char)[] key) {
-        if(this.keys[key].unwrap.isNone) {
-            log_warn(__FUNCTION__, "Key \"%s\" was not found in index!", key);
-            return false;
-        }
-        return true;
-    }
-
-    auto getKeysWithId() {
-        return this.keys.byKeyValue;
-    }
-
     /// key = val
-    Option!(uint128[]) filterSingle(T)(uint128 kh, T val) {
-        auto vh = getValueHash(val);
+    Option!(uint128[]) filterSingle(T)(const(char)[] key, T val) {
+        auto k = CompositeKey(key, val);
 
-        static if(isSomeString!T) {
-            if(this.strings[val].unwrap.isNone) {
-                log_warn(__FUNCTION__, "String value \"%s\" was not found in index!", val);
-            }
-
-        } else static if(isIntegral!T) {
-            if(this.longs[val].unwrap.isNone) {
-                log_warn(__FUNCTION__, "Int value \"%d\" was not found in index!", val);
-            }
-
-        } else static if(isFloatingPoint!T) {
-            if(this.floats[val].unwrap.isNone) {
-                log_warn(__FUNCTION__, "Float value \"%f\" was not found in index!", val);
-            }
-        } else static if(isBoolean!T) {
-
-        }
-
-        return this.idx[combineHash(kh, vh)].unwrap;
+        return this.idx[k].unwrap;
     }
 
-    auto filterRange(T)(uint128 kh, T[] range)
+    auto filterRange(T)(const(char)[] key, T[] range)
     {
-        assert(range.length == 2);
-        assert(range[0] <= range[1]);
-
-        static if (isIntegral!T || isFloatingPoint!T)
+        static if (isNumeric!T)
         {
-            auto ivals = this.longs
-                .byKeyValue
-                .filter!( x => x[0] >= (range[0]) && (x[0] < range[1]))
+            auto lowerK = CompositeKey(key, range[0]);
+            auto upperK = CompositeKey(key, range[1]);
+            auto vals = this.idx.filterRange(lowerK, upperK)
+                .filter!(x => x[0].key == lowerK.key)
                 .map!(x => x[1]);
-            auto fvals = this.floats
-                .byKeyValue
-                .filter!( x => x[0] >= (range[0]) && (x[0] < range[1]))
-                .map!(x => x[1]);
-            auto vals = chain(ivals, fvals);
         }
         else static if (isBoolean!T)
         {
@@ -266,40 +217,30 @@ struct InvertedIndexStore {
         }
         else static if (isSomeString!T)
         {
-            auto vals = this.strings
-                .byKeyValue
-                .filter!( x => x[0] >= (range[0]) && (x[0] < range[1]))
+            auto lowerK = CompositeKey(key, range[0]);
+            auto upperK = CompositeKey(key, range[1]);
+            auto vals = this.idx.byKeyValue(lowerK, upperK)
                 .map!(x => x[1]);
         }
+        
         uint128[] ret;
-        vals.map!(x => this.idx[combineHash(kh, x)].unwrap)
-            .filter!(x => !x.isNone)
-            .map!(x => x.unwrap).each!(x=> ret ~= x);
+        vals.each!(x=> ret ~= x);
         return ret;
     }
     
-    auto filterOp(string op, T)(uint128 kh, T val)
+    auto filterOp(string op, T)(const(char)[] key, T val)
     if(isFloatingPoint!T || isIntegral!T)
-    {
-
-        mixin("auto lfunc = (long a) => a " ~ op ~ " val;");
-        mixin("auto dfunc = (double a) => a " ~ op ~ " val;");
-
-        auto ivals = this.longs
-            .byKeyValue
-            .filter!( x => lfunc(x[0]))
+    { 
+        import std.stdio;
+        auto ival = CompositeKey(key, val);
+    
+        auto vals = this.idx.filterOp!op(ival)
+            .filter!(x => x[0].key == ival.key)
             .map!(x => x[1]);
 
-        auto dvals = this.floats
-            .byKeyValue
-            .filter!( x => dfunc(x[0]))
-            .map!(x => x[1]);
+        alias ifun = (x) => mixin("x[0] "~op~" ival");
         uint128[] ret;
-        chain(ivals, dvals)
-            .map!(x => this.idx[combineHash(kh, x)].unwrap)
-            .filter!(x => !x.isNone)
-            .map!(x => x.unwrap)
-            .each!(x=> ret ~= x);
+        vals.each!(x=> ret ~= x);
         return ret;
     }
 
@@ -310,25 +251,9 @@ struct InvertedIndexStore {
     void print() {
         import std.stdio;
         stderr.writeln("keys:");
-        foreach (kv; this.keys.byKeyValue)
+        foreach (k; this.keys.byKey)
         {
-            stderr.writeln(kv);
-        }
-        stderr.writeln("strings:");
-        foreach (kv; this.strings.byKeyValue)
-        {
-            stderr.writeln(kv);
-        }
-
-        stderr.writeln("longs:");
-        foreach (kv; this.longs.byKeyValue)
-        {
-            stderr.writeln(kv);
-        }
-        stderr.writeln("floats:");
-        foreach (kv; this.floats.byKeyValue)
-        {
-            stderr.writeln(kv);
+            stderr.writeln(k);
         }
         stderr.writeln("records:");
         foreach (kv; this.records.byKeyValue)

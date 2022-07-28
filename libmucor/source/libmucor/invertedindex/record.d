@@ -3,8 +3,12 @@ module libmucor.invertedindex.record;
 import std.traits;
 import std.typecons : tuple;
 import std.algorithm : std_map = map;
+import std.format;
+import std.array;
+import std.conv;
 
 import libmucor.hts_endian;
+import libmucor.fp80;
 import option;
 
 import drocks.database;
@@ -26,14 +30,6 @@ size_t toHash(uint128 x) nothrow @safe
     ulong tmp = p * (x.data[0] ^ (x.data[0] >> 32));
     auto hash = c * (tmp ^ (tmp >> 32));
     return hash ^ (x.data[1] + c);
-}
-
-size_t toHash(uint256 x) nothrow @safe
-{
-    auto hi = uint128(x.data[0..2]);
-    auto lo = uint128(x.data[2..4]);
-
-    return uint128([hi.toHash, lo.toHash]).toHash;
 }
 
 struct RecordStore(K, V) {
@@ -65,13 +61,79 @@ struct RecordStore(K, V) {
         auto r = this.family.iter;
         return r.std_map!(x => tuple(deserialize!(K,true)(x[0]), deserialize!(V,true)(x[1])));
     }
+
+    auto filterOp(string op)(K key) {
+        auto r = this.family.iter;
+        static if(op == "<")
+            return r.lt(serialize(key)).std_map!(x => tuple(deserialize!(K,true)(x[0]), deserialize!(V,true)(x[1])));
+        else static if(op == "<=")
+            return r.lte(serialize(key)).std_map!(x => tuple(deserialize!(K,true)(x[0]), deserialize!(V,true)(x[1])));
+        else static if(op == ">")
+            return r.gt(serialize(key)).std_map!(x => tuple(deserialize!(K,true)(x[0]), deserialize!(V,true)(x[1])));
+        else static if(op == ">=")
+            return r.gte(serialize(key)).std_map!(x => tuple(deserialize!(K,true)(x[0]), deserialize!(V,true)(x[1])));
+        else static assert(0);
+    }
+    auto filterRange(K start, K end) {
+        auto r = this.family.iter;
+        return r.gte(serialize(start))
+            .lt(serialize(end))
+            .std_map!(x => tuple(deserialize!(K,true)(x[0]), deserialize!(V,true)(x[1])));
+    }
 }
 
-alias Hash2IonStore = RecordStore!(uint128, immutable(ubyte)[]);
-alias String2HashStore = RecordStore!(const(char)[], uint128);
-alias Long2HashStore = RecordStore!(long, uint128);
-alias Float2HashStore = RecordStore!(double, uint128);
-alias KVIndex = RecordStore!(uint256, uint128[]);
+enum IndexValueType: char {
+    String = 's', 
+    Number = 'n',
+    Bool = 'b',
+}
+
+union IndexValue {
+    const(char)[] s;
+    FP80 n;
+    bool b;
+}
+
+struct CompositeKey {
+    const(char)[] key;
+    IndexValueType vtype;
+
+    IndexValue val;
+
+    this(T)(const(char)[] key, T val) {
+        this.key = key;
+        static if(isNumeric!T){
+            vtype = IndexValueType.Number;
+            this.val.n = FP80(val); 
+        } else static if(is(T == bool)) {
+            vtype = IndexValueType.Bool;
+            this.val.b = cast(long) val;
+        } else {
+            vtype = IndexValueType.String;
+            this.val.s = val;
+        }
+    }
+
+    auto toString() const {
+        final switch(this.vtype) {
+            case IndexValueType.Bool:
+                return "%s::%s::%s".format(key, cast(char)vtype, val.b);
+            case IndexValueType.Number:
+                return "%s::%s::%s".format(key, cast(char)vtype, val.n);
+            case IndexValueType.String:
+                return "%s::%s::%s".format(key, cast(char)vtype, val.s);
+        }
+    }
+
+    int opCmp(const CompositeKey other) const
+    {
+        if(this.toString == other.toString) return 0;
+        return this.toString < other.toString ? -1 : 1;
+    }
+}
+
+alias Hash2IonStore = RecordStore!(uint128, IonData);
+alias KVIndex = RecordStore!(CompositeKey, uint128[]);
 
 alias IonData = immutable(ubyte)[];
 
@@ -81,29 +143,55 @@ auto serialize(T)(T val)
         return cast(ubyte[])val;
     else static if(isSomeString!T)
         return cast(ubyte[])val;
-    else static if(isNumeric!T){
-        ubyte[T.sizeof] arr;
-        static if(is(T == float)){
-            float_to_le(val, arr.ptr);
-        }else static if(is(T == double)){
-            double_to_le(val, arr.ptr);
-        } else static if(is(T == ulong)){
-            u64_to_le(val, arr.ptr);
-        } else static if(is(T == long)){
-            i64_to_le(val, arr.ptr);
-        } else static assert(0);
-        return arr;
-    } else static if(is(T == uint128)) {
+    else static if(is(T == CompositeKey))
+    {
+        ubyte[] arr;
+        arr ~= cast(ubyte[])val.key;
+        arr ~= '\0';
+        arr ~= cast(ubyte) val.vtype;
+        final switch(val.vtype) {
+            case IndexValueType.Bool:
+                arr ~= cast(ubyte) val.val.b;
+                return arr;
+            case IndexValueType.Number:
+                arr ~= nativeToBigEndian(val.val.n);
+                return arr;
+            case IndexValueType.String:
+                return arr ~ cast(ubyte[])val.val.s;
+        }
+    }
+    else static if(isArray!T && isSomeString!(ForeachType!T)) {
+        // Calculate total space needed for strings
+        ubyte[] arr;
+        auto len = size_t.sizeof;
+        foreach(s; val) {
+            len += (cast(ubyte[]) val).length + size_t.sizeof;
+        }
+
+        // create array
+        arr = new ubyte[len];
+        auto p = arr.ptr;
+
+        // store num strings
+        u64_to_le(val.length, p);
+        p += size_t.sizeof;
+
+        // loop over strings
+        foreach(s; val) {
+            // store size of string
+            auto a = cast(ubyte[]) s;
+            u64_to_le(a.length, p);
+            p += size_t.sizeof;
+            // store string
+            p[0 .. a.length] = a[];
+            p += a.length;
+        }
+        return arr;   
+    }
+    else static if(is(T == uint128)) {
         ubyte[16] arr;
         u64_to_le(val.data[0], arr.ptr);
         u64_to_le(val.data[1], arr.ptr + 8);
-        return arr;
-    } else static if(is(T == uint256)) {
-        ubyte[32] arr;
-        u64_to_le(val.data[0], arr.ptr);
-        u64_to_le(val.data[1], arr.ptr + 8);
-        u64_to_le(val.data[2], arr.ptr + 16);
-        u64_to_le(val.data[3], arr.ptr + 24);
         return arr;
     } else static if(isArray!T){
         ubyte[] arr;
@@ -121,26 +209,42 @@ T deserialize(T, bool useGC = false)(ubyte[] val)
     T ret;
     static if(is(T == IonData))
         ret = val.dup;
-    else static if(isSomeString!T)
-        ret = cast(T)(val.dup);
-    else static if(isNumeric!T){
-        static if(is(T == float)){
-            ret = le_to_float(val.ptr);
-        }else static if(is(T == double)){
-            ret = le_to_double(val.ptr);
-        } else static if(is(T == ulong)){
-            ret = le_to_u64(val.ptr);
-        } else static if(is(T == long)){
-            ret = le_to_i64(val.ptr);
-        } else static assert(0);
+    else static if(is(T == CompositeKey)) {
+        import std.string;
+        ret.key = fromStringz(cast(char*)val.ptr);
+        ret.vtype = cast(IndexValueType) val[ret.key.length + 1];
+        final switch(ret.vtype) {
+            case IndexValueType.Bool:
+                ret.val.b = cast(bool) val[ret.key.length + 2];
+                break;
+            case IndexValueType.Number:
+                ret.val.n = bigEndianToNative(val[ret.key.length + 2 .. ret.key.length + 2 + 10][0..10]);
+                break;
+            case IndexValueType.String:
+                ret.val.s = cast(const(char)[])val[ret.key.length + 2 .. $];
+                break;
+        }
+    } else static if(isArray!T && isSomeString!(ForeachType!T)) {
+        // first get num of strings
+        auto p = val.ptr;
+        auto len = le_to_u64(p);
+        // create array
+        p += size_t.sizeof;
+        ret = new ForeachType!T[len];
+        // loop over num strings
+        for(auto i = 0; i < len; i++) {
+            // create char array that is length of string
+            char[] arr = new char[le_to_u64(p)];
+            p += 8;
+            // copy string data
+            arr[] = cast(char[])(p[0 .. arr.length]);
+            p += arr.length;
+            // copy to string[]
+            ret[i] = cast(ForeachType!T)arr;
+        }
+
     } else static if(is(T == uint128)) {
         ret = uint128([le_to_u64(val.ptr), le_to_u64(val.ptr + 8)]);
-    } else static if(is(T == uint256)) {
-        ret = uint256([
-            le_to_u64(val.ptr), 
-            le_to_u64(val.ptr + 8),
-            le_to_u64(val.ptr + 16),
-            le_to_u64(val.ptr + 24)]);
     } else static if(is(T == uint128[])){
         ret.length = val.length / 16;
         auto p = val.ptr;
@@ -156,36 +260,20 @@ T deserialize(T, bool useGC = false)(ubyte[] val)
 }
 
 unittest {
-    auto i = 1L;
-    assert(deserialize!(long, true)(serialize(i)) == i);
-    i = 2;
-    assert(deserialize!(long, true)(serialize(i)) == i);
-
-    auto f = 1.2f;
-    assert(deserialize!(float, true)(serialize(f)) == f);
-    
-    f = 10.000050;
-    assert(deserialize!(float, true)(serialize(f)) == f);
-
     auto h = uint128.fromHexString("e85b76fab7734ce9bebcd1e4517162e6");
     assert(deserialize!(uint128, true)(serialize(h)) == h);
-
-    auto h2 = uint256.fromHexString("e85b76fab7734ce9bebcd1e4517162e62550073b968043d39772f665b8fbd46f");
-    assert(deserialize!(uint256, true)(serialize(h2)) == h2);
-
-    auto s = "test";
-    assert(deserialize!(string, true)(serialize(s)) == s);
 
 }
 
 unittest {
     import std.stdio : writefln;
+    import std.algorithm : map, filter;
+    import std.range;
     import std.datetime.stopwatch : benchmark;
     import drocks.env;
     import drocks.options;
     import drocks.merge;
     import mir.ion.conv;
-    import libmucor.invertedindex.hash;
 
     writefln("Testing Data stores");
 
@@ -202,6 +290,10 @@ unittest {
     opts.setMergeOperator(createAppendMergeOperator);
     opts.env = env;
     import std.file;
+    import std.path;
+
+    if("/tmp/test_store".exists)
+        rmdirRecurse("/tmp/test_store");
     
     auto db = RocksDB(opts, "/tmp/test_store");
     auto records = Hash2IonStore(db.createColumnFamily("records").unwrap);
@@ -219,14 +311,42 @@ unittest {
     assert(records[h1].unwrap.unwrap.ion2text == `{key1:test,key2:1.2,key3:[1,2],key4:"test"}`);
     assert(records[h2].unwrap.unwrap.ion2text == `{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`);
     assert(records[h3].unwrap.unwrap.ion2text == `{key1:test3,key3:[1]}`);
-    idx[combineHash(getKeyHash("key1"), getValueHash("test"))] ~= h1;
-    idx[combineHash(getKeyHash("key1"), getValueHash("test2"))] ~= h2;
-    idx[combineHash(getKeyHash("key1"), getValueHash("test3"))] ~= h3;
+    idx[CompositeKey("key1", "test")] ~= h1;
+    idx[CompositeKey("key1", "test2")] ~= h2;
+    idx[CompositeKey("key1", "test3")] ~= h3;
 
-    assert(idx[combineHash(getKeyHash("key1"), getValueHash("test"))].unwrap.unwrap == [h1]);
-    assert(idx[combineHash(getKeyHash("key1"), getValueHash("test2"))].unwrap.unwrap == [h2]);
-    assert(idx[combineHash(getKeyHash("key1"), getValueHash("test3"))].unwrap.unwrap == [h3]);
+    assert(idx[CompositeKey("key1", "test")].unwrap.unwrap == [h1]);
+    assert(idx[CompositeKey("key1", "test2")].unwrap.unwrap == [h2]);
+    assert(idx[CompositeKey("key1", "test3")].unwrap.unwrap == [h3]);
 
-    import std.file;
-    rmdirRecurse("/tmp/test_store");
+    idx[CompositeKey("key3", 1)] ~= h1;
+    idx[CompositeKey("key3", 1)] ~= h2;
+    idx[CompositeKey("key3", 1)] ~= h3;
+
+    idx[CompositeKey("key3", 2)] ~= h2;
+    idx[CompositeKey("key3", 2)] ~= h3;
+
+    idx[CompositeKey("key3", 3)] ~= h3;
+
+    assert(idx[CompositeKey("key3", 1)].unwrap.unwrap == [h1, h2, h3]);
+    assert(idx[CompositeKey("key3", 2)].unwrap.unwrap == [h2, h3]);
+    assert(idx[CompositeKey("key3", 3)].unwrap.unwrap == [h3]);
+    
+    assert(idx.filterOp!">"(CompositeKey("key3", 1)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == [[h2, h3], [h3]]);
+    assert(idx.filterOp!">"(CompositeKey("key3", 2)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == [[h3]]);
+    assert(idx.filterOp!">"(CompositeKey("key3", 3)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == []);
+
+    assert(idx.filterOp!">="(CompositeKey("key3", 1)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == [[h1, h2, h3], [h2, h3], [h3]]);
+    assert(idx.filterOp!">="(CompositeKey("key3", 2)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == [[h2, h3], [h3]]);
+    assert(idx.filterOp!">="(CompositeKey("key3", 3)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == [[h3]]);
+
+    assert(idx.filterOp!"<"(CompositeKey("key3", 1)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == []);
+    assert(idx.filterOp!"<"(CompositeKey("key3", 2)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == [[h1, h2, h3]]);
+    assert(idx.filterOp!"<"(CompositeKey("key3", 3)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == [[h1, h2, h3], [h2, h3]]);
+
+    assert(idx.filterOp!"<="(CompositeKey("key3", 1)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == [[h1, h2, h3]]);
+    assert(idx.filterOp!"<="(CompositeKey("key3", 2)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == [[h1, h2, h3], [h2, h3]]);
+    assert(idx.filterOp!"<="(CompositeKey("key3", 3)).filter!(x => x[0].vtype == IndexValueType.Number).map!(x => x[1]).array == [[h1, h2, h3], [h2, h3], [h3]]);
+
+
 }

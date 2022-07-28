@@ -11,7 +11,6 @@ import std.range;
 
 import dhtslib.vcf;
 import htslib.hts_log;
-import libmucor.vcfops;
 import libmucor.jsonlops;
 import libmucor.error;
 import libmucor.option;

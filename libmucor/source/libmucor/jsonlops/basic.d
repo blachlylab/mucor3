@@ -5,7 +5,6 @@ import std.array : array;
 import std.digest.md : MD5Digest, toHexString;
 import std.format: format;
 import libmucor.spookyhash;
-import libmucor.invertedindex.hash: SEED3, SEED4;
 import libmucor.wideint;
 
 import asdf;
@@ -387,18 +386,6 @@ unittest
     auto exp = `{"foo":["bar","bar"],"inner":{"c":["32323","32","32323","32"],"a":[true,true,true,true],"e":{},"b":[false,true,false,true],"d":[null,false,null,false]}}`
         .parseJson;
     assert(res == exp);
-}
-
-Asdf spookyhashObject(Asdf obj)
-{
-    uint128 ret;
-    ret.hi = SEED3;
-    ret.lo = SEED4;
-
-    SpookyHash.Hash128(obj.data.ptr, obj.data.length, &ret.hi, &ret.lo);
-    auto root = AsdfNode(obj);
-    root["md5"] = AsdfNode(serializeToAsdf(format("%x", ret)));
-    return cast(Asdf) root;
 }
 
 Asdf md5sumObject(Asdf obj)
