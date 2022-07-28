@@ -141,9 +141,21 @@ struct wideIntImpl(bool signed, int bits)
         opAssign!T(x);
     }
 
+    static typeof(this) min() {
+        static if(signed) {
+            alias part = integer!(signed, bits / 2);
+            typeof(this) ret;
+            ret.hi = part.min;
+            ret.lo = part.min;
+            return ret;
+        } else {
+            return typeof(this)(0);
+        }
+    }
+
     /// Construct from hex string
     /// Added by Charles Gregory
-    @nogc void fromHexString(string str)
+    static typeof(this) fromHexString(string str) @nogc
     {
         typeof(this) value;
         assert(str.length * 4 <= _bits);
@@ -175,7 +187,7 @@ struct wideIntImpl(bool signed, int bits)
                 value.lo = (value.lo << 4 ) | hex2nibble[str[i]];
             }
         }
-        this = value;
+        return value;
     }
 
     // Private functions used by the `literal` template.
@@ -801,27 +813,26 @@ unittest
 {
     import std.string : format;
 
-    int128 x;
-    x.fromHexString("1158E460913D00001");
+    int128 x = int128.fromHexString("1158E460913D00001");
     assert(format("%x", x) == "1158E460913D00001");
     assert(format("%x", x));
     x.hi = 0;
     x.lo = 0;
 
-    x.fromHexString("FFFFFFFFFFFFFFFEEA71B9F6EC2FFFFF");
+    x = int128.fromHexString("FFFFFFFFFFFFFFFEEA71B9F6EC2FFFFF");
     assert(format("%x", x) == "FFFFFFFFFFFFFFFEEA71B9F6EC2FFFFF");
 
     x.hi = 0;
     x.lo = 0;
 
-    x.fromHexString("1158e460913d00001");
+    x = int128.fromHexString("1158e460913d00001");
     assert(format("%x", x) == "1158E460913D00001");
     assert(format("%x", x));
 
     x.hi = 0;
     x.lo = 0;
 
-    x.fromHexString("fffffffffffffffeea71b9f6ec2fffff");
+    x = int128.fromHexString("fffffffffffffffeea71b9f6ec2fffff");
     assert(format("%x", x) == "FFFFFFFFFFFFFFFEEA71B9F6EC2FFFFF");
 }
 
