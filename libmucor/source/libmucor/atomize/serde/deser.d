@@ -20,12 +20,20 @@ template tryRead(string ins, string handleError = "assert(!error, ionErrorMsg(er
     enum tryRead = "
     error = "~ ins~";     
     while(error == IonErrorCode.unexpectedEndOfData){
+        writeln(\"extending\");
         ubyte[4096] tmpBuf;
         ubyte[] tmp = tmpBuf[];
+        writeln(tmp.length);
         tmp = inFile.rawRead(tmp);
+        writeln(tmp.length);
         this.buffer ~= tmp;
+        writeln(this.buffer.length);
         this.bufferView = buffer;
         error = " ~ ins ~";
+        // if(tmp.length < 4096){
+        //     this.eof = true;
+        //     break;
+        // }
     }
     this.buffer = bufferView;
     "~handleError~";";
@@ -35,17 +43,36 @@ struct VcfIonRecord {
     
     SymbolTable * sharedSymbolTable;
     
-    SymbolTable * localSymbols;
+    SymbolTable localSymbols;
 
-    IonStructWithSymbols obj;
+    IonDescribedValue val;
 
-    this(ref SymbolTable sst, ref SymbolTable lst, ref IonStructWithSymbols val) {
+    this(ref SymbolTable sst, ref SymbolTable lst, IonDescribedValue val) {
         this.sharedSymbolTable = &sst;
-        this.localSymbols = &lst;
-        this.obj = val;
+        this.localSymbols = lst;
+        this.val = val;
     }
 
-    alias obj this;
+    alias getObj this;
+
+    auto getObj(){
+        IonStruct obj;
+        IonErrorCode error = val.get(obj);
+        assert(!error, ionErrorMsg(error));
+
+        return obj.withSymbols(this.sharedSymbolTable.table ~ localSymbols.table);
+    }
+
+    auto serializeLocalSymbols() {
+        IonSymbolTable!false tmptable;
+        tmptable.initialize;
+        foreach (name; localSymbols.table[10..$])
+        {
+            tmptable.insert(name);
+        }
+        tmptable.finalize;
+        return tmptable.data.dup;
+    }
 }
 
 /// Deserialize VCF ion
@@ -65,9 +92,10 @@ struct VcfIonDeserializer {
     SymbolTable sharedSymbolTable;
 
     size_t bufferSize;
-    const(ubyte)[] buffer;
+    ubyte[] buffer;
     const(ubyte)[] bufferView;
     bool eof;
+    bool empty;
     IonErrorCode error;
 
     VcfIonRecord frontVal;
@@ -79,8 +107,8 @@ struct VcfIonDeserializer {
         this.initialize();
 
         assert(!error, ionErrorMsg(error));
-        mixin(tryRead!"this.sharedSymbolTable.loadSymbolTable(bufferView)");
-
+        writefln("reading shared table: %d", bufferView.length);
+        tryReadSharedSymbolTable(this.sharedSymbolTable);
         this.popFront;
     }
 
@@ -88,11 +116,10 @@ struct VcfIonDeserializer {
     void initialize() {
         buffer.length = bufferSize;
 
-        buffer = cast(ubyte[]) this.inFile.rawRead(cast(ubyte[])buffer);
+        bufferView = cast(const(ubyte)[]) this.inFile.rawRead(buffer);
 
-        error = readVersion(this.buffer);
-
-        this.bufferView = this.buffer;
+        writefln("reading version: %d", bufferView.length);
+        error = readVersion(this.bufferView);
     }
 
     /// set up buffer, read first chunk, and validate version/ionPrefix
@@ -106,31 +133,105 @@ struct VcfIonDeserializer {
     void popFront(){
         SymbolTable localSymbols;
         IonDescribedValue val;
-        error = readVersion(this.buffer);
-        if(this.inFile.eof && this.buffer.length == 0){
+
+        if(this.eof && this.bufferView.length == 0){
             
-            this.eof = true;
+            this.empty = true;
             return;
         }
         
-        mixin(tryRead!("localSymbols.loadSymbolTable(this.bufferView)", "if(_expect(error, false)) return"));
+        writefln("reading version: %d", bufferView.length);
+        error = readVersion(this.bufferView);
         
-        mixin(tryRead!("parseValue(bufferView, val)", "if(_expect(error, false)) return"));
 
-        IonStruct obj;
-        error = val.get(obj);
+        writefln("reading local table: %d", bufferView.length);
+        tryReadSymbolTable(localSymbols);
         
-        if(_expect(error, false))
-            return;
+        writefln("reading value: %d", bufferView.length);
+        tryReadValue(val);
+        writeln(bufferView.length);
 
-        auto objWsym = obj.withSymbols(this.sharedSymbolTable.table ~ localSymbols.table);
-
-        this.frontVal = VcfIonRecord(this.sharedSymbolTable, localSymbols, objWsym);
+        this.frontVal = VcfIonRecord(this.sharedSymbolTable, localSymbols, val);
+        foreach (key, val; this.frontVal.getObj)
+        {
+            writefln("%s: %s", key, val);
+        }
+        
         
     }
 
-    bool empty() {
-        return this.eof;
+    void tryReadSharedSymbolTable(ref SymbolTable sym) {
+        IonDescriptor des;
+        error = parseValueDescriptor(this.bufferView, des);
+        assert(!error, ionErrorMsg(error));
+
+        error = ensureLoaded(des.L);
+        assert(!error, ionErrorMsg(error));
+
+        error = sym.loadSymbolTable(bufferView);
+        sym.data = cast(const(ubyte)[])sym.data.dup;
+
+        assert(!error, ionErrorMsg(error));
+    }
+
+    void tryReadSymbolTable(ref SymbolTable sym) {
+        IonDescriptor des;
+        error = parseValueDescriptor(this.bufferView, des);
+        assert(!error, ionErrorMsg(error));
+
+        error = ensureLoaded(des.L);
+        assert(!error, ionErrorMsg(error));
+
+        // auto data = cast(const(ubyte)[]) bufferView[0 .. des.L + 1].dup;
+        error = sym.loadSymbolTable(bufferView);
+        // bufferView = bufferView[des.L + 1 .. $];
+        sym.data = cast(const(ubyte)[])sym.data.dup;
+
+        assert(!error, ionErrorMsg(error));
+    }
+
+    void tryReadValue(ref IonDescribedValue val) {
+        IonDescriptor des;
+        error = parseValueDescriptor(this.bufferView, des);
+        assert(!error, ionErrorMsg(error));
+        
+        error = ensureLoaded(des.L);
+        assert(!error, ionErrorMsg(error));
+
+        error = parseValue(bufferView, val);
+        val.data = cast(const(ubyte)[])val.data.dup;
+        assert(!error, ionErrorMsg(error));
+    }
+
+    IonErrorCode ensureLoaded(uint size) {
+        
+        if(size > bufferView.length) {
+            writefln("Loading more data, have %d, need %d", bufferView.length, size);
+            writeln(bufferView);
+            /// move remaining to beginning
+            buffer[0 .. bufferView.length] = bufferView.dup[];
+
+            /// increase buffer size if needed
+            if(size > buffer.length) 
+                buffer.length = size + (4096 - (size % 4096));
+
+            /// read new bytes
+            auto tmp = inFile.rawRead(buffer[bufferView.length .. $]);
+
+            if(tmp.length < buffer[bufferView.length .. $].length) {
+                this.eof = true;
+            }
+
+            /// if returned is too short, err
+            if(_expect(bufferView.length + tmp.length < size, false)) 
+                return IonErrorCode.unexpectedEndOfData;
+
+            /// reset view
+            bufferView = buffer[0 .. tmp.length + bufferView.length];
+            writefln("Loaded: %d", bufferView.length);
+            writeln(bufferView);
+        }
+        return IonErrorCode.none;
     }
 }
 
@@ -191,6 +292,53 @@ IonErrorCode readVersion(ref const(ubyte)[] buffer) {
         }
     }
     return error;
+}
+
+IonErrorCode parseValueDescriptor()(const(ubyte)[] data, scope ref IonDescriptor descriptor)
+@safe pure nothrow @nogc
+{
+    version (LDC) pragma(inline, true);
+
+    if (_expect(data.length == 0, false))
+        return IonErrorCode.unexpectedEndOfData;
+    auto descriptorPtr = &data[0];
+    ubyte descriptorData = *descriptorPtr;
+
+    if (_expect(descriptorData > 0xEE, false))
+        return IonErrorCode.illegalTypeDescriptor;
+
+    descriptor = IonDescriptor(descriptorPtr);
+
+    // if null
+    if (descriptor.L == 0xF)
+        return IonErrorCode.none;
+    // if bool
+    if (descriptor.type == IonTypeCode.bool_)
+    {
+        if (_expect(descriptor.L > 1, false))
+            return IonErrorCode.illegalTypeDescriptor;
+        return IonErrorCode.none;
+    }
+    // if large
+    bool sortedStruct = descriptorData == 0xD1;
+    if (descriptor.L == 0xE || sortedStruct)
+    {
+        auto d = data[1..$];
+        if (auto error = parseVarUInt(d, descriptor.L))
+            return error;
+    }
+    // NOP Padding
+    return descriptor.type == IonTypeCode.null_ ? IonErrorCode.nop : IonErrorCode.none;
+}
+
+IonErrorCode loadValueData()(ref const(ubyte)[] data, scope ref IonDescribedValue describedValue)
+@safe pure nothrow @nogc
+{
+    if (_expect(describedValue.length > data.length, false))
+        return IonErrorCode.unexpectedEndOfData;
+    describedValue.data = data[0 .. length];
+    data = data[length .. $];
+    return IonErrorCode.none;
 }
 
 IonErrorCode parseValue()(ref const(ubyte)[] data, scope ref IonDescribedValue describedValue)

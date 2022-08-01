@@ -140,7 +140,7 @@ struct VcfRec {
         auto last = serializer.serializer.data[s .. $];
         serializer.putSharedKey("checksum");
 
-        serializeValue(serializer.serializer, hashIon(last));
+        serializeValue(serializer.serializer, hashIon(serializer.localSymbols.data ~ last));
         serializer.structEnd(s);
     }
 }
@@ -187,7 +187,7 @@ struct VcfRecSingleSample {
         auto last = serializer.serializer.data[s .. $];
         serializer.putSharedKey("checksum");
 
-        serializeValue(serializer.serializer, hashIon(last));
+        serializeValue(serializer.serializer, hashIon(serializer.localSymbols.data ~ last));
         serializer.structEnd(s);
     }
 }
@@ -235,7 +235,7 @@ struct VcfRecSingleAlt {
         auto last = serializer.serializer.data[s .. $];
         serializer.putSharedKey("checksum");
 
-        serializeValue(serializer.serializer, hashIon(last));
+        serializeValue(serializer.serializer, hashIon(serializer.localSymbols.data ~ last));
         serializer.structEnd(s);
     }
 }
@@ -249,11 +249,11 @@ unittest {
     auto hdrInfo = HeaderConfig(vcf.vcfhdr);
     auto rec = vcf.front;
 
-    auto res1 = `{CHROM:"1",POS:3000149,REF:C,ALT:[T],QUAL:59.2,FILTER:[PASS],INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{A:{GT:"0/1",GQ:245},B:{GT:"0/1",GQ:245}},checksum:117558158828293615626413830071040573524}`;
-    auto res2 = `{CHROM:"1",POS:3000149,REF:C,ALT:[T],QUAL:59.2,FILTER:[PASS],sample:A,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:312819208676450488940002048919564391637}`;
-    auto res3 = `{CHROM:"1",POS:3000149,REF:C,ALT:[T],QUAL:59.2,FILTER:[PASS],sample:B,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:183101013209721148783211394903802951045}`;
-    auto res4 = `{CHROM:"1",POS:3000149,REF:C,ALT:T,QUAL:59.2,FILTER:[PASS],sample:A,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:10062642182546142337762130151449115834}`;
-    auto res5 = `{CHROM:"1",POS:3000149,REF:C,ALT:T,QUAL:59.2,FILTER:[PASS],sample:B,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:264289506251969372394017004258015941852}`;
+    auto res1 = `{CHROM:"1",POS:3000149,REF:C,ALT:[T],QUAL:59.2,FILTER:[PASS],INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{A:{GT:"0/1",GQ:245},B:{GT:"0/1",GQ:245}},checksum:56320168808282222100496826910943182449}`;
+    auto res2 = `{CHROM:"1",POS:3000149,REF:C,ALT:[T],QUAL:59.2,FILTER:[PASS],sample:A,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:54669055384180119313611399664651327993}`;
+    auto res3 = `{CHROM:"1",POS:3000149,REF:C,ALT:[T],QUAL:59.2,FILTER:[PASS],sample:B,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:179874609177918956386798000075565266092}`;
+    auto res4 = `{CHROM:"1",POS:3000149,REF:C,ALT:T,QUAL:59.2,FILTER:[PASS],sample:A,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:309740077461203132154972158351695738307}`;
+    auto res5 = `{CHROM:"1",POS:3000149,REF:C,ALT:T,QUAL:59.2,FILTER:[PASS],sample:B,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245},checksum:214188149916657431805741335362681678534}`;
     auto ionRec = VcfRec(vcf.vcfhdr);
 
     ionRec.parse(rec);
@@ -276,13 +276,13 @@ unittest {
     vcf.popFront;
     vcf.popFront;
 
-    res1 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:[T,C],QUAL:12.6,FILTER:[test],INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{A:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},B:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}},checksum:219116576482101330421115625536470289143}`;
-    res2 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:[T,C],QUAL:12.6,FILTER:[test],sample:A,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},checksum:185658878538043403797160906909977743490}`;
-    res3 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:[T,C],QUAL:12.6,FILTER:[test],sample:B,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]},checksum:92660607317732590518334398831914442500}`;
-    res4 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:T,QUAL:12.6,FILTER:[test],sample:A,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},checksum:332798400777634619017407027204223542362}`;
-    res5 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:T,QUAL:12.6,FILTER:[test],sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]},checksum:242569322480355185711890828813215226132}`;
-    auto res6 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:C,QUAL:12.6,FILTER:[test],sample:A,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},checksum:176520503121926150263921337119712364072}`;
-    auto res7 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:C,QUAL:12.6,FILTER:[test],sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]},checksum:154878335168869126708367871750094980419}`;
+    res1 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:[T,C],QUAL:12.6,FILTER:[test],INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{A:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},B:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}},checksum:336808808299199621060170664033941655347}`;
+    res2 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:[T,C],QUAL:12.6,FILTER:[test],sample:A,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},checksum:339496765685359100924830177560372287322}`;
+    res3 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:[T,C],QUAL:12.6,FILTER:[test],sample:B,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]},checksum:237708375645289304417209875324351069387}`;
+    res4 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:T,QUAL:12.6,FILTER:[test],sample:A,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},checksum:21651954581148434034535224475915159822}`;
+    res5 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:T,QUAL:12.6,FILTER:[test],sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]},checksum:266551528496114478633197644041276517054}`;
+    auto res6 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:C,QUAL:12.6,FILTER:[test],sample:A,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},checksum:222739114060731013134680965120234081080}`;
+    auto res7 = `{CHROM:"1",POS:3062914,ID:"idSNP",REF:G,ALT:C,QUAL:12.6,FILTER:[test],sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]},checksum:195250912234971947471714678954171533972}`;
     
     rec = vcf.front;
     ionRec.parse(rec);

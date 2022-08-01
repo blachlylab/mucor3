@@ -28,8 +28,8 @@ struct InvertedIndexStore {
     this(string dbfn) {
         Env env;
         env.initialize;
-        env.backgroundThreads = 2;
-        env.highPriorityBackgroundThreads = 1;
+        env.backgroundThreads = 16;
+        env.highPriorityBackgroundThreads = 16;
 
         RocksDBOptions opts;
         opts.initialize;
@@ -92,7 +92,7 @@ struct InvertedIndexStore {
     }
 
     void insert(ref VcfIonRecord rec) {
-        auto data = rec.obj;
+        auto data = rec.getObj;
         IonInt hashValue;
         if(_expect(!("checksum" in data), false)) {
             log_err(__FUNCTION__, "record with no md5");
@@ -101,8 +101,9 @@ struct InvertedIndexStore {
         assert(err == IonErrorCode.none);
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
-
-        this.records[hash] = cast(immutable(ubyte)[])(ionPrefix ~ rec.localSymbols.data ~ data.ionStruct.data);
+        import std.stdio;
+        writeln(rec.localSymbols.table[10..$]);
+        this.records[hash] = cast(immutable(ubyte)[])(ionPrefix ~ rec.localSymbols.data.dup ~ rec.val.data);
 
         foreach (key,value; data)
         {

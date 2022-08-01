@@ -119,7 +119,7 @@ struct CompositeKey {
             case IndexValueType.Bool:
                 return "%s::%s::%s".format(key, cast(char)vtype, val.b);
             case IndexValueType.Number:
-                return "%s::%s::%s".format(key, cast(char)vtype, val.n);
+                return "%s::%s::%s".format(key, cast(char)vtype, val.n.toString);
             case IndexValueType.String:
                 return "%s::%s::%s".format(key, cast(char)vtype, val.s);
         }

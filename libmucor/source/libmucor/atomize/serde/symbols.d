@@ -248,7 +248,7 @@ struct SymbolTable {
     auto toBytes() {
         IonSymbolTable!true tmptable;
         tmptable.initialize;
-        foreach (const(char[]) key; this.table)
+        foreach (const(char[]) key; this.table[10..$])
         {
             tmptable.insert(key);
         }

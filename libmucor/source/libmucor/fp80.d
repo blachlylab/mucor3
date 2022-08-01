@@ -147,7 +147,7 @@ struct FP80
 
     }
 
-    auto toString() {
+    auto toString() const {
         char[32] buffer;
         auto len = ld_sprint(buffer.ptr, 'g', this);
         return buffer[0 .. len].idup;

@@ -17,6 +17,7 @@ import libmucor.khashl;
 import libmucor.atomize.serde;
 import libmucor: setup_global_pool;
 import std.algorithm.searching : balancedParens;
+import std.parallelism;
 import std.getopt;
 import core.stdc.stdlib: exit;
 import libmucor.query;
@@ -142,4 +143,41 @@ void index_main(string[] args)
     auto data = VcfIonDeserializer(File(args[1]));
     index(data, prefix);
 
+}
+
+unittest {
+    import std.path;
+    import std.file;
+    import libmucor.atomize.serde;
+    import libmucor.atomize;
+
+    auto dbname = "/tmp/test2.ion_index";
+    if(dbname.exists) rmdirRecurse(dbname);
+
+    
+    {
+        auto f = File("/tmp/test2.ion", "wb");
+        parseVCF("../test/data/vcf_file.vcf", -1, false, false, f);
+    }
+    
+    {
+        auto f = File("/tmp/test2.ion");
+        auto rdr = VcfIonDeserializer(f);
+        index(rdr, dbname);
+
+        f = File("/tmp/test3.ion", "w");
+        InvertedIndex idx = InvertedIndex(dbname);
+        // idx.store.print;
+        query(f, idx, "QUAL > 60");
+    }{
+        auto f = File("/tmp/test3.ion");
+        auto rdr = VcfIonDeserializer(f);
+        
+        foreach (rec; rdr)
+        {
+            auto r = rec.unwrap;
+            // writeln(r.symbolTable);
+            writeln(vcfIonToText(r));    
+        }
+    }
 }

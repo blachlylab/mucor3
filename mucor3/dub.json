@@ -12,11 +12,11 @@
 			"path": "../libmucor"
 		},
 		"progress": "~>5.0.1",
-		"drocks": {
-			"path": "../drocks"
-		},
 	},
+	"sourceFiles": ["../drocks/rocksdb/librocksdb.a"],
 	"targetPath": "../bin",
+	"dflags-ldc": ["--flto=full"],
+	"libs": ["bz2", "stdc++"],
 	"configurations": [
 		{
 			"name": "standard",

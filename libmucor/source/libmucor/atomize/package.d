@@ -90,7 +90,7 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, ref Fi
 unittest {
     {
         auto f = File("/tmp/test.ion", "wb");
-        parseVCF("../test/data/vcf_file.vcf", -1, true, true, f);
+        parseVCF("../test/data/vcf_file.vcf", -1, false, false, f);
     }
     import std.file : read;
     import mir.ion.conv;

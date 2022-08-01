@@ -136,6 +136,7 @@ enum Effect {
     non_coding_transcript_variant,
     duplication,
     bidirectional_gene_fusion,
+    structural_interaction_variant
 }
 
 struct Annotation {
