@@ -8,16 +8,98 @@ import mir.appender: ScopedBuffer;
 import mir.ion.symbol_table;
 import mir.ion.stream;
 import mir.serde : serdeGetSerializationKeysRecurse;
+import mir.ser.ion : IonSerializer;
 
 import libmucor.atomize.header;
 import libmucor.atomize.ann;
 import libmucor.atomize.serde;
 import libmucor.atomize.serde.deser : parseValue;
+import libmucor.khashl;
+
+struct SymbolTableBuilder {
+
+    IonSerializer!(1024, null, false) serializer;
+
+    /// previously serialized symbol hashmap
+    khashl!(const(char)[], size_t, true) currentSymbolsMap;
+    /// new yet-to-be serialized symbol hashmap
+    khashl!(const(char)[], size_t, true) newSymbolsMap;
+    /// new symbols
+    const(char)[][] syms;
+    /// concatenated new symbols
+    /// just used for hashing
+    ubyte[] dataForHashing;
+    /// total number of symbols
+    size_t numSymbols = IonSystemSymbol.max + 1;
+    bool first = true;
+
+    /// insert symbol  
+    size_t insert(const(char)[] key) {
+        auto p = key in currentSymbolsMap;
+        if(p)
+            return *p;
+        p = key in newSymbolsMap;
+        if(p)
+            return *p;
+        newSymbolsMap[key] = numSymbols++;
+        syms ~= key;
+        return numSymbols - 1;
+    }
+
+    ubyte[] getRawSymbols() {
+        import std.algorithm;
+        import std.array;
+        return cast(ubyte[])this.syms.joiner.array;
+    }
+
+    // $ion_symbol_table::
+    // {
+    //     symbols:[ ... ]
+    // }
+    const(ubyte)[] serialize() {
+        if(this.syms.length > 0) {
+            this.serializer.initializeNoTable;
+
+            auto annotationWrapperState = serializer.annotationWrapperBegin;
+
+            serializer.putAnnotationId(IonSystemSymbol.ion_symbol_table);
+            auto annotationsState = serializer.annotationsEnd(annotationWrapperState);
+
+            auto structState = serializer.structBegin();
+            if(_expect(!first, true)){
+                serializer.putKeyId(IonSystemSymbol.imports);
+                serializer.putSymbolId(IonSystemSymbol.ion_symbol_table);
+            }
+            serializer.putKeyId(IonSystemSymbol.symbols);
+            auto listState = serializer.listBegin();
+
+            auto n = currentSymbolsMap.kh_size;
+            foreach (i, const(char)[] key; syms)
+            {
+                serializer.putValue(key);
+                currentSymbolsMap[key] = n + i;
+            }
+
+            serializer.listEnd(listState);
+            serializer.structEnd(structState);
+            serializer.annotationWrapperEnd(annotationsState, annotationWrapperState);
+
+            this.syms.length = 0;
+            this.newSymbolsMap.kh_clear();
+            this.first = false;
+            return this.serializer.data;
+        }
+        return [];
+    }
+}
 
 struct SymbolTable {
     ScopedBuffer!(const(char)[]) symbolTableBuffer = void;
     const(char[])[] table;
-    const(ubyte)[] data;
+
+    void initialize() {
+        symbolTableBuffer.initialize;
+    }
 
     @trusted pure nothrow createFromHeaderConfig(ref HeaderConfig hdrInfo) {
         IonSymbolTable!false tmptable;
@@ -109,8 +191,6 @@ struct SymbolTable {
     @trusted pure nothrow @nogc
     scope IonErrorCode loadSymbolTable(ref const(ubyte)[] d)
     {
-        this.data = d;
-        symbolTableBuffer.initialize;
 
         void resetSymbolTable()
         {

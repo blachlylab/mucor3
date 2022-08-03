@@ -66,7 +66,7 @@ struct InvertedIndexStore {
     }
 
     void storeSharedSymbolTable(ref VcfIonDeserializer deserializer){
-        this.db[serialize("sharedTable")] = deserializer.sharedSymbolTable.toBytes;
+        this.db[serialize("sharedTable")] = deserializer.symbols.toBytes;
     }
 
     auto getSharedSymbolTable(){
@@ -102,8 +102,7 @@ struct InvertedIndexStore {
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
         import std.stdio;
-        writeln(rec.localSymbols.table[10..$]);
-        this.records[hash] = cast(immutable(ubyte)[])(ionPrefix ~ rec.localSymbols.data.dup ~ rec.val.data);
+        this.records[hash] = cast(immutable(ubyte)[])(rec.val.data);
 
         foreach (key,value; data)
         {

@@ -42,9 +42,9 @@ struct InfoAlleleValues {
         {
             if(val.isNull) continue;
             if(byAllele)
-                serializer.putSharedKey(cfg.infos.byAllele.names[i]);
+                serializer.putKey(cfg.infos.byAllele.names[i]);
             else
-                serializer.putSharedKey(cfg.infos.other.names[i]);
+                serializer.putKey(cfg.infos.other.names[i]);
             val.serialize(serializer);
         }
         serializer.structEnd(s);
@@ -169,7 +169,7 @@ struct Info {
     void serialize(ref VcfRecordSerializer serializer) {
         auto state = serializer.structBegin;
         if(this.byAllele.map!(x => !x.isNull).any){
-            serializer.putSharedKey("byAllele");
+            serializer.putKey("byAllele");
             auto state2 = serializer.listBegin;
             foreach (i,v; this.byAllele)
             {
@@ -181,13 +181,13 @@ struct Info {
         foreach (i,val; this.other)
         {
             if(val.isNull) continue;
-            serializer.putSharedKey(cfg.infos.other.names[i]);
+            serializer.putKey(cfg.infos.other.names[i]);
             val.serialize(serializer);
         }
 
         foreach (i, anns; annFields)
         {
-            serializer.putSharedKey(cfg.infos.annotations.names[i]);
+            serializer.putKey(cfg.infos.annotations.names[i]);
             auto l = serializer.listBegin;
             foreach (ann; anns)
             {
@@ -225,20 +225,20 @@ struct InfoSingleAlt {
         foreach (i,val; this.alleleValues.fields)
         {
             if(val.isNull) continue;
-            serializer.putSharedKey(cfg.infos.byAllele.names[i]);
+            serializer.putKey(cfg.infos.byAllele.names[i]);
             val.serialize(serializer);
         }
 
         foreach (i,val; this.other)
         {
             if(val.isNull) continue;
-            serializer.putSharedKey(cfg.infos.other.names[i]);
+            serializer.putKey(cfg.infos.other.names[i]);
             val.serialize(serializer);
         }
 
         foreach (i, anns; annFields)
         {
-            serializer.putSharedKey(cfg.infos.annotations.names[i]);
+            serializer.putKey(cfg.infos.annotations.names[i]);
             auto l = serializer.listBegin;
             foreach (ann; anns)
             {

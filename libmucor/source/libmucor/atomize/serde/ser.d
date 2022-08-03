@@ -23,40 +23,30 @@ enum nMax = 4096u;
 /// When this is serialized we serialize as such:
 /// [ion 4 byte prefix] + [local symbol table ] + [ion data]
 struct VcfRecordSerializer {
-    khashl!(const(char)[], size_t, true) * sharedSymbols;
-    size_t numShared;
-    
-    IonSymbolTable!false localSymbols;
+    SymbolTableBuilder * symbols;
     
     IonSerializer!(nMax * 8, [], false) serializer;
+    SerdeTarget target;
 
-    this(ref khashl!(const(char)[], size_t, true) sharedSymbols, size_t numShared, SerdeTarget target) {
-        this.sharedSymbols = &sharedSymbols;
-        this.localSymbols.initialize;
-        this.numShared = numShared;
+    this(ref SymbolTableBuilder symbols, SerdeTarget target) {
+        this.symbols = &symbols;
+        this.target = target;
 
-        this.serializer = ionSerializer!(nMax * 8, [], false);
-        this.serializer.initialize(localSymbols, target);
+        this.initialize;
+    }
+
+    void initialize() {
+        this.serializer.initializeNoTable(target);
     }
 
     void putKey(scope const char[] key) //@nogc
     {
-        serializer.putKeyId(localSymbols.insert(key) + numShared);
+        serializer.putKeyId(symbols.insert(key));
     }
 
     void putSymbol(scope const char[] key) //@nogc
     {
-        serializer.putSymbolId(localSymbols.insert(key) + numShared);
-    }
-
-    void putSharedKey(scope const char[] key) //@nogc
-    {
-        serializer.putKeyId((*sharedSymbols)[key]);
-    }
-
-    void putSharedSymbol(scope const char[] key) //@nogc
-    {
-        serializer.putSymbolId((*sharedSymbols)[key]);
+        serializer.putSymbolId(symbols.insert(key));
     }
 
     void putValue(V)(V val) {
@@ -79,13 +69,13 @@ struct VcfRecordSerializer {
         return serializer.listEnd(state);
     }
 
-    auto finalize() {
+    const(ubyte)[] finalize() {
+        import std.stdio;
         serializer.finalize;
-        // use runtime table
-        assert(localSymbols.initialized);
-        localSymbols.finalize; 
-        return () @trusted { return  cast(immutable) (ionPrefix ~ localSymbols.data ~ serializer.data); } ();
-        
+        auto symData = symbols.serialize; 
+        writefln("symbol table data length:\t%d",symData.length);
+        writefln("value data length:\t\t%d",serializer.data.length);
+        return () @trusted { return symData ~ serializer.data; } ();
     }
 
 }
@@ -98,52 +88,116 @@ struct VcfRecordSerializer {
 /// [ion 4 byte prefix] + [shared symbol table ] + [ion data records]
 struct VcfSerializer {
     File outfile;
-    SymbolTable sharedSymbols;
-    khashl!(const(char)[], size_t, true) sharedSymbolTable;
-    size_t numSharedSymbols;
+    SymbolTableBuilder symbols;
 
     SerdeTarget target;
 
+    VcfRecordSerializer recSerializer;
+
     this(File outfile, ref HeaderConfig hdrInfo, SerdeTarget target) {
+        import std.stdio;
+        writeln("Starting");
         this.outfile = outfile;
-        this(hdrInfo, target);
+        initializeTableFromHeader(hdrInfo);
         writeSharedTable;
         this.target = target;
+
+        this.recSerializer = VcfRecordSerializer(this.symbols, target);
     }
 
     this(ref HeaderConfig hdrInfo, SerdeTarget target) {
-        sharedSymbols.createFromHeaderConfig(hdrInfo);
-        foreach (i,key; sharedSymbols.table)
-        {
-            sharedSymbolTable[cast(const(char)[])key.dup] = i;
+        initializeTableFromHeader(hdrInfo);
+        this.target = target;
+
+        this.recSerializer = VcfRecordSerializer(this.symbols, target);
+    }
+
+    this(string[] symbols, SerdeTarget target) {
+        initializeTableFromStrings(symbols);
+        this.target = target;
+
+        this.recSerializer = VcfRecordSerializer(this.symbols, target);
+    }
+
+    void initializeTableFromHeader(ref HeaderConfig hdrInfo) {
+        symbols.insert("CHROM");
+        symbols.insert("POS");
+        symbols.insert("ID");
+        symbols.insert("REF");
+        symbols.insert("ALT");
+        symbols.insert("QUAL");
+        symbols.insert("FILTER");
+        symbols.insert("INFO");
+        symbols.insert("checksum");
+        symbols.insert("sample");
+        if(hdrInfo.fmts.byAllele.names.length > 0 || hdrInfo.fmts.other.names.length > 0)
+            symbols.insert("FORMAT");
+        foreach (f; hdrInfo.filters){
+            symbols.insert(f);
         }
-        this.target = target;
-    }
-
-    this(string[] sharedSymbols, SerdeTarget target) {
-        this.sharedSymbols.createFromStrings(sharedSymbols);
-        foreach (i,key; this.sharedSymbols.table)
+        foreach (sam; hdrInfo.samples)
         {
-            sharedSymbolTable[cast(const(char)[])key.dup] = i;
+            symbols.insert(sam);
         }
-        this.target = target;
+        if(hdrInfo.fmts.byAllele.names.length > 0 || hdrInfo.infos.byAllele.names.length > 0)
+            symbols.insert("byAllele");
+        foreach (name; hdrInfo.infos.byAllele.names)
+        {
+            symbols.insert(name);
+        }
+
+        foreach (name; hdrInfo.infos.other.names)
+        {
+            symbols.insert(name);
+        }
+
+        foreach (name; hdrInfo.infos.annotations.names)
+        {
+            if(name == "ANN"){
+                
+                import mir.serde : SerdeTarget, serdeGetSerializationKeysRecurse;
+                enum annFields = serdeGetSerializationKeysRecurse!Annotation.removeSystemSymbols;
+                static foreach (const(string) key; annFields)
+                {
+                    symbols.insert(key);    
+                }   
+            }
+            symbols.insert(name);
+        }
+
+        foreach (name; hdrInfo.fmts.byAllele.names)
+        {
+            symbols.insert(name);
+        }
+
+        foreach (name; hdrInfo.fmts.other.names)
+        {
+            symbols.insert(name);
+        }
     }
 
-    this(const(ubyte)[] sharedSymbolData, SerdeTarget target) {
-        this.sharedSymbols.loadSymbolTable(sharedSymbolData);
-        this.target = target;
+    void initializeTableFromStrings(string[] sharedSymbols) {
+        foreach (key; sharedSymbols)
+        {
+            symbols.insert(key);
+        }
     }
 
-    this(File outfile, const(ubyte)[] sharedSymbolData, SerdeTarget target) {
-        this.outfile = outfile;
-        this.sharedSymbols.loadSymbolTable(sharedSymbolData);
-        this.target = target;
-    }
+    // this(const(ubyte)[] sharedSymbolData, SerdeTarget target) {
+    //     this.sharedSymbols.loadSymbolTable(sharedSymbolData);
+    //     this.target = target;
+    // }
+
+    // this(File outfile, const(ubyte)[] sharedSymbolData, SerdeTarget target) {
+    //     this.outfile = outfile;
+    //     this.sharedSymbols.loadSymbolTable(sharedSymbolData);
+    //     this.target = target;
+    // }
 
     void putRecord(T)(ref T val) {
-        auto serializer = VcfRecordSerializer(this.sharedSymbolTable, this.sharedSymbols.table.length, target);
-        val.serialize(serializer);
-        outfile.rawWrite(serializer.finalize);
+        this.recSerializer.initialize;
+        val.serialize(this.recSerializer);
+        outfile.rawWrite(this.recSerializer.finalize);
     }
 
     void putData(const(ubyte)[] d) {
@@ -151,7 +205,7 @@ struct VcfSerializer {
     }
 
     void writeSharedTable() {
-        outfile.rawWrite(ionPrefix ~ sharedSymbols.data);
+        outfile.rawWrite(ionPrefix ~ symbols.serialize);
     }
     
 }
@@ -159,15 +213,13 @@ struct VcfSerializer {
 /// used for debug/testing 
 auto serializeVcfToIon(T)(T val, string[] symbols = [], SerdeTarget serdeTarget = SerdeTarget.ion) {
     VcfSerializer ser = VcfSerializer(symbols, serdeTarget);
-    VcfRecordSerializer serializer = VcfRecordSerializer(ser.sharedSymbolTable, ser.sharedSymbols.table.length, serdeTarget);
-    val.serialize(serializer);
-    return ionPrefix ~ ser.sharedSymbols.data ~ serializer.finalize;
+    val.serialize(ser.recSerializer);
+    return ionPrefix ~ ser.recSerializer.finalize;
 }
 
 /// used for debug/testing 
 auto serializeVcfToIon(T)(T val, ref HeaderConfig hdrInfo, SerdeTarget serdeTarget = SerdeTarget.ion) {
     VcfSerializer ser = VcfSerializer(hdrInfo, serdeTarget);
-    VcfRecordSerializer serializer = VcfRecordSerializer(ser.sharedSymbolTable, ser.sharedSymbols.table.length, serdeTarget);
-    val.serialize(serializer);
-    return ionPrefix ~ ser.sharedSymbols.data ~ serializer.finalize;
+    val.serialize(ser.recSerializer);
+    return ionPrefix ~ ser.recSerializer.finalize;
 }

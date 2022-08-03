@@ -39,9 +39,9 @@ struct FmtValues {
         {
             if(val.isNull) continue;
             if(byAllele)
-                serializer.putSharedKey(cfg.fmts.byAllele.names[i]);
+                serializer.putKey(cfg.fmts.byAllele.names[i]);
             else
-                serializer.putSharedKey(cfg.fmts.other.names[i]);
+                serializer.putKey(cfg.fmts.other.names[i]);
             val.serialize(serializer);
         }
         serializer.structEnd(s);
@@ -74,7 +74,7 @@ struct FmtSampleValues {
     void serialize(ref VcfRecordSerializer serializer, const(HeaderConfig) * cfg) {
         auto state = serializer.structBegin;
         if(this.byAllele.map!(x => !x.isNull).any){
-            serializer.putSharedKey("byAllele");
+            serializer.putKey("byAllele");
             auto state2 = serializer.listBegin;
             foreach (i,v; this.byAllele)
             {
@@ -86,7 +86,7 @@ struct FmtSampleValues {
         foreach (i,val; this.other.fields)
         {
             if(val.isNull) continue;
-            serializer.putSharedKey(cfg.fmts.other.names[i]);
+            serializer.putKey(cfg.fmts.other.names[i]);
             val.serialize(serializer);
         }
         serializer.structEnd(state);
@@ -277,7 +277,7 @@ struct Fmt {
         foreach (i,string key; cfg.samples)
         {
             if(this.bySample[i].isNull) continue;   
-            serializer.putSharedKey(key);
+            serializer.putKey(key);
             this.bySample[i].serialize(serializer, &cfg);
         }
         serializer.structEnd(state);
@@ -319,13 +319,13 @@ struct FmtSingleAlt {
         foreach (i,val; this.alleleValues.fields)
         {
             if(val.isNull) continue;
-            serializer.putSharedKey(cfg.fmts.byAllele.names[i]);
+            serializer.putKey(cfg.fmts.byAllele.names[i]);
             val.serialize(serializer);
         }
         foreach (i,val; this.other.fields)
         {
             if(val.isNull) continue;
-            serializer.putSharedKey(cfg.fmts.other.names[i]);
+            serializer.putKey(cfg.fmts.other.names[i]);
             val.serialize(serializer);
         }
         

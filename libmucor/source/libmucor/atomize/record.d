@@ -48,21 +48,21 @@ struct VcfRequiredFields(bool singleSample, bool singleAlt) {
     BigInt!2 checksum;
     
     void serialize(ref VcfRecordSerializer serializer) {
-        serializer.putSharedKey("CHROM");
+        serializer.putKey("CHROM");
         serializer.putValue(this.chrom);
 
-        serializer.putSharedKey("POS");
+        serializer.putKey("POS");
         serializer.putValue(pos);
 
         if(this.id != ".") {
-            serializer.putSharedKey("ID");
+            serializer.putKey("ID");
             serializer.putValue(id);
         }
 
-        serializer.putSharedKey("REF");
+        serializer.putKey("REF");
         serializer.putSymbol(this.ref_);
 
-        serializer.putSharedKey("ALT");
+        serializer.putKey("ALT");
         static if(singleAlt){
             serializer.putSymbol(this.alt);
         } else {
@@ -75,21 +75,21 @@ struct VcfRequiredFields(bool singleSample, bool singleAlt) {
         }
         
         if(!isNaN(this.qual)) {
-            serializer.putSharedKey("QUAL");
+            serializer.putKey("QUAL");
             serializer.putValue(qual);
         }
 
-        serializer.putSharedKey("FILTER");
+        serializer.putKey("FILTER");
         auto l2 = serializer.listBegin;
         foreach (ref string key; filter)
         {
-            serializer.putSharedSymbol(key);    
+            serializer.putSymbol(key);    
         }
         serializer.listEnd(l2);
 
         static if(singleSample){
-            serializer.putSharedKey("sample");
-            serializer.putSharedSymbol(this.sample);
+            serializer.putKey("sample");
+            serializer.putSymbol(this.sample);
         }
     }
 }
@@ -131,16 +131,16 @@ struct VcfRec {
         auto s = serializer.structBegin;
         this.required.serialize(serializer);
         
-        serializer.putSharedKey("INFO");
+        serializer.putKey("INFO");
         info.serialize(serializer);
 
-        serializer.putSharedKey("FORMAT");
+        serializer.putKey("FORMAT");
         fmt.serialize(serializer);
     
         auto last = serializer.serializer.data[s .. $];
-        serializer.putSharedKey("checksum");
+        serializer.putKey("checksum");
 
-        serializeValue(serializer.serializer, hashIon(serializer.localSymbols.data ~ last));
+        serializeValue(serializer.serializer, hashIon(serializer.symbols.getRawSymbols ~ last));
         serializer.structEnd(s);
     }
 }
@@ -178,16 +178,16 @@ struct VcfRecSingleSample {
         auto s = serializer.structBegin;
         this.required.serialize(serializer);
         
-        serializer.putSharedKey("INFO");
+        serializer.putKey("INFO");
         info.serialize(serializer);
 
-        serializer.putSharedKey("FORMAT");
+        serializer.putKey("FORMAT");
         fmt.serialize(serializer);
         
         auto last = serializer.serializer.data[s .. $];
-        serializer.putSharedKey("checksum");
+        serializer.putKey("checksum");
 
-        serializeValue(serializer.serializer, hashIon(serializer.localSymbols.data ~ last));
+        serializeValue(serializer.serializer, hashIon(serializer.symbols.getRawSymbols ~ last));
         serializer.structEnd(s);
     }
 }
@@ -226,16 +226,16 @@ struct VcfRecSingleAlt {
         auto s = serializer.structBegin;
         this.required.serialize(serializer);
         
-        serializer.putSharedKey("INFO");
+        serializer.putKey("INFO");
         info.serialize(serializer);
 
-        serializer.putSharedKey("FORMAT");
+        serializer.putKey("FORMAT");
         fmt.serialize(serializer);
 
         auto last = serializer.serializer.data[s .. $];
-        serializer.putSharedKey("checksum");
+        serializer.putKey("checksum");
 
-        serializeValue(serializer.serializer, hashIon(serializer.localSymbols.data ~ last));
+        serializeValue(serializer.serializer, hashIon(serializer.symbols.getRawSymbols ~ last));
         serializer.structEnd(s);
     }
 }
@@ -243,6 +243,7 @@ struct VcfRecSingleAlt {
 unittest {
     import std.stdio;
     import libmucor.atomize.serde;
+    import mir.ion.conv;
 
     auto vcf = VCFReader("../test/data/vcf_file.vcf",-1, UnpackLevel.All);
 
@@ -258,18 +259,18 @@ unittest {
 
     ionRec.parse(rec);
 
-    assert(serializeVcfToIon(ionRec, hdrInfo).vcfIonToText == res1);
+    assert(serializeVcfToIon(ionRec, hdrInfo).ion2text == res1);
 
     {
         auto ionRecSS1 = VcfRecSingleSample(ionRec, 0);
-        assert(serializeVcfToIon(ionRecSS1, hdrInfo).vcfIonToText == res2);
+        assert(serializeVcfToIon(ionRecSS1, hdrInfo).ion2text == res2);
         auto ionRecSS2 = VcfRecSingleSample(ionRec, 1);
-        assert(serializeVcfToIon(ionRecSS2, hdrInfo).vcfIonToText == res3);
+        assert(serializeVcfToIon(ionRecSS2, hdrInfo).ion2text == res3);
 
         auto ionRecSA1 = VcfRecSingleAlt(ionRecSS1, 0);
-        assert(serializeVcfToIon(ionRecSA1, hdrInfo).vcfIonToText == res4);
+        assert(serializeVcfToIon(ionRecSA1, hdrInfo).ion2text == res4);
         auto ionRecSA2 = VcfRecSingleAlt(ionRecSS2, 0);
-        assert(serializeVcfToIon(ionRecSA2, hdrInfo).vcfIonToText == res5);
+        assert(serializeVcfToIon(ionRecSA2, hdrInfo).ion2text == res5);
     }
 
     vcf.popFront;
@@ -286,23 +287,23 @@ unittest {
     
     rec = vcf.front;
     ionRec.parse(rec);
-    assert(serializeVcfToIon(ionRec, hdrInfo).vcfIonToText == res1);
+    assert(serializeVcfToIon(ionRec, hdrInfo).ion2text == res1);
 
     auto ionRecSS1 = VcfRecSingleSample(ionRec, 0);
-    assert(serializeVcfToIon(ionRecSS1, hdrInfo).vcfIonToText == res2);
+    assert(serializeVcfToIon(ionRecSS1, hdrInfo).ion2text == res2);
 
     auto ionRecSS2 = VcfRecSingleSample(ionRec, 1);
-    assert(serializeVcfToIon(ionRecSS2, hdrInfo).vcfIonToText == res3);
+    assert(serializeVcfToIon(ionRecSS2, hdrInfo).ion2text == res3);
 
     auto ionRecSA1 = VcfRecSingleAlt(ionRecSS1, 0);
-    assert(serializeVcfToIon(ionRecSA1, hdrInfo).vcfIonToText == res4);
+    assert(serializeVcfToIon(ionRecSA1, hdrInfo).ion2text == res4);
 
     auto ionRecSA2 = VcfRecSingleAlt(ionRecSS2, 0);
-    assert(serializeVcfToIon(ionRecSA2, hdrInfo).vcfIonToText == res5);
+    assert(serializeVcfToIon(ionRecSA2, hdrInfo).ion2text == res5);
 
     auto ionRecSA3 = VcfRecSingleAlt(ionRecSS1, 1);
-    assert(serializeVcfToIon(ionRecSA3, hdrInfo).vcfIonToText == res6);
+    assert(serializeVcfToIon(ionRecSA3, hdrInfo).ion2text == res6);
 
     auto ionRecSA4 = VcfRecSingleAlt(ionRecSS2, 1);
-    assert(serializeVcfToIon(ionRecSA4, hdrInfo).vcfIonToText == res7);
+    assert(serializeVcfToIon(ionRecSA4, hdrInfo).ion2text == res7);
 }

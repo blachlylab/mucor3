@@ -296,94 +296,94 @@ struct Annotation {
     void serialize(ref VcfRecordSerializer serializer) {
         auto s = serializer.structBegin;
         
-        serializer.putSharedKey("allele");
+        serializer.putKey("allele");
         serializer.putSymbol(this.allele);
 
-        serializer.putSharedKey("effect");
+        serializer.putKey("effect");
         auto l = serializer.listBegin;
         foreach (e; effect)
         {
-            serializer.putSharedSymbol(enumToString(e));    
+            serializer.putSymbol(enumToString(e));    
         }
         serializer.listEnd(l);
         
 
-        serializer.putSharedKey("impact");
-        serializer.putSharedSymbol(enumToString(impact));
+        serializer.putKey("impact");
+        serializer.putSymbol(enumToString(impact));
 
         if(!this.gene_name.isNone) {
-            serializer.putSharedKey("gene_name");
+            serializer.putKey("gene_name");
             serializer.putSymbol(this.gene_name.unwrap);
         }
 
         if(!this.gene_id.isNone) {
-            serializer.putSharedKey("gene_id");
+            serializer.putKey("gene_id");
             serializer.putSymbol(this.gene_id.unwrap);
         }
 
-        serializer.putSharedKey("feature_type");
+        serializer.putKey("feature_type");
         serializer.putSymbol(this.feature_type);
 
-        serializer.putSharedKey("feature_id");
+        serializer.putKey("feature_id");
         serializer.putValue(this.feature_id);
 
         if(!this.transcript_biotype.isNone) {
-            serializer.putSharedKey("transcript_biotype");
+            serializer.putKey("transcript_biotype");
             serializer.putSymbol(this.transcript_biotype.unwrap);
         }
 
         if(!this.rank.isNone) {
-            serializer.putSharedKey("rank");
+            serializer.putKey("rank");
             serializer.putValue(this.rank.unwrap);
         }
 
         if(!this.rtotal.isNone) {
-            serializer.putSharedKey("rtotal");
+            serializer.putKey("rtotal");
             serializer.putValue(this.rtotal.unwrap);
         }
         
-        serializer.putSharedKey("hgvs_c");
+        serializer.putKey("hgvs_c");
         serializer.putValue(this.hgvs_c);
 
         if(!this.hgvs_p.isNone) {
-            serializer.putSharedKey("hgvs_p");
+            serializer.putKey("hgvs_p");
             serializer.putValue(this.hgvs_p.unwrap);
         }
 
         if(!this.cdna_position.isNone) {
-            serializer.putSharedKey("cdna_position");
+            serializer.putKey("cdna_position");
             serializer.putValue(this.cdna_position.unwrap);
         }
         if(!this.cdna_length.isNone) {
-            serializer.putSharedKey("cdna_length");
+            serializer.putKey("cdna_length");
             serializer.putValue(this.cdna_length.unwrap);
         }
         
         if(!this.cds_position.isNone) {
-            serializer.putSharedKey("cds_position");
+            serializer.putKey("cds_position");
             serializer.putValue(this.cds_position.unwrap);
         }
         if(!this.cds_length.isNone) {
-            serializer.putSharedKey("cds_length");
+            serializer.putKey("cds_length");
             serializer.putValue(this.cds_length.unwrap);
         }
 
         if(!this.protein_position.isNone) {
-            serializer.putSharedKey("protein_position");
+            serializer.putKey("protein_position");
             serializer.putValue(this.protein_position.unwrap);
         }
         if(!this.protein_length.isNone) {
-            serializer.putSharedKey("protein_length");
+            serializer.putKey("protein_length");
             serializer.putValue(this.protein_length.unwrap);
         }
 
         if(!this.distance_to_feature.isNone) {
-            serializer.putSharedKey("distance_to_feature");
+            serializer.putKey("distance_to_feature");
             serializer.putValue(this.distance_to_feature.unwrap);
         }
 
         if(!this.errors_warnings_info.isNone) {
-            serializer.putSharedKey("errors_warnings_info");
+            serializer.putKey("errors_warnings_info");
             serializer.putValue(this.errors_warnings_info.unwrap);
         }
 
@@ -401,11 +401,12 @@ unittest{
     auto anns = Annotations(ann);
     import std.stdio;
     import mir.ser.ion;
+    import mir.ion.stream;
     import mir.ion.conv;
     auto parsed = anns.array;
     enum annFields = serdeGetSerializationKeysRecurse!Annotation.removeSystemSymbols;
-    assert(serializeVcfToIon(parsed[0], annFields).vcfIonToText == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381657",transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:"ENST00000381657.2:c.-21-26C>A"}`);
-    assert(serializeVcfToIon(parsed[1], annFields).vcfIonToText == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381663",transcript_biotype:protein_coding,rank:1,rtotal:7,hgvs_c:"ENST00000381663.3:c.-21-26C>A"}`);
+    assert(serializeVcfToIon(parsed[0], annFields).ion2text  == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381657",transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:"ENST00000381657.2:c.-21-26C>A"}`);
+    assert(serializeVcfToIon(parsed[1], annFields).ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381663",transcript_biotype:protein_coding,rank:1,rtotal:7,hgvs_c:"ENST00000381663.3:c.-21-26C>A"}`);
 
     // assert(serializeVcfToIon(Effect._5_prime_UTR_premature_start_codon_gain_variant).ion2text == "'5_prime_UTR_premature_start_codon_gain_variant'");
     

@@ -1,8 +1,11 @@
 module libmucor.atomize.serde;
 
 import mir.ion.symbol_table: IonSymbolTable, IonSystemSymbolTable_v1;
+import mir.ion.value;
+import mir.utility : _expect;
 import mir.bignum.integer;
 import libmucor.spookyhash;
+import libmucor.error;
 
 public import libmucor.atomize.serde.ser;
 public import libmucor.atomize.serde.deser;
@@ -35,4 +38,13 @@ BigInt!2 hashIon(ubyte[] data)
     BigInt!2 ret = BigInt!2([SEED1, SEED2]);
     SpookyHash.Hash128(data.ptr, data.length, &ret.data[0], &ret.data[1]);
     return ret;
+}
+
+void handleIonError(IonErrorCode err){
+    debug {
+        assert(!err, ionErrorMsg(err));
+    } else {
+        if(_expect(err, false))
+            log_err(__FUNCTION__, "Ion error: %s", ionErrorMsg(err));
+    }
 }
