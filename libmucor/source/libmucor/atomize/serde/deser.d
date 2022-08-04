@@ -18,21 +18,28 @@ struct VcfIonRecord {
     
     SymbolTable * symbols;
 
-    IonDescribedValue val;
+    IonValue val;
+    IonDescribedValue des;
 
-    this(ref SymbolTable st, IonDescribedValue val) {
+    this(ref SymbolTable st, IonValue val) {
         this.symbols = &st;
         this.val = val;
+        auto err = val.describe(des);
+        handleIonError(err);
     }
 
     alias getObj this;
 
     auto getObj(){
         IonStruct obj;
-        IonErrorCode error = val.get(obj);
+        IonErrorCode error = des.get(obj);
         assert(!error, ionErrorMsg(error));
 
         return obj.withSymbols(this.symbols.table);
+    }
+
+    auto toBytes() {
+        return this.val.data;
     }
 
 }
@@ -68,13 +75,12 @@ struct VcfIonDeserializer {
         this.inFile = inFile;
         this.chunks = this.inFile.byChunk(bufferSize);
 
-        this.buffer = this.chunks.front;
-
+        this.buffer = this.chunks.front.dup;
+        this.chunks.popFront;
         error = readVersion(this.buffer);
         handleIonError(error);
 
         this.readSymbolTable();
-
         this.popFront;
     }
 
@@ -87,104 +93,81 @@ struct VcfIonDeserializer {
     }
 
     void popFront(){
-        
-        IonDescribedValue val;
-        if(this.eof && this.buffer.length == 0){
-            
+        IonDescriptor des;
+        IonValue val;
+        readType(des);
+        if(des.type == IonTypeCode.annotations) {
+            this.readSymbolTable();
+            readType(des);
+        }
+
+        if(this.eof && this.buffer.length == 0){   
             this.empty = true;
             return;
         }
-        import std.stdio;
-        this.readSymbolTable;
-        this.readValue(val);
 
-        IonStruct obj;
-        error = val.get(obj);
+        error = this.readValue(val, des);
+
         handleIonError(error);
         
-        this.frontVal = VcfIonRecord(this.symbols, val);   
+        this.frontVal = VcfIonRecord(this.symbols, val);
     }
 
-    IonErrorCode loadMoreBytes(){
+    void loadMoreBytes() {
         if(_expect(!this.chunks.empty, true)){
             if(buffer.length > 0) {
-                this.buffer = this.buffer.dup;
+                this.buffer = this.buffer ~ this.chunks.front;
                 this.chunks.popFront;
-                this.buffer ~= this.chunks.front;
             } else {
+                this.buffer = this.chunks.front.dup;
                 this.chunks.popFront;
-                this.buffer = this.chunks.front;
             }
-            return IonErrorCode.none;
+            return;
         }
-        return IonErrorCode.eof;
+        this.eof = true;
     }
 
     void readSymbolTable(){
         auto view = buffer[];
         error = this.symbols.loadSymbolTable(view);
         while(error == IonErrorCode.unexpectedEndOfData) {
-            error = this.loadMoreBytes;
-            handleIonError(error);
+            this.loadMoreBytes;
+            if(_expect(this.eof, false)) {
+                return;
+            }
             view = buffer[];
             error = this.symbols.loadSymbolTable(view);
         }
-        import std.stdio;
-        writefln("read st: %d bytes", buffer.length - view.length);
         handleIonError(error);
         this.buffer = view;
     }
 
-
-    void readValue(ref IonDescribedValue val){
-        auto view = buffer[];
-        error = IonValue(view).describe(val);
-        error = IonValue(view[1..$]).describe(val);
-        while(error == IonErrorCode.unexpectedEndOfData) {
-            error = this.loadMoreBytes;
-            handleIonError(error);
-            view = buffer[];
-            error = IonValue(view).describe(val);
+    IonErrorCode readValue(ref IonValue val, ref IonDescriptor des){
+        while(des.L > buffer.length) {
+            this.loadMoreBytes;
+            if(_expect(this.eof, false)) {
+                return IonErrorCode.eof;
+            }
         }
-        writefln("read val: %d bytes", buffer.length - view.length);
-        handleIonError(error);
-        this.buffer = view;
+
+        auto end = des.L + 2 > this.buffer.length ? this.buffer.length : des.L + 2;
+        val = IonValue(this.buffer[0 .. end]);
+        this.buffer = this.buffer[end .. $];
+        return IonErrorCode.none;
     }
 
-}
+    void readType(ref IonDescriptor des) {
+        error = parseDescriptor(this.buffer, des);
+        while(_expect(error == IonErrorCode.unexpectedEndOfData, false)) {
+            this.loadMoreBytes;
+            if(_expect(this.eof, false)) {
+                return;
+            }
+            error = parseDescriptor(this.buffer, des);
+        }
+        handleIonError(error);
+    }
 
-auto vcfIonToText(const(ubyte)[] data){
-    import mir.ser.text;
-    import mir.ser.unwrap_ids;
-    import std.array : appender;
-
-    SymbolTable sharedSymbolTable;
-    SymbolTable localSymbols;
-    IonErrorCode error;
-    IonDescribedValue val;
-    IonStruct obj;
-
-    auto d = data;
-    error = readVersion(d);
-    if(error) throw new Exception(ionErrorMsg(error));
-    error = sharedSymbolTable.loadSymbolTable(d);
-    if(error) throw new Exception(ionErrorMsg(error));
-    error = readVersion(d);
-    if(error) throw new Exception(ionErrorMsg(error));
-    error = localSymbols.loadSymbolTable(d);
-    if(error) throw new Exception(ionErrorMsg(error));
-    error = parseValue(d, val);
-    if(error) throw new Exception(ionErrorMsg(error));
-    error = val.get(obj);
-    if(error) throw new Exception(ionErrorMsg(error));
-
-    auto table = sharedSymbolTable.table ~ localSymbols.table;
-
-    auto buffer = appender!string;
-    auto ser = textSerializer!""(&buffer);
-    auto unwrappedSer = unwrapSymbolIds(ser, table);
-    obj.serialize(unwrappedSer);
-    return buffer.data;
 }
 
 auto vcfIonToText(IonStructWithSymbols data){
@@ -194,6 +177,18 @@ auto vcfIonToText(IonStructWithSymbols data){
 
     auto buffer = appender!string;
     auto ser = textSerializer!""(&buffer);
+    auto unwrappedSer = unwrapSymbolIds(ser, data.symbolTable);
+    data.serialize(unwrappedSer);
+    return buffer.data;
+}
+
+auto vcfIonToJson(IonStructWithSymbols data){
+    import mir.ser.json;
+    import mir.ser.unwrap_ids;
+    import std.array : appender;
+
+    auto buffer = appender!string;
+    auto ser = jsonSerializer!""(&buffer);
     auto unwrappedSer = unwrapSymbolIds(ser, data.symbolTable);
     data.serialize(unwrappedSer);
     return buffer.data;
@@ -210,6 +205,44 @@ IonErrorCode readVersion(ref const(ubyte)[] buffer) {
         }
     }
     return error;
+}
+
+IonErrorCode parseDescriptor()(const(ubyte)[] data, scope ref IonDescriptor descriptor)
+@safe pure nothrow @nogc
+{
+    version (LDC) pragma(inline, true);
+
+    if (_expect(data.length == 0, false))
+        return IonErrorCode.unexpectedEndOfData;
+    auto descriptorPtr = &data[0];
+    data = data[1 .. $];
+    ubyte descriptorData = *descriptorPtr;
+
+    if (_expect(descriptorData > 0xEE, false))
+        return IonErrorCode.illegalTypeDescriptor;
+
+    descriptor = IonDescriptor(descriptorPtr);
+
+    const L = descriptor.L;
+    const type = descriptor.type;
+    // if null
+    if (L == 0xF)
+        return IonErrorCode.none;
+    // if bool
+    if (type == IonTypeCode.bool_)
+    {
+        if (_expect(L > 1, false))
+            return IonErrorCode.illegalTypeDescriptor;
+        return IonErrorCode.none;
+    }
+    // if large
+    bool sortedStruct = descriptorData == 0xD1;
+    if (L == 0xE || sortedStruct)
+    {
+        if (auto error = parseVarUInt(data, descriptor.L))
+            return error;
+    }
+    return IonErrorCode.none;
 }
 
 IonErrorCode parseValue()(ref const(ubyte)[] data, scope ref IonDescribedValue describedValue)

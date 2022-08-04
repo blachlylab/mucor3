@@ -72,9 +72,7 @@ struct VcfRecordSerializer {
     const(ubyte)[] finalize() {
         import std.stdio;
         serializer.finalize;
-        auto symData = symbols.serialize; 
-        writefln("symbol table data length:\t%d",symData.length);
-        writefln("value data length:\t\t%d",serializer.data.length);
+        auto symData = symbols.serialize;
         return () @trusted { return symData ~ serializer.data; } ();
     }
 
@@ -95,8 +93,6 @@ struct VcfSerializer {
     VcfRecordSerializer recSerializer;
 
     this(File outfile, ref HeaderConfig hdrInfo, SerdeTarget target) {
-        import std.stdio;
-        writeln("Starting");
         this.outfile = outfile;
         initializeTableFromHeader(hdrInfo);
         writeSharedTable;
@@ -114,6 +110,15 @@ struct VcfSerializer {
 
     this(string[] symbols, SerdeTarget target) {
         initializeTableFromStrings(symbols);
+        this.target = target;
+
+        this.recSerializer = VcfRecordSerializer(this.symbols, target);
+    }
+
+    this(File outfile, string[] symbols, SerdeTarget target) {
+        this.outfile = outfile;
+        initializeTableFromStrings(symbols);
+        writeSharedTable;
         this.target = target;
 
         this.recSerializer = VcfRecordSerializer(this.symbols, target);

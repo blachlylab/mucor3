@@ -73,7 +73,7 @@ struct SymbolTableBuilder {
             serializer.putKeyId(IonSystemSymbol.symbols);
             auto listState = serializer.listBegin();
 
-            auto n = currentSymbolsMap.kh_size;
+            auto n = currentSymbolsMap.kh_size + IonSystemSymbol.max + 1;
             foreach (i, const(char)[] key; syms)
             {
                 serializer.putValue(key);

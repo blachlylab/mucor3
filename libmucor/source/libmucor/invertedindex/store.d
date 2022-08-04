@@ -24,6 +24,7 @@ struct InvertedIndexStore {
     Hash2IonStore records;
     KVIndex idx;
     khashlSet!(const(char)[]) keys;
+    SymbolTable * lastSymbolTable;
 
     this(string dbfn) {
         Env env;
@@ -65,8 +66,17 @@ struct InvertedIndexStore {
         this.db[serialize("keys")] = serialize(this.keys.byKey.array);
     }
 
-    void storeSharedSymbolTable(ref VcfIonDeserializer deserializer){
-        this.db[serialize("sharedTable")] = deserializer.symbols.toBytes;
+    void storeSharedSymbolTable(){
+        import mir.ion.symbol_table : IonSymbolTable;
+        IonSymbolTable!false table;
+        table.initialize;
+        assert(this.lastSymbolTable);
+        foreach (key; this.lastSymbolTable.table[10 .. $])
+        {
+            table.insert(key.dup);        
+        }
+        table.finalize;
+        this.db[serialize("sharedTable")] = table.data;
     }
 
     auto getSharedSymbolTable(){
@@ -101,8 +111,8 @@ struct InvertedIndexStore {
         assert(err == IonErrorCode.none);
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
-        import std.stdio;
-        this.records[hash] = cast(immutable(ubyte)[])(rec.val.data);
+        this.lastSymbolTable = rec.symbols;
+        this.records[hash] = cast(immutable(ubyte)[])rec.toBytes;
 
         foreach (key,value; data)
         {
