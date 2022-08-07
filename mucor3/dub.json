@@ -15,7 +15,7 @@
 	},
 	"sourceFiles": ["../drocks/rocksdb/librocksdb.a"],
 	"targetPath": "../bin",
-	"dflags-ldc": ["--flto=full"],
+	"_dflags-ldc": ["--flto=full"],
 	"libs": ["bz2", "stdc++"],
 	"configurations": [
 		{

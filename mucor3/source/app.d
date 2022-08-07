@@ -78,6 +78,9 @@ void main(string[] args)
     case "principal":
         principal(args[1 .. $]);
         return;
+    case "view":
+        view_main(args[1 .. $]);
+        return;
     default:
         mucor_main(args);
     }
