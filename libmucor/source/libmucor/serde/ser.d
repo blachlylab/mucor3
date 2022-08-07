@@ -1,4 +1,4 @@
-module libmucor.atomize.serde.ser;
+module libmucor.serde.ser;
 
 import mir.utility: _expect;
 import mir.ser: serializeValue;
@@ -7,9 +7,9 @@ import mir.ion.symbol_table: IonSymbolTable, IonSystemSymbolTable_v1;
 import mir.serde : SerdeTarget, serdeGetSerializationKeysRecurse;
 
 import libmucor.atomize.ann;
-import libmucor.atomize.serde.symbols;
+import libmucor.serde.symbols;
 import libmucor.atomize.header;
-import libmucor.atomize.serde;
+import libmucor.serde;
 import libmucor.khashl;
 
 import std.stdio;

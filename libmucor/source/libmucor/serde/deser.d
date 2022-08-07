@@ -1,4 +1,4 @@
-module libmucor.atomize.serde.deser;
+module libmucor.serde.deser;
 
 import mir.ion.exception;
 import mir.ion.type_code;
@@ -8,7 +8,7 @@ import mir.appender: ScopedBuffer;
 import mir.ion.symbol_table;
 import mir.ion.stream;
 
-import libmucor.atomize.serde;
+import libmucor.serde;
 
 import option;
 import std.stdio;

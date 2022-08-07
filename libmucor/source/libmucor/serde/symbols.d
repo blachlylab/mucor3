@@ -1,4 +1,4 @@
-module libmucor.atomize.serde.symbols;
+module libmucor.serde.symbols;
 
 import mir.ion.exception;
 import mir.ion.type_code;
@@ -12,8 +12,8 @@ import mir.ser.ion : IonSerializer;
 
 import libmucor.atomize.header;
 import libmucor.atomize.ann;
-import libmucor.atomize.serde;
-import libmucor.atomize.serde.deser : parseValue;
+import libmucor.serde;
+import libmucor.serde.deser : parseValue;
 import libmucor.khashl;
 
 struct SymbolTableBuilder {

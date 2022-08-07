@@ -14,7 +14,7 @@ public import libmucor.query;
 import asdf : deserializeAsdf = deserialize, parseJsonByLine, Asdf;
 import libmucor.wideint : uint128;
 import libmucor.khashl;
-import libmucor.atomize.serde;
+import libmucor.serde;
 import libmucor: setup_global_pool;
 import std.algorithm.searching : balancedParens;
 import std.parallelism;

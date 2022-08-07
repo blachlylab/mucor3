@@ -1,4 +1,4 @@
-module libmucor.atomize.serde;
+module libmucor.serde;
 
 import mir.ion.symbol_table: IonSymbolTable, IonSystemSymbolTable_v1;
 import mir.ion.value;
@@ -7,9 +7,9 @@ import mir.bignum.integer;
 import libmucor.spookyhash;
 import libmucor.error;
 
-public import libmucor.atomize.serde.ser;
-public import libmucor.atomize.serde.deser;
-public import libmucor.atomize.serde.symbols;
+public import libmucor.serde.ser;
+public import libmucor.serde.deser;
+public import libmucor.serde.symbols;
 
 public import mir.serde : SerdeTarget;
 

@@ -1,7 +1,7 @@
 module libmucor.invertedindex;
 import libmucor.invertedindex.record;
 import libmucor.invertedindex.store;
-import libmucor.atomize.serde;
+import libmucor.serde;
 import std.algorithm : balancedParens;
 import std.datetime.stopwatch : StopWatch;
 
@@ -23,7 +23,7 @@ import std.exception : enforce;
 import asdf : deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
 import libmucor.jsonlops.jsonvalue;
 import libmucor.query.eval;
-import libmucor.atomize.serde : VcfIonRecord;
+import libmucor.serde : VcfIonRecord;
 
 import libmucor.khashl;
 import libmucor.error;
@@ -463,7 +463,7 @@ void index(ref VcfIonDeserializer range, string prefix)
 unittest {
     import std.path;
     import std.file;
-    import libmucor.atomize.serde;
+    import libmucor.serde;
     import libmucor.atomize;
 
     auto dbname = "/tmp/test2.ion_index";

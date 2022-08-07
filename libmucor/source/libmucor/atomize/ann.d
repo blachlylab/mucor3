@@ -15,8 +15,8 @@ import libmucor.jsonlops;
 import libmucor.error;
 import libmucor.option;
 import libmucor.atomize.util;
-import libmucor.atomize.serde;
-import libmucor.atomize.serde.ser;
+import libmucor.serde;
+import libmucor.serde.ser;
 import mir.ser;
 import mir.ser.interfaces;
 import mir.serde : serdeGetSerializationKeysRecurse;
@@ -393,7 +393,7 @@ struct Annotation {
 }
 
 unittest{
-    import libmucor.atomize.serde.deser;
+    import libmucor.serde.deser;
     string ann = "A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"~
                 "protein_coding|1/6|ENST00000381657.2:c.-21-26C>A|||||,A|intron_variant|MODIFIER"~
                 "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding|1/7|ENST00000381663.3:c.-21-26C>A||"~

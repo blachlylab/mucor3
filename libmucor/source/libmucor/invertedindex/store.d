@@ -2,7 +2,7 @@ module libmucor.invertedindex.store;
 
 import libmucor.invertedindex.record;
 import libmucor.error;
-import libmucor.atomize.serde;
+import libmucor.serde;
 import option;
 import drocks.database;
 import drocks.env;

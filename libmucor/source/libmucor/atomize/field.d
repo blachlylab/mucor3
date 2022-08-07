@@ -8,7 +8,7 @@ import mir.ser.interfaces;
 import mir.ser;
 import mir.serde;
 
-import libmucor.atomize.serde.ser;
+import libmucor.serde.ser;
 
 alias FieldTypes = Variant!(long, float, long[], float[], bool, string);
 

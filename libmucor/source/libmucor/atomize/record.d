@@ -10,8 +10,8 @@ import libmucor.atomize.fmt;
 import libmucor.atomize.info;
 import libmucor.atomize.ann;
 import libmucor.atomize.header;
-import libmucor.atomize.serde.ser;
-import libmucor.atomize.serde;
+import libmucor.serde.ser;
+import libmucor.serde;
 
 struct VcfRequiredFields(bool singleSample, bool singleAlt) {
 
@@ -242,7 +242,7 @@ struct VcfRecSingleAlt {
 
 unittest {
     import std.stdio;
-    import libmucor.atomize.serde;
+    import libmucor.serde;
     import mir.ion.conv;
 
     auto vcf = VCFReader("../test/data/vcf_file.vcf",-1, UnpackLevel.All);

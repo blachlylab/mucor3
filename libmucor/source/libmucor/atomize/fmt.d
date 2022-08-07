@@ -10,7 +10,7 @@ import dhtslib.vcf;
 import libmucor.khashl;
 import libmucor.atomize.field;
 import libmucor.atomize.header;
-import libmucor.atomize.serde.ser;
+import libmucor.serde.ser;
 
 struct FmtValues {
     @serdeIgnore

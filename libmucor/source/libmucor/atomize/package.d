@@ -13,7 +13,7 @@ import dhtslib.coordinates;
 import htslib;
 import libmucor.atomize.record;
 import libmucor.atomize.header;
-import libmucor.atomize.serde.ser;
+import libmucor.serde.ser;
 
 import libmucor.khashl : khashl;
 import libmucor.jsonlops;
@@ -95,7 +95,7 @@ unittest {
     import std.file : read;
     import mir.ion.conv;
     import mir.ser.text;
-    import libmucor.atomize.serde.deser;
+    import libmucor.serde.deser;
     
     auto f = File("/tmp/test.ion");
     auto rdr = VcfIonDeserializer(f);

@@ -12,7 +12,7 @@ import libmucor.khashl;
 import libmucor.atomize.header;
 import libmucor.atomize.field;
 import libmucor.atomize.ann;
-import libmucor.atomize.serde.ser;
+import libmucor.serde.ser;
 import libmucor.error;
 
 struct InfoAlleleValues {
