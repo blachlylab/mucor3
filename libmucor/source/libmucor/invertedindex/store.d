@@ -37,7 +37,15 @@ struct InvertedIndexStore {
         opts.errorIfExists = false;
         opts.compression = CompressionType.None;
         opts.setMergeOperator(createAppendMergeOperator);
-        opts.setFilterPolicy(FilterPolicy.BloomFull, 18);
+
+        RocksBlockBasedOptions bbopts;
+        bbopts.initialize;
+        bbopts.cacheIndexAndFilterBlocks = true;
+        bbopts.setFilterPolicy(FilterPolicy.BloomFull, 18);
+
+        opts.setBlockBasedOptions(bbopts);
+        opts.unorderedWrites = true;
+
         opts.env = env;
         this.db = RocksDB(opts, dbfn);
         auto cf = "records" in this.db.columnFamilies;
@@ -79,7 +87,7 @@ struct InvertedIndexStore {
             log_err(__FUNCTION__, "record with no md5");
         }
         auto err = data["checksum"].get(hashValue);
-        assert(err == IonErrorCode.none);
+        handleIonError(err);
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
 
@@ -98,7 +106,7 @@ struct InvertedIndexStore {
             log_err(__FUNCTION__, "record with no md5");
         }
         auto err = data["checksum"].get(hashValue);
-        assert(err == IonErrorCode.none);
+        handleIonError(err);
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
         this.lastSymbolTable = rec.symbols;
@@ -112,6 +120,8 @@ struct InvertedIndexStore {
 
     void insertIonValue(const(char)[] key, IonDescribedValue value, const(char[])[] symbolTable, uint128 checksum) {
         if(key == "checksum") return;
+        
+        IonErrorCode err;
         final switch(value.descriptor.type) {
             case IonTypeCode.null_:
                 return;
@@ -120,10 +130,12 @@ struct InvertedIndexStore {
                 else return;
             case IonTypeCode.uInt:
                 IonInt val;
-                auto err = value.get(val);
-                assert(err == IonErrorCode.none);
+                err = value.get(val);
+                handleIonError(err);
 
-                auto l = val.get!long;
+                ulong l;
+                err = val.get(l);
+                handleIonError(err);
                 auto k = CompositeKey(key, l);
 
                 this.idx[k] ~= checksum;
@@ -131,10 +143,12 @@ struct InvertedIndexStore {
 
             case IonTypeCode.nInt:
                 IonNInt val;
-                auto err = value.get(val);
-                assert(err == IonErrorCode.none);
+                err = value.get(val);
+                handleIonError(err);
 
-                auto l = val.get!long;
+                long l;
+                err = val.get(l);
+                handleIonError(err);
                 auto k = CompositeKey(key, l);
 
                 this.idx[k] ~= checksum;
@@ -142,28 +156,32 @@ struct InvertedIndexStore {
 
             case IonTypeCode.float_:
                 IonFloat val;
-                auto err = value.get(val);
-                assert(err == IonErrorCode.none);
+                err = value.get(val);
+                handleIonError(err);
 
-                auto f = val.get!double;
+                double f;
+                err = val.get(f);
+                handleIonError(err);
                 auto k = CompositeKey(key, f);
 
                 this.idx[k] ~= checksum;
                 return;
             case IonTypeCode.decimal:
                 IonDecimal val;
-                auto err = value.get(val);
-                assert(err == IonErrorCode.none);
+                err = value.get(val);
+                handleIonError(err);
 
-                auto f = val.get!double;
+                double f;
+                err = val.get(f);
+                handleIonError(err);
                 auto k = CompositeKey(key, f);
 
                 this.idx[k] ~= checksum;
                 return;
             case IonTypeCode.symbol:
                 IonSymbolID val;
-                auto err = value.get(val);
-                assert(err == IonErrorCode.none);
+                err = value.get(val);
+                handleIonError(err);
 
                 auto i = val.get;
                 auto s = symbolTable[i];
@@ -173,8 +191,8 @@ struct InvertedIndexStore {
                 return;
             case IonTypeCode.string:
                 const(char)[] val;
-                auto err = value.get(val);
-                assert(err == IonErrorCode.none);
+                err = value.get(val);
+                handleIonError(err);
 
                 auto k = CompositeKey(key, val);
 
@@ -191,8 +209,8 @@ struct InvertedIndexStore {
                 else return;
             case IonTypeCode.list:
                 IonList vals;
-                auto err = value.get(vals);
-                assert(err == IonErrorCode.none);
+                err = value.get(vals);
+                handleIonError(err);
 
                 foreach (val; vals)
                 {
@@ -205,8 +223,8 @@ struct InvertedIndexStore {
             case IonTypeCode.struct_:
                 IonStruct obj;
                 IonStructWithSymbols objWSym;
-                auto err = value.get(obj);
-                assert(err == IonErrorCode.none);
+                err = value.get(obj);
+                handleIonError(err);
 
                 objWSym = obj.withSymbols(symbolTable);
 

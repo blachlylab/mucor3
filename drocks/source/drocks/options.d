@@ -32,13 +32,6 @@ enum ReadTier : int {
     Persisted = 0x2,
 }
 
-enum FilterPolicy {
-    Bloom,
-    BloomFull,
-    Ribbon,
-    RibbonHybrid
-}
-
 alias WriteOptPtr = SafePtr!(rocksdb_writeoptions_t, rocksdb_writeoptions_destroy); 
 struct WriteOptions {
     WriteOptPtr opts;
@@ -144,34 +137,14 @@ struct RocksDBOptions {
         rocksdb_options_set_merge_operator(this.opts, op);
     }
 
-    @property void setFilterPolicy(FilterPolicy policy, double bits_per_key) {
-        auto block_options = rocksdb_block_based_options_create;
-        switch (policy) {
-            case FilterPolicy.BloomFull:
-                rocksdb_block_based_options_set_filter_policy(
-                    block_options, 
-                    rocksdb_filterpolicy_create_bloom_full(bits_per_key)
-                );
-                break;
-            case FilterPolicy.Bloom:
-                rocksdb_block_based_options_set_filter_policy(
-                    block_options, 
-                    rocksdb_filterpolicy_create_bloom(bits_per_key)
-                );
-                break;
-            case FilterPolicy.Ribbon:
-                rocksdb_block_based_options_set_filter_policy(
-                    block_options, 
-                    rocksdb_filterpolicy_create_ribbon(bits_per_key)
-                );
-                break;
-            default:
-                assert(0, "FilterPolicy.RibbonHybrid is not yet supported");
-        }
-
-        rocksdb_options_set_block_based_table_factory(this.opts, block_options);
-        
+    @property void unorderedWrites(bool val) {
+        rocksdb_options_set_unordered_write(this.opts, cast(ubyte)val);
     }
+
+    @property void setBlockBasedOptions(RocksBlockBasedOptions bbopts) {
+        rocksdb_options_set_block_based_table_factory(this.opts, bbopts.opts);
+    }
+    
 
     // @property void comparator(Comparator cmp) {
     //     rocksdb_options_set_comparator(this.opts, cmp.cmp);
@@ -186,5 +159,57 @@ struct RocksDBOptions {
         string result = fromStringz(cresult).to!string;
         free(cresult);
         return result;
+    }
+}
+
+enum FilterPolicy {
+    Bloom,
+    BloomFull,
+    Ribbon,
+    RibbonHybrid
+}
+
+alias RocksBlockBasedOptionsPtr = SafePtr!(rocksdb_block_based_table_options_t, rocksdb_block_based_options_destroy);
+
+struct RocksBlockBasedOptions {
+
+    RocksBlockBasedOptionsPtr opts;
+
+    this(this) {
+        this.opts = opts;
+    }
+
+    void initialize() {
+        this.opts = RocksBlockBasedOptionsPtr(rocksdb_block_based_options_create());
+    }
+
+    @property void cacheIndexAndFilterBlocks(bool val) {
+        rocksdb_block_based_options_set_cache_index_and_filter_blocks(this.opts, cast(ubyte)val);
+    }
+
+    @property void setFilterPolicy(FilterPolicy policy, double bits_per_key) {
+        switch (policy) {
+            case FilterPolicy.BloomFull:
+                rocksdb_block_based_options_set_filter_policy(
+                    this.opts, 
+                    rocksdb_filterpolicy_create_bloom_full(bits_per_key)
+                );
+                break;
+            case FilterPolicy.Bloom:
+                rocksdb_block_based_options_set_filter_policy(
+                    this.opts, 
+                    rocksdb_filterpolicy_create_bloom(bits_per_key)
+                );
+                break;
+            case FilterPolicy.Ribbon:
+                rocksdb_block_based_options_set_filter_policy(
+                    this.opts, 
+                    rocksdb_filterpolicy_create_ribbon(bits_per_key)
+                );
+                break;
+            default:
+                assert(0, "FilterPolicy.RibbonHybrid is not yet supported");
+        }
+        
     }
 }
