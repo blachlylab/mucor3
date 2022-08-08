@@ -32,6 +32,13 @@ enum ReadTier : int {
     Persisted = 0x2,
 }
 
+enum FilterPolicy {
+    Bloom,
+    BloomFull,
+    Ribbon,
+    RibbonHybrid
+}
+
 alias WriteOptPtr = SafePtr!(rocksdb_writeoptions_t, rocksdb_writeoptions_destroy); 
 struct WriteOptions {
     WriteOptPtr opts;
@@ -135,6 +142,35 @@ struct RocksDBOptions {
 
     @property void setMergeOperator(rocksdb_mergeoperator_t * op) {
         rocksdb_options_set_merge_operator(this.opts, op);
+    }
+
+    @property void setFilterPolicy(FilterPolicy policy, double bits_per_key) {
+        auto block_options = rocksdb_block_based_options_create;
+        switch (policy) {
+            case FilterPolicy.BloomFull:
+                rocksdb_block_based_options_set_filter_policy(
+                    block_options, 
+                    rocksdb_filterpolicy_create_bloom_full(bits_per_key)
+                );
+                break;
+            case FilterPolicy.Bloom:
+                rocksdb_block_based_options_set_filter_policy(
+                    block_options, 
+                    rocksdb_filterpolicy_create_bloom(bits_per_key)
+                );
+                break;
+            case FilterPolicy.Ribbon:
+                rocksdb_block_based_options_set_filter_policy(
+                    block_options, 
+                    rocksdb_filterpolicy_create_ribbon(bits_per_key)
+                );
+                break;
+            default:
+                assert(0, "FilterPolicy.RibbonHybrid is not yet supported");
+        }
+
+        rocksdb_options_set_block_based_table_factory(this.opts, block_options);
+        
     }
 
     // @property void comparator(Comparator cmp) {
