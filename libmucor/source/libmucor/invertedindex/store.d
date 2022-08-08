@@ -23,7 +23,6 @@ struct InvertedIndexStore {
     RocksDB db;
     Hash2IonStore records;
     KVIndex idx;
-    khashlSet!(const(char)[]) keys;
     SymbolTable * lastSymbolTable;
 
     this(string dbfn) {
@@ -38,32 +37,23 @@ struct InvertedIndexStore {
         opts.errorIfExists = false;
         opts.compression = CompressionType.None;
         opts.setMergeOperator(createAppendMergeOperator);
+        opts.setFilterPolicy(FilterPolicy.BloomFull, 18);
         opts.env = env;
         this.db = RocksDB(opts, dbfn);
         auto cf = "records" in this.db.columnFamilies;
         if(cf) {
             this.records = Hash2IonStore(&this.db.columnFamilies["records"]);
             this.idx = KVIndex(&this.db.columnFamilies["idx"]);
-            getIonKeys;
         } else {
             this.records = Hash2IonStore(this.db.createColumnFamily("records").unwrap);
             this.idx = KVIndex(this.db.createColumnFamily("idx").unwrap);
         }
     }
-    ~this(){
-        this.storeIonKeys;
-    }
 
     /// load string keys from db that have been observed in data
     /// i.e INFO/ANN, CHROM, POS, ...
-    auto getIonKeys() {
-        this.keys = *deserialize!(const(char)[][])(this.db[serialize("keys")].unwrap.unwrap).collect;
-    }
-
-    /// store string keys into db that have been observed in data
-    /// i.e INFO/ANN, CHROM, POS, ...
-    auto storeIonKeys() {
-        this.db[serialize("keys")] = serialize(this.keys.byKey.array);
+    khashlSet!(const(char)[]) * getIonKeys() {
+        return this.idx.byKeyValue().map!(x => cast(const(char)[])(x[0].key.dup)).collect;
     }
 
     void storeSharedSymbolTable(){
@@ -122,7 +112,6 @@ struct InvertedIndexStore {
 
     void insertIonValue(const(char)[] key, IonDescribedValue value, const(char[])[] symbolTable, uint128 checksum) {
         if(key == "checksum") return;
-        this.keys.insert(key);
         final switch(value.descriptor.type) {
             case IonTypeCode.null_:
                 return;
@@ -289,7 +278,7 @@ struct InvertedIndexStore {
     void print() {
         import std.stdio;
         stderr.writeln("keys:");
-        foreach (k; this.keys.byKey)
+        foreach (k; this.getIonKeys.byKey)
         {
             stderr.writeln(k);
         }

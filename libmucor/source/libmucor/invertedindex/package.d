@@ -74,9 +74,10 @@ struct InvertedIndex
         auto keycopy = key.idup;
         const(char[])[] ret;
         auto wildcard = key.indexOf('*');
+        auto keys = this.store.getIonKeys;
         if (wildcard == -1)
         {
-            if (!(key in this.store.keys)) {
+            if (!(key in *keys)) {
                 return [];
             } else {
                 ret = [key];
@@ -86,9 +87,7 @@ struct InvertedIndex
         {
             key = key.replace("*", ".*");
             auto reg = regex("^" ~ key ~ "$");
-            ret = this.store
-                .keys
-                .byKey
+            ret = keys.byKey
                 .filter!(x => !(x.matchFirst(reg).empty))
                 .array;
             if (ret.length == 0)
@@ -441,15 +440,16 @@ auto query(ref File outfile, ref InvertedIndex idx, string queryStr)
 
 void index(ref VcfIonDeserializer range, string prefix)
 {
+    import core.atomic : atomicOp;
     InvertedIndex idx = InvertedIndex(prefix);
     StopWatch sw;
     sw.start;
-    auto count = 0;
-    foreach (ref rec; range)
+    shared(ulong) count;
+    foreach (rec; parallel(range))
     {
         auto r = rec.unwrap;
         idx.insert(r);
-        count++;
+        count.atomicOp!"+="(1);
     }
     idx.store.storeSharedSymbolTable();
     // assert(count == idx.recordMd5s.length,"number of md5s doesn't match number of records");

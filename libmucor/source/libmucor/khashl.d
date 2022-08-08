@@ -924,6 +924,8 @@ unittest {
     b.insert("test4");
     b.insert("test4");
 
+    assert(a.byKey.array == ["test1", "test3", "test2"]);
+    assert(b.byKey.array == ["test4", "test1", "test3"]);
     assert((a & b).byKey.array == ["test1", "test3"]);
     assert((a | b).byKey.array == ["test4", "test1", "test3", "test2"]);
     assert((a - b).byKey.array == ["test2"]);
