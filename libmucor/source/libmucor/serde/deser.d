@@ -149,10 +149,9 @@ struct VcfIonDeserializer {
                 return IonErrorCode.eof;
             }
         }
-
-        auto end = des.L + 2 > this.buffer.length ? this.buffer.length : des.L + 2;
-        val = IonValue(this.buffer[0 .. end]);
-        this.buffer = this.buffer[end .. $];
+        
+        val = IonValue(this.buffer[0 .. des.L]);
+        this.buffer = this.buffer[des.L .. $];
         return IonErrorCode.none;
     }
 
@@ -210,6 +209,7 @@ IonErrorCode readVersion(ref const(ubyte)[] buffer) {
 IonErrorCode parseDescriptor()(const(ubyte)[] data, scope ref IonDescriptor descriptor)
 @safe pure nothrow @nogc
 {
+    auto len = data.length;
     version (LDC) pragma(inline, true);
 
     if (_expect(data.length == 0, false))
@@ -241,6 +241,7 @@ IonErrorCode parseDescriptor()(const(ubyte)[] data, scope ref IonDescriptor desc
     {
         if (auto error = parseVarUInt(data, descriptor.L))
             return error;
+        descriptor.L += cast(uint)(len - data.length);
     }
     return IonErrorCode.none;
 }
