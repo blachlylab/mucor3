@@ -325,7 +325,7 @@ struct Annotation {
         serializer.putSymbol(this.feature_type);
 
         serializer.putKey("feature_id");
-        serializer.putValue(this.feature_id);
+        serializer.putSymbol(this.feature_id);
 
         if(!this.transcript_biotype.isNone) {
             serializer.putKey("transcript_biotype");
@@ -343,11 +343,11 @@ struct Annotation {
         }
         
         serializer.putKey("hgvs_c");
-        serializer.putValue(this.hgvs_c);
+        serializer.putSymbol(this.hgvs_c);
 
         if(!this.hgvs_p.isNone) {
             serializer.putKey("hgvs_p");
-            serializer.putValue(this.hgvs_p.unwrap);
+            serializer.putSymbol(this.hgvs_p.unwrap);
         }
 
         if(!this.cdna_position.isNone) {
@@ -384,7 +384,7 @@ struct Annotation {
 
         if(!this.errors_warnings_info.isNone) {
             serializer.putKey("errors_warnings_info");
-            serializer.putValue(this.errors_warnings_info.unwrap);
+            serializer.putSymbol(this.errors_warnings_info.unwrap);
         }
 
         serializer.structEnd(s);
@@ -405,8 +405,9 @@ unittest{
     import mir.ion.conv;
     auto parsed = anns.array;
     enum annFields = serdeGetSerializationKeysRecurse!Annotation.removeSystemSymbols;
-    assert(serializeVcfToIon(parsed[0], annFields).ion2text  == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381657",transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:"ENST00000381657.2:c.-21-26C>A"}`);
-    assert(serializeVcfToIon(parsed[1], annFields).ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:"ENST00000381663",transcript_biotype:protein_coding,rank:1,rtotal:7,hgvs_c:"ENST00000381663.3:c.-21-26C>A"}`);
+
+    assert(serializeVcfToIon(parsed[0], annFields).ion2text  == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:ENST00000381657,transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:'ENST00000381657.2:c.-21-26C>A'}`);
+    assert(serializeVcfToIon(parsed[1], annFields).ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:ENST00000381663,transcript_biotype:protein_coding,rank:1,rtotal:7,hgvs_c:'ENST00000381663.3:c.-21-26C>A'}`);
 
     // assert(serializeVcfToIon(Effect._5_prime_UTR_premature_start_codon_gain_variant).ion2text == "'5_prime_UTR_premature_start_codon_gain_variant'");
     

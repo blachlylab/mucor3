@@ -46,12 +46,6 @@ void query_main(string[] args)
         defaultGetoptPrinter("",res.options);
         exit(0);
     }
-    if (args.length == 1)
-    {
-        defaultGetoptPrinter("",res.options);
-        log_err(__FUNCTION__, "Please specify input json files");
-        exit(1);
-    }
     // set_log_level(LogLevel.Debug);
     StopWatch sw;
     sw.start;

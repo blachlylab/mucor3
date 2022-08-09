@@ -46,6 +46,7 @@ struct FieldValue {
 
     void serialize(ref VcfRecordSerializer serializer) {
         match!(
+            (string x) => serializer.putSymbol(x),
             (x) => serializeValue(serializer.serializer, x),
         )(this.data);
     }

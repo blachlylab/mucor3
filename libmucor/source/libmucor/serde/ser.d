@@ -137,13 +137,6 @@ struct VcfSerializer {
         symbols.insert("sample");
         if(hdrInfo.fmts.byAllele.names.length > 0 || hdrInfo.fmts.other.names.length > 0)
             symbols.insert("FORMAT");
-        foreach (f; hdrInfo.filters){
-            symbols.insert(f);
-        }
-        foreach (sam; hdrInfo.samples)
-        {
-            symbols.insert(sam);
-        }
         if(hdrInfo.fmts.byAllele.names.length > 0 || hdrInfo.infos.byAllele.names.length > 0)
             symbols.insert("byAllele");
         foreach (name; hdrInfo.infos.byAllele.names)
@@ -178,6 +171,13 @@ struct VcfSerializer {
         foreach (name; hdrInfo.fmts.other.names)
         {
             symbols.insert(name);
+        }
+        foreach (f; hdrInfo.filters){
+            symbols.insert(f);
+        }
+        foreach (sam; hdrInfo.samples)
+        {
+            symbols.insert(sam);
         }
     }
 
