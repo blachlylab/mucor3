@@ -94,14 +94,9 @@ struct SymbolTableBuilder {
 }
 
 struct SymbolTable {
-    ScopedBuffer!(const(char)[]) symbolTableBuffer = void;
     const(char[])[] table;
 
-    void initialize() {
-        symbolTableBuffer.initialize;
-    }
-
-    @trusted pure nothrow createFromHeaderConfig(ref HeaderConfig hdrInfo) {
+    void createFromHeaderConfig(ref HeaderConfig hdrInfo) {
         IonSymbolTable!false tmptable;
         tmptable.initialize;
         tmptable.insert("CHROM");
@@ -164,7 +159,7 @@ struct SymbolTable {
         assert(!err, ionErrorMsg(err));
     }
 
-    @trusted pure nothrow createFromStrings(string[] symbols) {
+    void createFromStrings(string[] symbols) {
         IonSymbolTable!false tmptable;
         tmptable.initialize;
         tmptable.insert("CHROM");
@@ -188,14 +183,13 @@ struct SymbolTable {
     }
 
     /// scraped and modified from here: 
-    @trusted pure nothrow @nogc
-    scope IonErrorCode loadSymbolTable(ref const(ubyte)[] d)
+    IonErrorCode loadSymbolTable(ref const(ubyte)[] d)
     {
 
         void resetSymbolTable()
         {
-            symbolTableBuffer.reset;
-            symbolTableBuffer.put(IonSystemSymbolTable_v1);
+            table = [];
+            table ~= IonSystemSymbolTable_v1;
         }
 
         IonErrorCode error;
@@ -308,11 +302,10 @@ struct SymbolTable {
                         error = symbolValue.get(symbol);
                         if (error)
                             goto C;
-                        symbolTableBuffer.put(symbol);
+                        table ~= symbol;
                     }
                 }
             }
-            this.table = this.symbolTableBuffer.data;
             // TODO: continue work
             C:
                 return error;

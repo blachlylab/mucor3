@@ -1,6 +1,7 @@
 module mucor3.view;
 
 import libmucor.serde;
+import mir.ion.value;
 
 import std.stdio;
 import core.stdc.stdlib : exit;
@@ -34,9 +35,9 @@ void view_main(string[] args)
     {
         auto r = rec.unwrap;
         if(json) {
-            writeln(vcfIonToJson(r));
+            writeln(vcfIonToJson(r.withSymbols(r.symbols.table)));
         } else {
-            writeln(vcfIonToText(r));
+            writeln(vcfIonToText(r.withSymbols(r.symbols.table)));
         }
     }
 }

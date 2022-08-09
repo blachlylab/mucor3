@@ -103,6 +103,6 @@ unittest {
     foreach (rec; rdr)
     {
         auto r = rec.unwrap;
-        writeln(vcfIonToText(r));    
+        writeln(vcfIonToText(r.withSymbols(r.symbols.table)));    
     }
 }

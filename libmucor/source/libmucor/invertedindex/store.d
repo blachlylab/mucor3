@@ -17,15 +17,18 @@ import std.traits;
 import mir.ion.value;
 import mir.ser.ion;
 import mir.utility;
+import mir.appender : ScopedBuffer;
 import libmucor.khashl;
 
 struct InvertedIndexStore {
     RocksDB db;
     Hash2IonStore records;
     KVIndex idx;
-    SymbolTable * lastSymbolTable;
+    SymbolTable * currentSymbolTable;
+    SymbolTableBuilder * newSymbolTable;
 
     this(string dbfn) {
+
         Env env;
         env.initialize;
         env.backgroundThreads = 16;
@@ -52,6 +55,19 @@ struct InvertedIndexStore {
         if(cf) {
             this.records = Hash2IonStore(&this.db.columnFamilies["records"]);
             this.idx = KVIndex(&this.db.columnFamilies["idx"]);
+            
+            auto existing = this.getSharedSymbolTable.unwrap;
+            if(!existing.isNone){
+                this.currentSymbolTable = new SymbolTable;
+                auto d = cast(const(ubyte)[]) existing.unwrap;
+                this.currentSymbolTable.loadSymbolTable(d);
+                this.newSymbolTable = new SymbolTableBuilder;
+                foreach (key; this.currentSymbolTable.table[10..$])
+                {
+                    this.newSymbolTable.insert(key);
+                }
+            }
+            
         } else {
             this.records = Hash2IonStore(this.db.createColumnFamily("records").unwrap);
             this.idx = KVIndex(this.db.createColumnFamily("idx").unwrap);
@@ -64,12 +80,11 @@ struct InvertedIndexStore {
         return this.idx.byKeyValue().map!(x => cast(const(char)[])(x[0].key.dup)).collect;
     }
 
-    void storeSharedSymbolTable(){
+    void storeSharedSymbolTable(SymbolTable * lastSymbolTable){
         import mir.ion.symbol_table : IonSymbolTable;
         IonSymbolTable!false table;
         table.initialize;
-        assert(this.lastSymbolTable);
-        foreach (key; this.lastSymbolTable.table[10 .. $])
+        foreach (key; lastSymbolTable.table[10 .. $])
         {
             table.insert(key.dup);        
         }
@@ -100,16 +115,34 @@ struct InvertedIndexStore {
     }
 
     void insert(ref VcfIonRecord rec) {
-        auto data = rec.getObj;
+        IonStructWithSymbols data;
+        IonStruct sval;
         IonInt hashValue;
+        IonErrorCode err;
+        
+        if(this.currentSymbolTable && rec.symbols.table != this.currentSymbolTable.table) {
+            auto val = convertIonSymbols(rec);
+            IonDescribedValue dval;
+            err = val.describe(dval);
+            handleIonError(err);
+            
+            err = dval.get(sval);
+            handleIonError(err);
+            data = sval.withSymbols(this.currentSymbolTable.table);
+            
+        } else {
+            sval = rec.getObj;
+            data = sval.withSymbols(rec.symbols.table);
+        }
+
+        data = sval.withSymbols(rec.symbols.table);
         if(_expect(!("checksum" in data), false)) {
             log_err(__FUNCTION__, "record with no md5");
         }
-        auto err = data["checksum"].get(hashValue);
+        err = data["checksum"].get(hashValue);
         handleIonError(err);
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
-        this.lastSymbolTable = rec.symbols;
         this.records[hash] = cast(immutable(ubyte)[])rec.toBytes;
 
         foreach (key,value; data)
@@ -120,7 +153,7 @@ struct InvertedIndexStore {
 
     void insertIonValue(const(char)[] key, IonDescribedValue value, const(char[])[] symbolTable, uint128 checksum) {
         if(key == "checksum") return;
-        
+
         IonErrorCode err;
         final switch(value.descriptor.type) {
             case IonTypeCode.null_:
@@ -236,6 +269,80 @@ struct InvertedIndexStore {
             case IonTypeCode.annotations:
                 debug assert(0, "We don't handle ion annotations");
                 else return;
+        }
+    }
+
+    IonValue convertIonSymbols(ref VcfIonRecord rec) {
+        IonDescribedValue value;
+        auto err = rec.val.describe(value);
+        handleIonError(err);
+        IonSerializer!(nMax * 8, [], false) serializer;
+        serializer.initializeNoTable;
+
+        this.convertIonSymbols(value, rec.symbols.table[10 .. $], serializer);
+
+        serializer.finalize;
+        this.currentSymbolTable = new SymbolTable;
+        auto d = this.newSymbolTable.serialize();
+        this.currentSymbolTable.loadSymbolTable(d);
+        return IonValue(serializer.data.dup);
+    }
+
+    void convertIonSymbols(S)(IonDescribedValue value, const(char[])[] oldSymbols, ref S serializer) {
+        IonErrorCode err;
+        final switch(value.descriptor.type) {
+            case IonTypeCode.null_:
+            case IonTypeCode.bool_:
+            case IonTypeCode.uInt:
+            case IonTypeCode.nInt:
+            case IonTypeCode.float_:
+            case IonTypeCode.decimal:
+            case IonTypeCode.string:
+            case IonTypeCode.clob:
+            case IonTypeCode.blob:
+            case IonTypeCode.timestamp:
+            case IonTypeCode.sexp:
+            case IonTypeCode.annotations:
+                value.serialize(serializer);
+                return;
+            case IonTypeCode.symbol:
+                IonSymbolID val;
+                err = value.get(val);
+                handleIonError(err);
+
+                auto i = val.get;
+                auto sym = oldSymbols[i];
+                auto newSym = this.newSymbolTable.insert(sym);
+                serializer.putSymbolId(newSym);
+                return;
+            
+            case IonTypeCode.list:
+                IonList vals;
+                err = value.get(vals);
+                handleIonError(err);
+                auto l = serializer.listBegin;
+                foreach (val; vals)
+                {
+                    convertIonSymbols(val, oldSymbols, serializer);
+                }
+                serializer.listEnd(l);
+                return;
+            case IonTypeCode.struct_:
+                IonStruct obj;
+                IonStructWithSymbols objWSym;
+                err = value.get(obj);
+                handleIonError(err);
+
+                objWSym = obj.withSymbols(oldSymbols);
+                auto s = serializer.structBegin;
+                foreach (k, v; objWSym)
+                {
+                    auto newSym = this.newSymbolTable.insert(k);
+                    serializer.putKeyId(newSym);
+                    convertIonSymbols(v, oldSymbols, serializer);
+                }
+                serializer.structEnd(s);
+                return;
         }
     }
 

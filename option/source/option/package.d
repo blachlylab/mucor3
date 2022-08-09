@@ -171,7 +171,7 @@ struct Result(V, E) {
         return this.err;
     }
 
-    auto unwrap() {
+    ref auto unwrap() {
         assert(!this.isErr, this.err.toString);
         return this.value;
     }

@@ -447,11 +447,10 @@ void index(ref VcfIonDeserializer range, string prefix)
     shared(ulong) count;
     foreach (rec; parallel(range))
     {
-        auto r = rec.unwrap;
-        idx.insert(r);
+        idx.insert(rec.unwrap);
         count.atomicOp!"+="(1);
     }
-    idx.store.storeSharedSymbolTable();
+    idx.store.storeSharedSymbolTable(range.symbols);
     // assert(count == idx.recordMd5s.length,"number of md5s doesn't match number of records");
     
     sw.stop;
@@ -490,10 +489,10 @@ unittest {
         
         foreach (rec; rdr)
         {
-            auto r = rec.unwrap;
             // writeln(r.symbolTable);
-            writeln(vcfIonToText(r));
-            writeln(vcfIonToJson(r));
+            auto r = rec.unwrap;
+            writeln(vcfIonToText(r.withSymbols(r.symbols.table)));
+            writeln(vcfIonToJson(r.withSymbols(r.symbols.table)));
         }
     }
 }

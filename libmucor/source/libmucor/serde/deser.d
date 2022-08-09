@@ -13,19 +13,19 @@ import libmucor.serde;
 import option;
 import std.stdio;
 import std.traits : ReturnType;
+import std.container : Array;
+import core.sync.mutex : Mutex;
 
 struct VcfIonRecord {
     
     SymbolTable * symbols;
-    const(char[])[] symbolArray;
 
     IonValue val;
     IonDescribedValue des;
 
-    this(ref SymbolTable st, IonValue val) {
-        val = IonValue(val.data.dup);
-        this.symbols = &st;
-        this.symbolArray = st.table.dup;
+    this(SymbolTable * st, IonValue val) {
+        this.val = val;
+        this.symbols = st;
         auto err = val.describe(des);
         handleIonError(err);
     }
@@ -37,7 +37,7 @@ struct VcfIonRecord {
         IonErrorCode error = des.get(obj);
         assert(!error, ionErrorMsg(error));
 
-        return obj.withSymbols(symbolArray);
+        return obj;
     }
 
     auto toBytes() {
@@ -60,7 +60,7 @@ struct VcfIonRecord {
 struct VcfIonDeserializer {
     File inFile;
 
-    SymbolTable symbols;
+    SymbolTable * symbols;
 
     ReturnType!(File.byChunk) chunks;
 
@@ -73,7 +73,7 @@ struct VcfIonDeserializer {
     VcfIonRecord frontVal;
 
     this(File inFile, size_t bufferSize = 4096){
-
+        this.symbols = new SymbolTable;
         this.inFile = inFile;
         this.chunks = this.inFile.byChunk(bufferSize);
 
