@@ -6,7 +6,8 @@
 	"description": "Bindings to RocksDB",
 	"license": "MIT",
 	"name": "drocks",
-	"libs": ["rocksdb"],
+    "sourceFiles": ["rocksdb/librocksdb.a"],
+    "libs": ["bz2", "stdc++", "zstd"],
 	"dependencies": {
 		"option" : {
 			"path": "../option"

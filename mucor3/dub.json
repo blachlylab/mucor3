@@ -13,15 +13,12 @@
 		},
 		"progress": "~>5.0.1",
 	},
-	"sourceFiles": ["../drocks/rocksdb/librocksdb.a"],
 	"targetPath": "../bin",
 	"dflags-ldc": ["--flto=full"],
-	"libs": ["bz2", "stdc++"],
 	"configurations": [
 		{
 			"name": "standard",
-			"targetType": "executable",
-			"libs": ["rocksdb"]
+			"targetType": "executable"
 		},
 		{
 			"name": "SSE4",
