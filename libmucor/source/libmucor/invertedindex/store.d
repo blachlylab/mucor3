@@ -129,7 +129,7 @@ struct InvertedIndexStore {
                 debug assert(0, "We don't handle bool values yet");
                 else return;
             case IonTypeCode.uInt:
-                IonInt val;
+                IonUInt val;
                 err = value.get(val);
                 handleIonError(err);
 

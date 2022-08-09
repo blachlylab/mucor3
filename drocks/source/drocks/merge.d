@@ -91,10 +91,7 @@ void AppendDtr(void * state){
 }
 
 const(char)* AppendName(void* state){
-    auto n = cast(char*) malloc(15);
-    n[0..14] = "AppendOperator";
-    n[14] = '\0';
-    return n;
+    return "AppendOperator\0";
 }
 
 }

@@ -22,7 +22,7 @@ endif
 
 all: $(BINARIES)
 
-$(BINARIES): $(shell find . -type f -name "*.d")
+$(BINARIES): $(shell find . -type f -name "*.d") mucor3/dub.json
 ifdef STATIC
 	cd $(notdir $@); $(DUB) $(DC) -c static-alpine $(notdir $@)
 else

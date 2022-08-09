@@ -17,13 +17,15 @@ import std.traits : ReturnType;
 struct VcfIonRecord {
     
     SymbolTable * symbols;
+    const(char[])[] symbolArray;
 
     IonValue val;
     IonDescribedValue des;
 
     this(ref SymbolTable st, IonValue val) {
+        val = IonValue(val.data.dup);
         this.symbols = &st;
-        this.val = val;
+        this.symbolArray = st.table.dup;
         auto err = val.describe(des);
         handleIonError(err);
     }
@@ -35,7 +37,7 @@ struct VcfIonRecord {
         IonErrorCode error = des.get(obj);
         assert(!error, ionErrorMsg(error));
 
-        return obj.withSymbols(this.symbols.table);
+        return obj.withSymbols(symbolArray);
     }
 
     auto toBytes() {
