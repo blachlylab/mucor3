@@ -15,7 +15,7 @@ import mucor3.mucor.query;
 import mucor3.mucor.table;
 import libmucor.error;
 import libmucor.khashl;
-import libmucor: setup_global_pool;
+import libmucor : setup_global_pool;
 
 int threads = -1;
 string bam_dir = "";
@@ -38,13 +38,17 @@ void mucor_main(string[] args)
     hts_set_log_level(htsLogLevel.HTS_LOG_INFO);
     auto res = getopt(args, config.bundling,
             "threads|t", "threads for running mucor", &threads,
-            "bam-dir|b", "folder of bam files", &bam_dir, 
-            "extra-fields|e", "extra fields from VCF to be displayed in pivot tables",&extraFields, 
-            "prefix|p", "output directory for files (can be directory or file prefix)", &prefix, 
-            "config|c", "specify json config file (not yet working)", &config_file, 
-            "query|q", "filter vcf data using varquery syntax", &query_str,
-            "file-cache-size|f", "number of highly used files kept open", &fileCacheSize,
-            "ids-cache-size|i", "number of ids that can be stored per key before a file is opened", &smallsSize);
+            "bam-dir|b", "folder of bam files", &bam_dir, "extra-fields|e",
+            "extra fields from VCF to be displayed in pivot tables",
+            &extraFields, "prefix|p",
+            "output directory for files (can be directory or file prefix)", &prefix,
+            "config|c", "specify json config file (not yet working)",
+            &config_file, "query|q", "filter vcf data using varquery syntax",
+            &query_str,
+            "file-cache-size|f",
+            "number of highly used files kept open",
+            &fileCacheSize, "ids-cache-size|i",
+            "number of ids that can be stored per key before a file is opened", &smallsSize);
 
     if (res.helpWanted)
     {
@@ -119,7 +123,8 @@ void mucor_main(string[] args)
     {
 
         log_info(__FUNCTION__, "Indexing vcf data ...");
-        indexJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads, fileCacheSize, smallsSize);
+        indexJsonFiles(args[0], query_str, vcfJsonFiles, index_dir, threads,
+                fileCacheSize, smallsSize);
 
         log_info(__FUNCTION__, "Filtering vcf data...");
         combined_json_file = buildPath(prefix, "filtered.json");
@@ -138,18 +143,21 @@ void mucor_main(string[] args)
 
     khashlSet!(string, true) initialColsSet;
 
-    foreach(col; pivReqCols ~ extraFields){
+    foreach (col; pivReqCols ~ extraFields)
+    {
         initialColsSet.insert(col);
     }
 
     auto otherCols = colData.cols - initialColsSet;
 
-    auto masterCols = pivReqCols ~ extraFields ~ otherCols.byKey.map!(x => cast(string)x).array.sort.array;
+    auto masterCols = pivReqCols ~ extraFields ~ otherCols.byKey.map!(x => cast(string) x)
+        .array.sort.array;
 
     flattenAndMakeMaster(combined_json_file, pivReqCols, masterCols, prefix);
 
-    log_warn(__FUNCTION__, "The following samples had no rows after filtering: %s", (allsamples - colData.samples).byKey.array);
-    auto samples = allsamples.byKey.map!(x => cast(string)x).array.sort.array;
+    log_warn(__FUNCTION__, "The following samples had no rows after filtering: %s",
+            (allsamples - colData.samples).byKey.array);
+    auto samples = allsamples.byKey.map!(x => cast(string) x).array.sort.array;
 
     pivotAndMakeTable(master, requiredCols, pivotOn, pivotValue, extraFields, samples, prefix);
 }

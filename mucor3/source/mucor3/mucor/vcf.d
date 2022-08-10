@@ -88,7 +88,6 @@ auto validateData(string fn, string[] required)
     return sampleSet;
 }
 
-
 auto validateVcfData(string[] json_files, string[] required)
 {
     Bar b = new Bar();
@@ -110,7 +109,8 @@ auto validateVcfData(string[] json_files, string[] required)
     return combined;
 }
 
-ColData combineColData(ColData a, ColData b) {
+ColData combineColData(ColData a, ColData b)
+{
     ColData ret;
     ret.cols = a.cols | b.cols;
     ret.samples = a.samples | b.samples;

@@ -149,8 +149,8 @@ template pivot(fun...)
 {
     static if (fun[0] == "self")
     {
-        auto pivot(Range)(Range range, string on, string val, string[] extraCols = []) 
-        if (is(ElementType!Range == GroupByObject))
+        auto pivot(Range)(Range range, string on, string val, string[] extraCols = [
+                ]) if (is(ElementType!Range == GroupByObject))
         {
             return range.map!((x) {
                 auto ret = AsdfNode(`{}`.parseJson);
@@ -164,33 +164,34 @@ template pivot(fun...)
                 }
                 foreach (Asdf obj; x.objs)
                 {
-                    Asdf onVal;   
-                    if(obj[on] != Asdf.init)
+                    Asdf onVal;
+                    if (obj[on] != Asdf.init)
                         onVal = obj[on];
-                    else if(obj[on.split("/")] != Asdf.init)
+                    else if (obj[on.split("/")] != Asdf.init)
                         onVal = obj[on.split("/")];
                     else
                         log_err(__FUNCTION__, "Record doesn't have on val: %s, %s", on, obj);
 
                     string onStr;
-                    
+
                     switch (onVal.kind)
                     {
-                        case Asdf.Kind.array:
-                        case Asdf.Kind.object:
-                            onStr = onVal.to!string;
-                            break;
-                        default:
-                            onStr = deserialize!string(onVal);
+                    case Asdf.Kind.array:
+                    case Asdf.Kind.object:
+                        onStr = onVal.to!string;
+                        break;
+                    default:
+                        onStr = deserialize!string(onVal);
                     }
                     foreach (col; extraCols)
                     {
 
                         auto colFields = col.split("/");
                         if (obj[col] != Asdf.init)
-                            ret[col] = AsdfNode(combineAsdfArray(cast(Asdf)ret[col], obj[col]));
+                            ret[col] = AsdfNode(combineAsdfArray(cast(Asdf) ret[col], obj[col]));
                         else if (obj[colFields] != Asdf.init)
-                            ret[col] = AsdfNode(combineAsdfArray(cast(Asdf)ret[col], obj[colFields]));
+                            ret[col] = AsdfNode(combineAsdfArray(cast(Asdf) ret[col],
+                                obj[colFields]));
                     }
                     if (obj[val] != Asdf.init)
                         ret[onStr] = AsdfNode(obj[val]);
@@ -199,18 +200,19 @@ template pivot(fun...)
                 }
                 foreach (col; extraCols)
                 {
-                    if((cast(Asdf)ret[col]) == parseJson(`[]`))
+                    if ((cast(Asdf) ret[col]) == parseJson(`[]`))
                         ret.children.remove(col);
-                    else {
+                    else
+                    {
                         string[] res;
-                        foreach (e; unique(cast(Asdf)ret[col]).byElement)
+                        foreach (e; unique(cast(Asdf) ret[col]).byElement)
                         {
                             res ~= e.to!string;
                         }
                         ret[col] = AsdfNode(parseJson(res.join(";")));
                     }
                 }
-                return cast(Asdf)ret;
+                return cast(Asdf) ret;
             });
         }
     }
@@ -221,8 +223,7 @@ template pivot(fun...)
 }
 
 /// apply reducing function (folding function) to any groupby range 
-auto aggregate(Range)(Range range) 
-if (is(ElementType!Range == GroupByObject))
+auto aggregate(Range)(Range range) if (is(ElementType!Range == GroupByObject))
 {
     alias f = binaryFun!(fun);
     return range.map!(x => x.objs.fold!f);
@@ -374,7 +375,8 @@ auto to_table(R)(R json_stream, string[] fields, string delimiter = "\t", string
 
         string front()
         {
-            if(first) {
+            if (first)
+            {
                 first = false;
                 return fields.join(delimiter);
             }

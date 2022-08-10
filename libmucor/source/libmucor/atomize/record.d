@@ -14,7 +14,8 @@ import libmucor.atomize.header;
 import libmucor.serde.ser;
 import libmucor.serde;
 
-struct VcfRequiredFields(bool singleSample, bool singleAlt) {
+struct VcfRequiredFields(bool singleSample, bool singleAlt)
+{
 
     @serdeKeys("CHROM")
     string chrom;
@@ -23,39 +24,40 @@ struct VcfRequiredFields(bool singleSample, bool singleAlt) {
     long pos;
 
     @serdeKeys("ID")
-    @serdeIgnoreOutIf!`a == "."`
-    string id;
+    @serdeIgnoreOutIf!`a == "."` string id;
 
     @serdeKeys("REF")
     string ref_;
 
     @serdeKeys("ALT")
-    static if(singleAlt)
+    static if (singleAlt)
         string alt;
     else
         string[] alt;
 
-    @serdeIgnoreOutIf!isNaN
-    @serdeKeys("QUAL")
+    @serdeIgnoreOutIf!isNaN @serdeKeys("QUAL")
     float qual;
 
     @serdeKeys("FILTER")
     string[] filter;
 
-    static if(singleSample) {
+    static if (singleSample)
+    {
         string sample;
     }
 
     BigInt!2 checksum;
-    
-    void serialize(ref VcfRecordSerializer serializer) {
+
+    void serialize(ref VcfRecordSerializer serializer)
+    {
         serializer.putKey("CHROM");
         serializer.putSymbol(this.chrom);
 
         serializer.putKey("POS");
         serializer.putValue(pos);
 
-        if(this.id != ".") {
+        if (this.id != ".")
+        {
             serializer.putKey("ID");
             serializer.putSymbol(id);
         }
@@ -64,9 +66,12 @@ struct VcfRequiredFields(bool singleSample, bool singleAlt) {
         serializer.putSymbol(this.ref_);
 
         serializer.putKey("ALT");
-        static if(singleAlt){
+        static if (singleAlt)
+        {
             serializer.putSymbol(this.alt);
-        } else {
+        }
+        else
+        {
             auto l = serializer.listBegin;
             foreach (ref string key; this.alt)
             {
@@ -74,8 +79,9 @@ struct VcfRequiredFields(bool singleSample, bool singleAlt) {
             }
             serializer.listEnd(l);
         }
-        
-        if(!isNaN(this.qual)) {
+
+        if (!isNaN(this.qual))
+        {
             serializer.putKey("QUAL");
             serializer.putValue(qual);
         }
@@ -84,18 +90,20 @@ struct VcfRequiredFields(bool singleSample, bool singleAlt) {
         auto l2 = serializer.listBegin;
         foreach (ref string key; filter)
         {
-            serializer.putSymbol(key);    
+            serializer.putSymbol(key);
         }
         serializer.listEnd(l2);
 
-        static if(singleSample){
+        static if (singleSample)
+        {
             serializer.putKey("sample");
             serializer.putSymbol(this.sample);
         }
     }
 }
 
-struct VcfRec {
+struct VcfRec
+{
     alias ReqFields = VcfRequiredFields!(false, false);
     ReqFields required;
     alias required this;
@@ -106,17 +114,19 @@ struct VcfRec {
     @serdeKeys("FORMAT")
     Fmt fmt;
     // Annotations[] anns;
-    @serdeIgnoreOut
-    HeaderConfig hdrInfo;
+    @serdeIgnoreOut HeaderConfig hdrInfo;
 
-    this(VCFHeader hdr) {
+    this(VCFHeader hdr)
+    {
         this.hdrInfo = HeaderConfig(hdr);
         this.info = Info(this.hdrInfo);
         this.fmt = Fmt(this.hdrInfo);
     }
 
-    void parse(VCFRecord rec) {
+    void parse(VCFRecord rec)
+    {
         import std.array : split;
+
         this.chrom = rec.chrom;
         this.pos = rec.pos.to!OB.pos;
         this.id = rec.id;
@@ -128,16 +138,17 @@ struct VcfRec {
         this.fmt.parse(rec);
     }
 
-    void serialize(ref VcfRecordSerializer serializer) {
+    void serialize(ref VcfRecordSerializer serializer)
+    {
         auto s = serializer.structBegin;
         this.required.serialize(serializer);
-        
+
         serializer.putKey("INFO");
         info.serialize(serializer);
 
         serializer.putKey("FORMAT");
         fmt.serialize(serializer);
-    
+
         auto last = serializer.serializer.data[s .. $];
         serializer.putKey("checksum");
 
@@ -146,10 +157,10 @@ struct VcfRec {
     }
 }
 
-struct VcfRecSingleSample {
+struct VcfRecSingleSample
+{
     alias ReqFields = VcfRequiredFields!(true, false);
-    @serdeIgnoreOut
-    ReqFields required;
+    @serdeIgnoreOut ReqFields required;
     alias required this;
 
     @serdeKeys("INFO")
@@ -158,10 +169,10 @@ struct VcfRecSingleSample {
     @serdeKeys("FORMAT")
     FmtSingleSample fmt;
     // Annotations[] anns;
-    @serdeIgnoreOut
-    HeaderConfig hdrInfo;
+    @serdeIgnoreOut HeaderConfig hdrInfo;
 
-    this(VcfRec rec, size_t samIdx) {
+    this(VcfRec rec, size_t samIdx)
+    {
         this.chrom = rec.chrom;
         this.pos = rec.pos;
         this.id = rec.id;
@@ -175,16 +186,17 @@ struct VcfRecSingleSample {
         this.hdrInfo = rec.hdrInfo;
     }
 
-    void serialize(ref VcfRecordSerializer serializer) {
+    void serialize(ref VcfRecordSerializer serializer)
+    {
         auto s = serializer.structBegin;
         this.required.serialize(serializer);
-        
+
         serializer.putKey("INFO");
         info.serialize(serializer);
 
         serializer.putKey("FORMAT");
         fmt.serialize(serializer);
-        
+
         auto last = serializer.serializer.data[s .. $];
         serializer.putKey("checksum");
 
@@ -193,10 +205,10 @@ struct VcfRecSingleSample {
     }
 }
 
-struct VcfRecSingleAlt {
+struct VcfRecSingleAlt
+{
     alias ReqFields = VcfRequiredFields!(true, true);
-    @serdeIgnoreOut
-    ReqFields required;
+    @serdeIgnoreOut ReqFields required;
     alias required this;
 
     @serdeKeys("INFO")
@@ -204,12 +216,10 @@ struct VcfRecSingleAlt {
 
     @serdeKeys("FORMAT")
     FmtSingleAlt fmt;
-    @serdeIgnoreOut
-    HeaderConfig hdrInfo;
+    @serdeIgnoreOut HeaderConfig hdrInfo;
 
-    
-
-    this(VcfRecSingleSample rec, size_t altIdx) {
+    this(VcfRecSingleSample rec, size_t altIdx)
+    {
         this.chrom = rec.chrom;
         this.pos = rec.pos;
         this.id = rec.id;
@@ -223,10 +233,11 @@ struct VcfRecSingleAlt {
         this.hdrInfo = rec.hdrInfo;
     }
 
-    void serialize(ref VcfRecordSerializer serializer) {
+    void serialize(ref VcfRecordSerializer serializer)
+    {
         auto s = serializer.structBegin;
         this.required.serialize(serializer);
-        
+
         serializer.putKey("INFO");
         info.serialize(serializer);
 
@@ -241,12 +252,13 @@ struct VcfRecSingleAlt {
     }
 }
 
-unittest {
+unittest
+{
     import std.stdio;
     import libmucor.serde;
     import mir.ion.conv;
 
-    auto vcf = VCFReader("../test/data/vcf_file.vcf",-1, UnpackLevel.All);
+    auto vcf = VCFReader("../test/data/vcf_file.vcf", -1, UnpackLevel.All);
 
     auto hdrInfo = HeaderConfig(vcf.vcfhdr);
     auto rec = vcf.front;
@@ -265,17 +277,17 @@ unittest {
     {
         auto ionRecSS1 = VcfRecSingleSample(ionRec, 0);
         // assert(serializeVcfToIon(ionRecSS1, hdrInfo).ion2text == res2);
-// 
+        // 
         auto ionRecSS2 = VcfRecSingleSample(ionRec, 1);
         // assert(serializeVcfToIon(ionRecSS2, hdrInfo).ion2text == res3);
-// 
+        // 
 
         auto ionRecSA1 = VcfRecSingleAlt(ionRecSS1, 0);
         // assert(serializeVcfToIon(ionRecSA1, hdrInfo).ion2text == res4);
-// 
+        // 
         auto ionRecSA2 = VcfRecSingleAlt(ionRecSS2, 0);
         // assert(serializeVcfToIon(ionRecSA2, hdrInfo).ion2text == res5);
-// 
+        // 
     }
 
     vcf.popFront;
@@ -289,7 +301,7 @@ unittest {
     res5 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:G,ALT:T,QUAL:12.6,FILTER:[test],sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:'2',GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]},checksum:175127199109185310019294968658578824505}`;
     auto res6 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:G,ALT:C,QUAL:12.6,FILTER:[test],sample:A,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:'0/1',GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},checksum:219863281376588456487662513914302963957}`;
     auto res7 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:G,ALT:C,QUAL:12.6,FILTER:[test],sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:'2',GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]},checksum:89391436317617167887546552862988127933}`;
-    
+
     rec = vcf.front;
     ionRec.parse(rec);
     assert(serializeVcfToIon(ionRec, hdrInfo).ion2text == res1);

@@ -18,15 +18,18 @@ alias DoubleRange = Tuple!(double, "start", double, "end");
 /// Values can be any of string, double, or long
 alias ValueExpr = SumType!(bool, double, long, string, DoubleRange, LongRange);
 
-struct Value {
-    ValueExpr * expr;
+struct Value
+{
+    ValueExpr* expr;
 
-    this(ValueExpr ex) {
+    this(ValueExpr ex)
+    {
         this.expr = new ValueExpr;
         *this.expr = ex;
     }
 
-    this(string query) {
+    this(string query)
+    {
         auto q = query;
         if (q.startsWith('"') && q.endsWith('"'))
         {
@@ -44,7 +47,8 @@ struct Value {
             {
                 try
                 {
-                    this.expr = new ValueExpr(DoubleRange(conv_parse!double(split[0]), conv_parse!double(split[2])));
+                    this.expr = new ValueExpr(DoubleRange(conv_parse!double(split[0]),
+                            conv_parse!double(split[2])));
                 }
                 catch (ConvException e)
                 {
@@ -97,15 +101,11 @@ struct Value {
 
     bool opEquals(const Value other) const
     {
-        return match!(
-            (const bool a, const bool b) => a == b, 
-            (const long a, const long b) => a == b,
-            (const double a, const double b) => a == b, 
-            (const string a, const string b) => a == b,
-            (const DoubleRange a, const DoubleRange b) => a == b, 
-            (const LongRange a, const LongRange b) => a == b, 
-            (_a, _b) => false,
-        )(*this.expr, *other.expr);
+        return match!((const bool a, const bool b) => a == b, (const long a,
+                const long b) => a == b, (const double a, const double b) => a == b,
+                (const string a, const string b) => a == b, (const DoubleRange a,
+                    const DoubleRange b) => a == b, (const LongRange a,
+                    const LongRange b) => a == b, (_a, _b) => false,)(*this.expr, *other.expr);
     }
 
     /// Get inner type for testing
@@ -150,11 +150,9 @@ struct Value {
 
     string toString()
     {
-        return (*this.expr).match!(
-            (string x) => x,
-            (DoubleRange x) => format("%f..%f", x[0], x[1]), 
-            (LongRange x) => format("%d..%d", x[0], x[1]), 
-            (x) => x.to!string,);
+        return (*this.expr).match!((string x) => x,
+                (DoubleRange x) => format("%f..%f", x[0], x[1]),
+                (LongRange x) => format("%d..%d", x[0], x[1]), (x) => x.to!string,);
     }
 }
 
@@ -200,4 +198,3 @@ unittest
     assert(Value("False").getInner!bool == false);
     assert(Value("FALSE").getInner!bool == false);
 }
-

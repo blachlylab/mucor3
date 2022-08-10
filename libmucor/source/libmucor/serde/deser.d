@@ -3,8 +3,8 @@ module libmucor.serde.deser;
 import mir.ion.exception;
 import mir.ion.type_code;
 import mir.ion.value;
-import mir.utility: _expect;
-import mir.appender: ScopedBuffer;
+import mir.utility : _expect;
+import mir.appender : ScopedBuffer;
 import mir.ion.symbol_table;
 import mir.ion.stream;
 
@@ -16,14 +16,16 @@ import std.traits : ReturnType;
 import std.container : Array;
 import core.sync.mutex : Mutex;
 
-struct VcfIonRecord {
-    
-    SymbolTable * symbols;
+struct VcfIonRecord
+{
+
+    SymbolTable* symbols;
 
     IonValue val;
     IonDescribedValue des;
 
-    this(SymbolTable * st, IonValue val) {
+    this(SymbolTable* st, IonValue val)
+    {
         this.val = val;
         this.symbols = st;
         auto err = val.describe(des);
@@ -32,7 +34,8 @@ struct VcfIonRecord {
 
     alias getObj this;
 
-    auto getObj(){
+    auto getObj()
+    {
         IonStruct obj;
         IonErrorCode error = des.get(obj);
         assert(!error, ionErrorMsg(error));
@@ -40,7 +43,8 @@ struct VcfIonRecord {
         return obj;
     }
 
-    auto toBytes() {
+    auto toBytes()
+    {
         return this.val.data;
     }
 
@@ -57,10 +61,11 @@ struct VcfIonRecord {
 ///     [ ion data ]        
 /// ]
 ///     
-struct VcfIonDeserializer {
+struct VcfIonDeserializer
+{
     File inFile;
 
-    SymbolTable * symbols;
+    SymbolTable* symbols;
 
     ReturnType!(File.byChunk) chunks;
 
@@ -72,7 +77,8 @@ struct VcfIonDeserializer {
 
     VcfIonRecord frontVal;
 
-    this(File inFile, size_t bufferSize = 4096){
+    this(File inFile, size_t bufferSize = 4096)
+    {
         this.symbols = new SymbolTable;
         this.inFile = inFile;
         this.chunks = this.inFile.byChunk(bufferSize);
@@ -87,23 +93,29 @@ struct VcfIonDeserializer {
     }
 
     /// set up buffer, read first chunk, and validate version/ionPrefix
-    Result!(VcfIonRecord, string) front() {
+    Result!(VcfIonRecord, string) front()
+    {
         Result!(VcfIonRecord, string) ret;
-        if(error) ret = Err(ionErrorMsg(error));
-        else ret = Ok(frontVal);
+        if (error)
+            ret = Err(ionErrorMsg(error));
+        else
+            ret = Ok(frontVal);
         return ret;
     }
 
-    void popFront(){
+    void popFront()
+    {
         IonDescriptor des;
         IonValue val;
         readType(des);
-        if(des.type == IonTypeCode.annotations) {
+        if (des.type == IonTypeCode.annotations)
+        {
             this.readSymbolTable();
             readType(des);
         }
 
-        if(this.eof && this.buffer.length == 0){   
+        if (this.eof && this.buffer.length == 0)
+        {
             this.empty = true;
             return;
         }
@@ -111,16 +123,21 @@ struct VcfIonDeserializer {
         error = this.readValue(val, des);
 
         handleIonError(error);
-        
+
         this.frontVal = VcfIonRecord(this.symbols, val);
     }
 
-    void loadMoreBytes() {
-        if(_expect(!this.chunks.empty, true)){
-            if(buffer.length > 0) {
+    void loadMoreBytes()
+    {
+        if (_expect(!this.chunks.empty, true))
+        {
+            if (buffer.length > 0)
+            {
                 this.buffer = this.buffer ~ this.chunks.front;
                 this.chunks.popFront;
-            } else {
+            }
+            else
+            {
                 this.buffer = this.chunks.front.dup;
                 this.chunks.popFront;
             }
@@ -129,12 +146,15 @@ struct VcfIonDeserializer {
         this.eof = true;
     }
 
-    void readSymbolTable(){
+    void readSymbolTable()
+    {
         auto view = buffer[];
         error = this.symbols.loadSymbolTable(view);
-        while(error == IonErrorCode.unexpectedEndOfData) {
+        while (error == IonErrorCode.unexpectedEndOfData)
+        {
             this.loadMoreBytes;
-            if(_expect(this.eof, false)) {
+            if (_expect(this.eof, false))
+            {
                 return;
             }
             view = buffer[];
@@ -144,24 +164,30 @@ struct VcfIonDeserializer {
         this.buffer = view;
     }
 
-    IonErrorCode readValue(ref IonValue val, ref IonDescriptor des){
-        while(des.L > buffer.length) {
+    IonErrorCode readValue(ref IonValue val, ref IonDescriptor des)
+    {
+        while (des.L > buffer.length)
+        {
             this.loadMoreBytes;
-            if(_expect(this.eof, false)) {
+            if (_expect(this.eof, false))
+            {
                 return IonErrorCode.eof;
             }
         }
-        
+
         val = IonValue(this.buffer[0 .. des.L]);
         this.buffer = this.buffer[des.L .. $];
         return IonErrorCode.none;
     }
 
-    void readType(ref IonDescriptor des) {
+    void readType(ref IonDescriptor des)
+    {
         error = parseDescriptor(this.buffer, des);
-        while(_expect(error == IonErrorCode.unexpectedEndOfData, false)) {
+        while (_expect(error == IonErrorCode.unexpectedEndOfData, false))
+        {
             this.loadMoreBytes;
-            if(_expect(this.eof, false)) {
+            if (_expect(this.eof, false))
+            {
                 return;
             }
             error = parseDescriptor(this.buffer, des);
@@ -171,7 +197,8 @@ struct VcfIonDeserializer {
 
 }
 
-auto vcfIonToText(IonStructWithSymbols data){
+auto vcfIonToText(IonStructWithSymbols data)
+{
     import mir.ser.text;
     import mir.ser.unwrap_ids;
     import std.array : appender;
@@ -183,7 +210,8 @@ auto vcfIonToText(IonStructWithSymbols data){
     return buffer.data;
 }
 
-auto vcfIonToJson(IonStructWithSymbols data){
+auto vcfIonToJson(IonStructWithSymbols data)
+{
     import mir.ser.json;
     import mir.ser.unwrap_ids;
     import std.array : appender;
@@ -195,7 +223,8 @@ auto vcfIonToJson(IonStructWithSymbols data){
     return buffer.data;
 }
 
-IonErrorCode readVersion(ref const(ubyte)[] buffer) {
+IonErrorCode readVersion(ref const(ubyte)[] buffer)
+{
     IonVersionMarker versionMarker;
     auto error = buffer.parseVersion(versionMarker);
     if (!error)
@@ -208,8 +237,7 @@ IonErrorCode readVersion(ref const(ubyte)[] buffer) {
     return error;
 }
 
-IonErrorCode parseDescriptor()(const(ubyte)[] data, scope ref IonDescriptor descriptor)
-@safe pure nothrow @nogc
+IonErrorCode parseDescriptor()(const(ubyte)[] data, scope ref IonDescriptor descriptor) @safe pure nothrow @nogc
 {
     auto len = data.length;
     version (LDC) pragma(inline, true);
@@ -248,8 +276,7 @@ IonErrorCode parseDescriptor()(const(ubyte)[] data, scope ref IonDescriptor desc
     return IonErrorCode.none;
 }
 
-IonErrorCode parseValue()(ref const(ubyte)[] data, scope ref IonDescribedValue describedValue)
-@safe pure nothrow @nogc
+IonErrorCode parseValue()(ref const(ubyte)[] data, scope ref IonDescribedValue describedValue) @safe pure nothrow @nogc
 {
     version (LDC) pragma(inline, true);
 
@@ -292,8 +319,7 @@ IonErrorCode parseValue()(ref const(ubyte)[] data, scope ref IonDescribedValue d
     return type == IonTypeCode.null_ ? IonErrorCode.nop : IonErrorCode.none;
 }
 
-package IonErrorCode parseVersion(ref const(ubyte)[] data, scope ref IonVersionMarker versionMarker)
-@safe pure nothrow @nogc
+package IonErrorCode parseVersion(ref const(ubyte)[] data, scope ref IonVersionMarker versionMarker) @safe pure nothrow @nogc
 {
     version (LDC) pragma(inline, true);
     if (data.length < 4 || data[0] != 0xE0 || data[3] != 0xEA)
@@ -303,13 +329,13 @@ package IonErrorCode parseVersion(ref const(ubyte)[] data, scope ref IonVersionM
     return IonErrorCode.none;
 }
 
-package IonErrorCode parseVarUInt(bool checkInput = true, U)(scope ref const(ubyte)[] data, scope out U result)
-@safe pure nothrow @nogc
-    if (is(U == ubyte) || is(U == ushort) || is(U == uint) || is(U == ulong))
+package IonErrorCode parseVarUInt(bool checkInput = true, U)(
+        scope ref const(ubyte)[] data, scope out U result) @safe pure nothrow @nogc
+        if (is(U == ubyte) || is(U == ushort) || is(U == uint) || is(U == ulong))
 {
     version (LDC) pragma(inline, true);
     enum mLength = U(1) << (U.sizeof * 8 / 7 * 7);
-    for(;;)
+    for (;;)
     {
         static if (checkInput)
         {
@@ -324,7 +350,7 @@ package IonErrorCode parseVarUInt(bool checkInput = true, U)(scope ref const(uby
         data = data[1 .. $];
         result <<= 7;
         result |= b & 0x7F;
-        if (cast(byte)b < 0)
+        if (cast(byte) b < 0)
             return IonErrorCode.none;
         static if (checkInput)
         {

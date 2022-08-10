@@ -18,9 +18,9 @@ import libmucor.query.key;
 import libmucor.query.value;
 import libmucor.query.tokens;
 
-
 /// key op value
-struct KeyValue {
+struct KeyValue
+{
     ValueOp op;
     Key lhs;
     Value rhs;
@@ -47,7 +47,8 @@ struct KeyValue {
 }
 
 /// key op
-struct UnaryKeyOp {
+struct UnaryKeyOp
+{
     KeyOp op;
     Key lhs;
 
@@ -57,11 +58,12 @@ struct UnaryKeyOp {
         this.op = op;
     }
 
-    this(Tokenized tokens){
+    this(Tokenized tokens)
+    {
         this.lhs = Key(tokens.getFrontInner!string);
         tokens.popFront;
         auto op = tokens.getFrontInner!ValueOp;
-        if(op != ValueOp.KeyOperator)
+        if (op != ValueOp.KeyOperator)
             queryErr(tokens.original, tokens.idxs[0], "Expected \":\"");
         tokens.popFront;
         this.op = tokens.getFrontInner!KeyOp;
@@ -79,11 +81,10 @@ struct UnaryKeyOp {
 
 }
 
-string toString(T: UnaryKeyOp)(T kv)
+string toString(T : UnaryKeyOp)(T kv)
 {
     return kv.lhs ~ ":" ~ cast(string) kv.op;
 }
-
 
 // unittest
 // {

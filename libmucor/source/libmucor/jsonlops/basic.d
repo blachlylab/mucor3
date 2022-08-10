@@ -3,7 +3,7 @@ module libmucor.jsonlops.basic;
 import std.algorithm : map, sort, uniq, joiner, sum, fold, count;
 import std.array : array;
 import std.digest.md : MD5Digest, toHexString;
-import std.format: format;
+import std.format : format;
 import libmucor.spookyhash;
 import libmucor.wideint;
 
@@ -407,7 +407,8 @@ auto getAllKeys(Asdf obj, char[] sep = ['/'])
     alias AsdfObjItr = ReturnType!(Asdf.byKeyValue);
     alias KeyValue = ElementType!(AsdfObjItr);
 
-    struct GetAllKeys {
+    struct GetAllKeys
+    {
         Queue!KeyValue kvQueue;
         this(Asdf o)
         {
@@ -418,47 +419,53 @@ auto getAllKeys(Asdf obj, char[] sep = ['/'])
             }
         }
 
-        auto front() {
+        auto front()
+        {
             return this.kvQueue.front.key;
         }
 
-        void popFront() {
+        void popFront()
+        {
             auto kv = kvQueue.pop;
-            final switch(kv.value.kind) {
-                case Asdf.Kind.object:
-                    foreach(kv2;kv.value.byKeyValue){
-                        kv2.key = kv.key ~ sep ~ kv2.key;
-                        kvQueue.push(kv2);
-                    }
-                    break;
-                case Asdf.Kind.array:
-                    foreach(e;kv.value.byElement){
-                        KeyValue kv2;
-                        kv2.key = kv.key;
-                        kv2.value = e;
-                        kvQueue.push(kv2);
-                    }
-                    break;
-                case Asdf.Kind.string:
-                    goto case ;
-                case Asdf.Kind.null_:
-                    goto case ;
-                case Asdf.Kind.number:
-                    goto case ;
-                case Asdf.Kind.true_:
-                    goto case ;
-                case Asdf.Kind.false_:
-                    break;
+            final switch (kv.value.kind)
+            {
+            case Asdf.Kind.object:
+                foreach (kv2; kv.value.byKeyValue)
+                {
+                    kv2.key = kv.key ~ sep ~ kv2.key;
+                    kvQueue.push(kv2);
+                }
+                break;
+            case Asdf.Kind.array:
+                foreach (e; kv.value.byElement)
+                {
+                    KeyValue kv2;
+                    kv2.key = kv.key;
+                    kv2.value = e;
+                    kvQueue.push(kv2);
+                }
+                break;
+            case Asdf.Kind.string:
+                goto case;
+            case Asdf.Kind.null_:
+                goto case;
+            case Asdf.Kind.number:
+                goto case;
+            case Asdf.Kind.true_:
+                goto case;
+            case Asdf.Kind.false_:
+                break;
             }
         }
 
-        bool empty() {
+        bool empty()
+        {
             return this.kvQueue.empty;
         }
     }
 
     khashlSet!(string, true) ret;
-    foreach(k;GetAllKeys(obj))
+    foreach (k; GetAllKeys(obj))
         ret.insert(k.idup);
 
     return ret;
@@ -472,6 +479,8 @@ unittest
     auto text = `{"foo":"bar","inner":[{"a":true,"b":false,"c":"32323","d":null,"e":{}},{"a":true,"b":true,"c":"32","d":false,"e":{}}]}`;
     auto textJson = text.parseJson;
     auto res = getAllKeys(textJson).byKey.array;
-    auto exp = ["inner", "inner/a", "foo", "inner/c", "inner/e", "inner/b", "inner/d"];
+    auto exp = [
+        "inner", "inner/a", "foo", "inner/c", "inner/e", "inner/b", "inner/d"
+    ];
     assert(res == exp);
 }

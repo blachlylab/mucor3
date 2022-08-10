@@ -45,7 +45,8 @@ unittest
     assert("()test".splitOnClosingParenthesis == tuple("()", "test"));
     assert("(())test".splitOnClosingParenthesis == tuple("(())", "test"));
     assert("((()))test".splitOnClosingParenthesis == tuple("((()))", "test"));
-    assert("(a and b) and (b and c)".splitOnClosingParenthesis == tuple("(a and b)", " and (b and c)"));
+    assert("(a and b) and (b and c)".splitOnClosingParenthesis == tuple("(a and b)",
+            " and (b and c)"));
     assert("((a and b) and (b and c))".splitOnClosingParenthesis == tuple(
             "((a and b) and (b and c))", ""));
 }
@@ -110,63 +111,72 @@ unittest
     assert("test".splitOnLogicalOp == tuple(false, "test", BinaryLogicalOp.init, ""));
 }
 
+void validateParenthesis(string query)
+{
+    if (!(balancedParens(query, '(', ')')))
+    {
 
-void validateParenthesis(string query) {
-    if(!(balancedParens(query, '(', ')'))){
-        
         long openIdx = query.countUntil("(");
-        assert((openIdx == -1) || (query[openIdx] == '('));    
+        assert((openIdx == -1) || (query[openIdx] == '('));
 
-        long nextOpenIdx = openIdx == -1 ? -1 : query[openIdx+1..$].countUntil("(");
+        long nextOpenIdx = openIdx == -1 ? -1 : query[openIdx + 1 .. $].countUntil("(");
         long nextCloseIdx = query.countUntil(")");
         long lastCloseIdx = query.dup.reverse.countUntil(")");
         lastCloseIdx = lastCloseIdx == -1 ? -1 : (query.length - lastCloseIdx) - 1;
         long closeIdx;
-        if(nextCloseIdx == -1)
+        if (nextCloseIdx == -1)
             closeIdx = -1;
-        else if(nextOpenIdx == -1)
+        else if (nextOpenIdx == -1)
             closeIdx = nextCloseIdx;
-        else if(nextCloseIdx < nextOpenIdx)
+        else if (nextCloseIdx < nextOpenIdx)
             closeIdx = nextCloseIdx;
         else
             closeIdx = lastCloseIdx;
-        
+
         assert((closeIdx == -1) || (query[closeIdx] == ')'));
 
-        if(openIdx == -1 && closeIdx != -1){
+        if (openIdx == -1 && closeIdx != -1)
+        {
             log_err_no_exit("parseQuery", "Query sytax error!");
             log_err_no_exit("parseQuery", "Missing opening parenthesis");
-            log_err_no_exit("parseQuery", "Unmatched ')' here: "~(' '.repeat.take(closeIdx).array.idup)~"v");
+            log_err_no_exit("parseQuery",
+                    "Unmatched ')' here: " ~ (' '.repeat.take(closeIdx).array.idup) ~ "v");
             log_err("parseQuery", "QueryFragment:      %s", query);
         }
-        if(openIdx != -1 && closeIdx == -1){
+        if (openIdx != -1 && closeIdx == -1)
+        {
             log_err_no_exit("parseQuery", "Query sytax error!");
             log_err_no_exit("parseQuery", "Missing closing parenthesis");
-            log_err_no_exit("parseQuery", "Unmatched '(' here: "~(' '.repeat.take(openIdx).array.idup)~"v");
+            log_err_no_exit("parseQuery",
+                    "Unmatched '(' here: " ~ (' '.repeat.take(openIdx).array.idup) ~ "v");
             log_err("parseQuery", "QueryFragment:      %s", query);
         }
-        if(closeIdx < openIdx){
+        if (closeIdx < openIdx)
+        {
             log_err_no_exit("parseQuery", "Query sytax error!");
             log_err_no_exit("parseQuery", "Missing opening parenthesis");
-            log_err_no_exit("parseQuery", "Unmatched ')' here: "~(' '.repeat.take(closeIdx).array.idup)~"v");
+            log_err_no_exit("parseQuery",
+                    "Unmatched ')' here: " ~ (' '.repeat.take(closeIdx).array.idup) ~ "v");
             log_err("parseQuery", "QueryFragment:      %s", query);
         }
-        validateParenthesis(query[openIdx+1 .. closeIdx]);
-        if(closeIdx < query.length)
-            validateParenthesis(query[closeIdx + 1..$]);
+        validateParenthesis(query[openIdx + 1 .. closeIdx]);
+        if (closeIdx < query.length)
+            validateParenthesis(query[closeIdx + 1 .. $]);
     }
 }
 
 unittest
 {
-    import std.exception: assertThrown;
+    import std.exception : assertThrown;
+
     assertThrown(validateParenthesis(" ()())"));
     assertThrown(validateParenthesis("(()() "));
     assertThrown(validateParenthesis("(())("));
     assertThrown(validateParenthesis(")())("));
 }
 
-string[] splitIntoGroupsByTokens(string query) {
+string[] splitIntoGroupsByTokens(string query)
+{
     int opened = 0;
     int negIdx = -1;
     int trailIdx = -1;
@@ -174,12 +184,15 @@ string[] splitIntoGroupsByTokens(string query) {
     string[] arr;
     string curStatement = query.strip;
     auto i = 0;
-    while(true){
-        if(curStatement.length == 0) break;
-        if(curStatement[i] == '(') {
+    while (true)
+    {
+        if (curStatement.length == 0)
+            break;
+        if (curStatement[i] == '(')
+        {
             opened++;
             auto s = splitOnClosingParenthesis(curStatement);
-            if(negIdx != -1 && negIdx == i-1)
+            if (negIdx != -1 && negIdx == i - 1)
                 arr ~= "!" ~ s[0];
             else
                 arr ~= s[0];
@@ -187,35 +200,41 @@ string[] splitIntoGroupsByTokens(string query) {
             continue;
         }
 
-        if(query[i] == '!' && negIdx == -1){
-            negIdx = cast(int)i;
+        if (query[i] == '!' && negIdx == -1)
+        {
+            negIdx = cast(int) i;
             continue;
         }
 
-        if(query[i] == '|' || query[i] == '&') {
-            if(opened == 0 && i != 0 && negIdx != i-1){
-                if(lastOp != -1)
-                    arr ~= query[lastOp+1 .. i];
+        if (query[i] == '|' || query[i] == '&')
+        {
+            if (opened == 0 && i != 0 && negIdx != i - 1)
+            {
+                if (lastOp != -1)
+                    arr ~= query[lastOp + 1 .. i];
                 else
                     arr ~= query[0 .. i];
                 trailIdx = -1;
-                
+
             }
-            arr ~= query[i .. i+1];
+            arr ~= query[i .. i + 1];
             lastOp = i;
             continue;
         }
-        if(query[i] == ' ') continue;
-        if(trailIdx == -1)
-            trailIdx = cast(int)i;
+        if (query[i] == ' ')
+            continue;
+        if (trailIdx == -1)
+            trailIdx = cast(int) i;
     }
 
-    if(trailIdx != -1 && opened != 0) {
+    if (trailIdx != -1 && opened != 0)
+    {
         arr ~= query[trailIdx .. $];
     }
-    if(arr.length == 1) {
-        if(arr[0][0] != '!')
-            arr[0] = arr[0][1..$-1];
+    if (arr.length == 1)
+    {
+        if (arr[0][0] != '!')
+            arr[0] = arr[0][1 .. $ - 1];
 
     }
     return arr;

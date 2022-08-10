@@ -18,7 +18,7 @@ import libmucor.serde.ser;
 import libmucor.khashl : khashl;
 import libmucor.jsonlops;
 import libmucor.error;
-import libmucor: setup_global_pool;
+import libmucor : setup_global_pool;
 import std.parallelism : parallel;
 
 import mir.ser.interfaces;
@@ -39,7 +39,8 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, ref Fi
     auto recIR = VcfRec(vcf.vcfhdr);
     // loop over records and parse
     auto ser = VcfSerializer(output, recIR.hdrInfo, SerdeTarget.ion);
-    if(multiSample && multiAllele) {
+    if (multiSample && multiAllele)
+    {
         foreach (x; vcf)
         {
             recIR.parse(x);
@@ -47,32 +48,39 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, ref Fi
             ser.putRecord(recIR);
             output_count++;
         }
-    } else if(!multiSample && multiAllele) {
+    }
+    else if (!multiSample && multiAllele)
+    {
         foreach (x; vcf)
         {
             recIR.parse(x);
             vcf_row_count++;
-            for(auto i = 0; i < recIR.hdrInfo.samples.length;i++) {
+            for (auto i = 0; i < recIR.hdrInfo.samples.length; i++)
+            {
                 auto samIR = VcfRecSingleSample(recIR, i);
                 ser.putRecord(samIR);
                 output_count++;
             }
-            
+
         }
-    } else {
+    }
+    else
+    {
         foreach (x; vcf)
         {
             recIR.parse(x);
             vcf_row_count++;
-            for(auto i = 0; i < recIR.hdrInfo.samples.length;i++) {
+            for (auto i = 0; i < recIR.hdrInfo.samples.length; i++)
+            {
                 auto samIR = VcfRecSingleSample(recIR, i);
-                for(auto j = 0; j < samIR.alt.length; j++) {
+                for (auto j = 0; j < samIR.alt.length; j++)
+                {
                     auto aIR = VcfRecSingleAlt(samIR, j);
                     ser.putRecord(aIR);
                     output_count++;
                 }
             }
-            
+
         }
     }
     if (vcf_row_count > 0)
@@ -84,10 +92,11 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, ref Fi
                 sw.peek.total!"usecs" / vcf_row_count);
     }
     else
-    log_info(__FUNCTION__, "No records in this file!");
+        log_info(__FUNCTION__, "No records in this file!");
 }
 
-unittest {
+unittest
+{
     {
         auto f = File("/tmp/test.ion", "wb");
         parseVCF("../test/data/vcf_file.vcf", -1, false, false, f);
@@ -96,13 +105,13 @@ unittest {
     import mir.ion.conv;
     import mir.ser.text;
     import libmucor.serde.deser;
-    
+
     auto f = File("/tmp/test.ion");
     auto rdr = VcfIonDeserializer(f);
-    
+
     foreach (rec; rdr)
     {
         auto r = rec.unwrap;
-        writeln(vcfIonToText(r.withSymbols(r.symbols.table)));    
+        writeln(vcfIonToText(r.withSymbols(r.symbols.table)));
     }
 }

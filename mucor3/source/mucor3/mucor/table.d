@@ -54,8 +54,10 @@ auto flattenAndMakeMaster(string fn, string[] index, string[] cols, string prefi
     auto masterTsv = buildPath(prefix, "master.tsv");
     auto outputJson = File(masterJson, "w");
     auto outputTsv = File(masterTsv, "w");
-    auto range = File(fn).byChunk(4096).parseJsonByLine.map!(x => normalize(x,
-            ['/'])).tee!(x => outputJson.writeln(x)).createTable(index, cols);
+    auto range = File(fn).byChunk(4096).parseJsonByLine
+        .map!(x => normalize(x, ['/']))
+        .tee!(x => outputJson.writeln(x))
+        .createTable(index, cols);
     foreach (line; range)
     {
         outputTsv.writeln(line);
@@ -66,17 +68,17 @@ auto pivotAndMakeTable(string fn, string[] index, string on, string val,
         string[] extra, string[] samples, string prefix)
 {
     import std.stdio;
-    auto pivName = val.split("/")[$-1];
+
+    auto pivName = val.split("/")[$ - 1];
     auto pivotJson = buildPath(prefix, format("%s.json", pivName));
     auto pivotTsv = buildPath(prefix, format("%s.tsv", pivName));
     auto outputJson = File(pivotJson, "w");
     auto outputTsv = File(pivotTsv, "w");
     auto cols = index ~ extra ~ ["Positive results", "Positive rate"] ~ samples;
     auto range = File(fn).byChunk(4096).parseJsonByLine.groupby(index)
-        .pivot!"self"(on, val, extra)
-        .tee!(x=> outputJson.writeln(x))
+        .pivot!"self"(on, val, extra).tee!(x => outputJson.writeln(x))
         .apply!(x => calulatePositiveColumns(x, index ~ extra, samples))
-        .createTable(index,  cols);
+        .createTable(index, cols);
 
     foreach (line; range)
     {
@@ -84,21 +86,22 @@ auto pivotAndMakeTable(string fn, string[] index, string on, string val,
     }
 }
 
-
-auto createTable(R)(R json_stream, string[] indexes, string[] fields, string delimiter = "\t", string fill = ".")
+auto createTable(R)(R json_stream, string[] indexes, string[] fields,
+        string delimiter = "\t", string fill = ".")
 {
     import std.array : join;
     import std.conv : to;
     import std.algorithm : sort;
     import std.range;
-    
+
     struct CreateTable
     {
         Asdf[] rows;
         bool first;
         string[] fields;
 
-        this(Asdf[] rows, string[] fields) {
+        this(Asdf[] rows, string[] fields)
+        {
             this.rows = rows;
             first = true;
             this.fields = fields;
@@ -111,7 +114,8 @@ auto createTable(R)(R json_stream, string[] indexes, string[] fields, string del
 
         string front()
         {
-            if(first) {
+            if (first)
+            {
                 first = false;
                 return fields.join(delimiter);
             }
@@ -132,7 +136,7 @@ auto createTable(R)(R json_stream, string[] indexes, string[] fields, string del
             rows.popFront;
         }
     }
-    
+
     Asdf[] rows = json_stream.array;
     rows.sort!((a, b) => cmp(a, b, indexes));
 

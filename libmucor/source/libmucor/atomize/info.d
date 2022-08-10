@@ -15,13 +15,13 @@ import libmucor.atomize.ann;
 import libmucor.serde.ser;
 import libmucor.error;
 
-struct InfoAlleleValues {
-    @serdeIgnore
-    FieldValue[] fields;
-    @serdeIgnore
-    bool isNull = true;
+struct InfoAlleleValues
+{
+    @serdeIgnore FieldValue[] fields;
+    @serdeIgnore bool isNull = true;
 
-    void reset() {
+    void reset()
+    {
         this.isNull = true;
         foreach (ref f; fields)
         {
@@ -35,13 +35,16 @@ struct InfoAlleleValues {
         return fields[index];
     }
 
-    void serialize(ref VcfRecordSerializer serializer, const(HeaderConfig) * cfg, bool byAllele) {
-        if(this.isNull) return;
+    void serialize(ref VcfRecordSerializer serializer, const(HeaderConfig)* cfg, bool byAllele)
+    {
+        if (this.isNull)
+            return;
         auto s = serializer.structBegin;
-        foreach (i,val; this.fields)
+        foreach (i, val; this.fields)
         {
-            if(val.isNull) continue;
-            if(byAllele)
+            if (val.isNull)
+                continue;
+            if (byAllele)
                 serializer.putKey(cfg.infos.byAllele.names[i]);
             else
                 serializer.putKey(cfg.infos.other.names[i]);
@@ -51,28 +54,27 @@ struct InfoAlleleValues {
     }
 }
 
-struct Info {
+struct Info
+{
     Annotation _dummy;
-    @serdeIgnore
-    InfoAlleleValues[] byAllele;
-    @serdeIgnore
-    FieldValue[] other;
-    @serdeIgnore
-    Annotations[] annFields;
-    @serdeIgnore
-    const(HeaderConfig) cfg;
-    @serdeIgnore
-    size_t numByAlleleFields;
+    @serdeIgnore InfoAlleleValues[] byAllele;
+    @serdeIgnore FieldValue[] other;
+    @serdeIgnore Annotations[] annFields;
+    @serdeIgnore const(HeaderConfig) cfg;
+    @serdeIgnore size_t numByAlleleFields;
 
-    this(HeaderConfig cfg) {
+    this(HeaderConfig cfg)
+    {
         this.numByAlleleFields = cfg.infos.byAllele.names.length;
         this.other.length = cfg.infos.other.names.length;
         this.annFields.length = cfg.infos.annotations.names.length;
         this.cfg = cfg;
     }
 
-    void reset() {
-        foreach (ref key; byAllele){
+    void reset()
+    {
+        foreach (ref key; byAllele)
+        {
             key.reset;
         }
         foreach (ref key; other)
@@ -84,18 +86,23 @@ struct Info {
     void parse(VCFRecord rec)
     {
         import htslib.vcf;
+
         this.reset;
         /// make sure all arrays are initialized
-        if(this.byAllele.length < rec.line.n_allele - 1){
+        if (this.byAllele.length < rec.line.n_allele - 1)
+        {
             this.byAllele.length = rec.line.n_allele - 1;
             foreach (ref v; this.byAllele)
             {
                 v.fields.length = this.numByAlleleFields;
             }
-        } else {
+        }
+        else
+        {
             this.byAllele.length = rec.line.n_allele - 1;
         }
-        if(rec.line.n_info == 0) return;
+        if (rec.line.n_info == 0)
+            return;
         /// loop over infos
         foreach (bcf_info_t v; rec.line.d.info[0 .. rec.line.n_info])
         {
@@ -105,7 +112,8 @@ struct Info {
             auto info = InfoField("", &v, rec.line);
             auto idx = cfg.getIdx(v.key);
             auto hdrInfo = cfg.getInfo(v.key);
-            if(cfg.isAnn[v.key]) {
+            if (cfg.isAnn[v.key])
+            {
                 annFields[idx] = Annotations(info.to!string);
                 continue;
             }
@@ -142,11 +150,13 @@ struct Info {
         }
     }
 
-    void parseInfo(T)(HdrFieldInfo hdrInfo, InfoField info, size_t idx) {
+    void parseInfo(T)(HdrFieldInfo hdrInfo, InfoField info, size_t idx)
+    {
         final switch (hdrInfo.n)
         {
         case HeaderLengths.OnePerAllele:
-            if(this.byAllele.length == 0) return;
+            if (this.byAllele.length == 0)
+                return;
             auto vals = info.to!(T[]);
 
             foreach (i, val; vals)
@@ -157,7 +167,8 @@ struct Info {
             }
             return;
         case HeaderLengths.OnePerAltAllele:
-            if(this.byAllele.length == 0) return;
+            if (this.byAllele.length == 0)
+                return;
             auto vals = info.to!(T[]);
 
             foreach (i, val; vals)
@@ -177,21 +188,24 @@ struct Info {
         }
     }
 
-    void serialize(ref VcfRecordSerializer serializer) {
+    void serialize(ref VcfRecordSerializer serializer)
+    {
         auto state = serializer.structBegin;
-        if(this.byAllele.map!(x => !x.isNull).any){
+        if (this.byAllele.map!(x => !x.isNull).any)
+        {
             serializer.putKey("byAllele");
             auto state2 = serializer.listBegin;
-            foreach (i,v; this.byAllele)
+            foreach (i, v; this.byAllele)
             {
                 v.serialize(serializer, &cfg, true);
             }
             serializer.listEnd(state2);
         }
 
-        foreach (i,val; this.other)
+        foreach (i, val; this.other)
         {
-            if(val.isNull) continue;
+            if (val.isNull)
+                continue;
             serializer.putKey(cfg.infos.other.names[i]);
             val.serialize(serializer);
         }
@@ -210,20 +224,17 @@ struct Info {
     }
 }
 
-struct InfoSingleAlt {
+struct InfoSingleAlt
+{
     Annotation _dummy;
-    @serdeIgnore
-    InfoAlleleValues alleleValues;
-    @serdeIgnore
-    FieldValue[] other;
-    @serdeIgnore
-    Annotations[] annFields;
-    @serdeIgnore
-    const(HeaderConfig) cfg;
-    @serdeIgnore
-    string allele;
+    @serdeIgnore InfoAlleleValues alleleValues;
+    @serdeIgnore FieldValue[] other;
+    @serdeIgnore Annotations[] annFields;
+    @serdeIgnore const(HeaderConfig) cfg;
+    @serdeIgnore string allele;
 
-    this(Info info, size_t altIdx, string allele) {
+    this(Info info, size_t altIdx, string allele)
+    {
         this.alleleValues = info.byAllele[altIdx];
         this.other = info.other;
         this.annFields = info.annFields;
@@ -231,18 +242,21 @@ struct InfoSingleAlt {
         this.cfg = info.cfg;
     }
 
-    void serialize(ref VcfRecordSerializer serializer) {
+    void serialize(ref VcfRecordSerializer serializer)
+    {
         auto state = serializer.structBegin;
-        foreach (i,val; this.alleleValues.fields)
+        foreach (i, val; this.alleleValues.fields)
         {
-            if(val.isNull) continue;
+            if (val.isNull)
+                continue;
             serializer.putKey(cfg.infos.byAllele.names[i]);
             val.serialize(serializer);
         }
 
-        foreach (i,val; this.other)
+        foreach (i, val; this.other)
         {
-            if(val.isNull) continue;
+            if (val.isNull)
+                continue;
             serializer.putKey(cfg.infos.other.names[i]);
             val.serialize(serializer);
         }
@@ -253,7 +267,8 @@ struct InfoSingleAlt {
             auto l = serializer.listBegin;
             foreach (ann; anns)
             {
-                if(ann.allele != allele) continue;
+                if (ann.allele != allele)
+                    continue;
                 ann.serialize(serializer);
             }
             serializer.listEnd(l);

@@ -11,10 +11,10 @@ import dhtslib.gff;
 import libmucor.error;
 import libmucor.atomize.ann;
 
-
 /// Tags that are penalized in the Principal Isoform score
 /// Hopefully these are mutually exlusive with principal isoforms
-enum NonCanonical : ubyte {
+enum NonCanonical : ubyte
+{
     /// the transcript has a non-canonical splice site conserved in other species.
     non_canonical_conserved = 1,
     /// the transcript has a non-canonical splice site explained by a genomic sequencing error.
@@ -37,7 +37,8 @@ enum NonCanonical : ubyte {
 }
 
 /// APPRIS score Tag
-enum Appris : ushort {
+enum Appris : ushort
+{
     /// (This flag corresponds to the older flag "appris_principal") Where the transcript expected to 
     /// code for the main functional isoform based solely on the core modules in the APPRIS database. 
     /// The APPRIS core modules map protein structural and functional information and cross-species 
@@ -49,7 +50,7 @@ enum Appris : ushort {
     /// If one (but no more than one) of these candidates has a distinct CCDS identifier it is selected 
     /// as the principal variant for that gene. A CCDS identifier shows that there is consensus between 
     /// RefSeq and GENCODE/Ensembl for that variant, guaranteeing that the variant has cDNA support.    
-    appris_principal_2= 1 << 12,
+    appris_principal_2 = 1 << 12,
     /// Where the APPRIS core modules are unable to choose a clear principal variant and there more than 
     /// one of the variants have distinct CCDS identifiers, APPRIS selects the variant with lowest CCDS 
     /// identifier as the principal variant. The lower the CCDS identifier, the earlier it was annotated. 
@@ -72,7 +73,7 @@ enum Appris : ushort {
     /// transcript expected to code for the main functional isoform based on a range of protein features 
     /// (APPRIS pipeline).
     appris_principal = 1 << 6,
-    
+
     /// where there is no 'appris_principal' variant, the candidate with highest APPRIS score is selected as 
     /// the primary variant.
     appris_candidate_highest_score = 1 << 5,
@@ -100,7 +101,8 @@ enum Appris : ushort {
 
 /// MANE score tag
 /// The Matched Annotation from NCBI and EMBL-EBI project (MANE)
-enum MANE {
+enum MANE
+{
     /// the transcript belongs to the MANE Plus Clinical data set. Within the MANE project, these are 
     /// additional transcripts per locus necessary to support clinical variant reporting, for example 
     /// transcripts containing known pathogenic or likely pathogenic clinical variants not reportable 
@@ -115,36 +117,42 @@ enum MANE {
     MANE_Select,
 }
 
-enum OtherTags: ubyte {
+enum OtherTags : ubyte
+{
     /// identifies a subset of representative transcripts for each gene; prioritises full-length 
     /// protein coding transcripts over partial or non-protein coding transcripts within the same gene, 
     /// and intends to highlight those transcripts that will be useful to the majority of users.
     basic = 1,
 }
 
-auto scoreTags(T)(string[] tags) {
+auto scoreTags(T)(string[] tags)
+{
     uint score;
     foreach (i, tag; tags)
     {
-        sw: switch(tag) {
+    sw:
+        switch (tag)
+        {
             static foreach (v; EnumMembers!T)
             {
-                case v.stringof:
-                    score |= v;
-                    break sw;
+        case v.stringof:
+                score |= v;
+                break sw;
             }
-            default:
-                break;
+        default:
+            break;
         }
     }
     return score;
 }
 
-struct PrincipalScore {
+struct PrincipalScore
+{
     ulong score;
     uint penalty;
 
-    this(GFF3Record rec) {
+    this(GFF3Record rec)
+    {
         auto tags = rec["tag"].splitter(",").array;
         this.score = scoreTags!OtherTags(tags);
         this.score |= scoreTags!Appris(tags) << 1;
@@ -153,29 +161,36 @@ struct PrincipalScore {
 
     }
 
-    auto combinedScore() {
+    auto combinedScore()
+    {
         import core.bitop;
+
         return this.score - popcnt(penalty) * 2;
     }
 }
 
 /// Filter annotation to principal isoform
-void filterAnnotationToPrincipalIsoform(VCFRecord rec, string annotationFile, string infoField = "ANN") {
+void filterAnnotationToPrincipalIsoform(VCFRecord rec, string annotationFile,
+        string infoField = "ANN")
+{
 
     auto infos = rec.getInfos;
     auto field = infoField in infos;
-    if(field is null) return;
+    if (field is null)
+        return;
 
     auto region = GFF3Reader(annotationFile, rec.chrom, rec.coordinates);
     auto anns = Annotations((*field).to!string);
 
     auto featureNames = anns.map!(x => x.feature_id).array;
     auto matchingRecords = region.filter!(rec => featureNames.countUntil(rec["ID"]) != -1).array;
-    
+
     auto scores = matchingRecords.map!(x => PrincipalScore(x).combinedScore).array;
     auto bestIdx = scores.maxIndex;
-    if(bestIdx == -1) {
-        log_warn(__FUNCTION__, "Couldn't choose best isoform for record at %s: %d", rec.chrom, rec.pos.pos);
+    if (bestIdx == -1)
+    {
+        log_warn(__FUNCTION__, "Couldn't choose best isoform for record at %s: %d",
+                rec.chrom, rec.pos.pos);
         auto newAnn = anns.getRange.front;
         rec.addInfo(infoField, newAnn);
         return;
@@ -185,19 +200,23 @@ void filterAnnotationToPrincipalIsoform(VCFRecord rec, string annotationFile, st
     string newAnn;
     foreach (i, f; featureNames)
     {
-        if(f == best["ID"]) {
+        if (f == best["ID"])
+        {
             newAnn = anns.getRange.drop(i).front;
             break;
         }
     }
-    
+
     rec.addInfo(infoField, newAnn);
 }
 
-void principal(string[] args) {
-    if(args.length < 3 || args.length > 3) 
-        log_err(__FUNCTION__, "Incorrect number of arguments. Usage: mucor3 principal [VCF/BCF] [tabix'd GFF3] > out.vcf");
+void principal(string[] args)
+{
+    if (args.length < 3 || args.length > 3)
+        log_err(__FUNCTION__,
+                "Incorrect number of arguments. Usage: mucor3 principal [VCF/BCF] [tabix'd GFF3] > out.vcf");
     import std.stdio;
+
     auto vcfr = VCFReader(args[1]);
     auto vcfw = VCFWriter("-", vcfr.vcfhdr, VCFWriterTypes.VCF);
     vcfw.writeHeader;

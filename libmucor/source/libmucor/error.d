@@ -108,7 +108,7 @@ void log_err(Args...)(string ctx, string fmt, Args args)
         fmt = format("[Err::%s]: ", ctx) ~ fmt;
         stderr.writeln(open_err_color, format(fmt, args), close_color);
         debug throw new Exception("An error occured");
-        else exit(1);
+    else exit(1);
     }
 
 }

@@ -23,62 +23,71 @@ import mir.serde : serdeGetSerializationKeysRecurse;
 
 /// Structured VCF String field 
 /// List of objects
-struct Annotations {
-    @serdeIgnoreOut
-    /// slice of original string 
+struct Annotations
+{
+    @serdeIgnoreOut /// slice of original string 
     string original;
-    @serdeIgnoreOut
-    /// range of individual annotations
+    @serdeIgnoreOut /// range of individual annotations
     ReturnType!(getRange) annotations;
 
-    this(string val) {
+    this(string val)
+    {
         // if types empty, all types are encoded as strings
         this.original = val;
         this.annotations = getRange;
     }
 
     /// helper function
-    auto getRange(){
+    auto getRange()
+    {
         return original.splitter(",");
     }
 
     /// get number of annotations
-    auto length() {
+    auto length()
+    {
         return getRange.count;
     }
 
     /// range functions
-    auto front() {
+    auto front()
+    {
         return Annotation(this.annotations.front);
     }
 
     /// range functions
-    void popFront() {
+    void popFront()
+    {
         this.annotations.popFront;
     }
 
     /// range functions
-    auto empty() {
+    auto empty()
+    {
         return this.annotations.empty;
     }
 
-    auto opIndex(size_t i) {
+    auto opIndex(size_t i)
+    {
         return Annotation(getRange.drop(i).front);
     }
 
-    auto toString() {
+    auto toString()
+    {
         return this.original;
     }
 }
 
-enum Modifier {
-    HIGH, 
-    MODERATE, 
-    LOW, 
+enum Modifier
+{
+    HIGH,
+    MODERATE,
+    LOW,
     MODIFIER
 }
 
-enum Effect {
+enum Effect
+{
     chromosome_number_variation,
     exon_loss_variant,
     frameshift_variant,
@@ -93,10 +102,8 @@ enum Effect {
     conservative_inframe_insertion,
     disruptive_inframe_deletion,
     conservative_inframe_deletion,
-    @serdeKeys("5_prime_UTR_truncation")
-    _5_prime_UTR_truncation,
-    @serdeKeys("3_prime_UTR_truncation")
-    _3_prime_UTR_truncation,
+    @serdeKeys("5_prime_UTR_truncation") _5_prime_UTR_truncation,
+    @serdeKeys("3_prime_UTR_truncation") _3_prime_UTR_truncation,
     exon_loss,
     splice_branch_variant,
     splice_region_variant,
@@ -105,12 +112,9 @@ enum Effect {
     synonymous_variant,
     non_canonical_start_codon,
     coding_sequence_variant,
-    @serdeKeys("5_prime_UTR_variant")
-    _5_prime_UTR_variant,
-    @serdeKeys("3_prime_UTR_variant")
-    _3_prime_UTR_variant,
-    @serdeKeys("5_prime_UTR_premature_start_codon_gain_variant")
-    _5_prime_UTR_premature_start_codon_gain_variant,
+    @serdeKeys("5_prime_UTR_variant") _5_prime_UTR_variant,
+    @serdeKeys("3_prime_UTR_variant") _3_prime_UTR_variant,
+    @serdeKeys("5_prime_UTR_premature_start_codon_gain_variant") _5_prime_UTR_premature_start_codon_gain_variant,
     upstream_gene_variant,
     downstream_gene_variant,
     TF_binding_site_variant,
@@ -139,7 +143,8 @@ enum Effect {
     structural_interaction_variant
 }
 
-struct Annotation {
+struct Annotation
+{
     /// Allele (or ALT)
     string allele;
 
@@ -163,11 +168,11 @@ struct Annotation {
 
     /// Transcript biotype. The bare minimum is at least a description on whether the transcript is {“Coding”, “Noncoding”}. Whenever possible, use ENSEMBL biotypes.
     Option!string transcript_biotype;
-    
+
     /// Rank / total : Exon or Intron rank / total number of exons or introns.
     Option!long rank; // not required
     Option!long rtotal; // not required
-    
+
     /// HGVS.c: Variant using HGVS notation (DNA level)
     string hgvs_c;
 
@@ -177,7 +182,7 @@ struct Annotation {
 
     /// cDNA_position: Position in cDNA (one based).
     Option!long cdna_position; // not required
-    
+
     /// cDNA_len: trancript’s cDNA length.
     Option!long cdna_length; // not required
 
@@ -211,7 +216,8 @@ struct Annotation {
     /// messages messages are optional.
     Option!string errors_warnings_info;
 
-    this(string ann) {
+    this(string ann)
+    {
         import std.algorithm : findSplit;
 
         auto vals = ann.findSplit("|");
@@ -224,12 +230,14 @@ struct Annotation {
         this.impact = enumFromStr!Modifier(vals[0]);
 
         vals = vals[2].findSplit("|");
-        if(vals[0] != "") {
+        if (vals[0] != "")
+        {
             this.gene_name = Some(vals[0]);
         }
 
         vals = vals[2].findSplit("|");
-        if(vals[0] != "") {
+        if (vals[0] != "")
+        {
             this.gene_id = Some(vals[0]);
         }
 
@@ -240,15 +248,17 @@ struct Annotation {
         this.feature_id = vals[0];
 
         vals = vals[2].findSplit("|");
-        if(vals[0] != "") {
+        if (vals[0] != "")
+        {
             this.transcript_biotype = Some(vals[0]);
         }
 
         vals = vals[2].findSplit("|");
-        if(vals[0] != "") {
+        if (vals[0] != "")
+        {
             auto f = vals[0].split("/");
             this.rank = Some(f[0].to!long);
-            if(f.length == 2) 
+            if (f.length == 2)
                 this.rtotal = Some(f[1].to!long);
         }
 
@@ -256,46 +266,50 @@ struct Annotation {
         this.hgvs_c = vals[0];
 
         vals = vals[2].findSplit("|");
-        if(vals[0] != "")
+        if (vals[0] != "")
             this.hgvs_p = Some(vals[0]);
-        
+
         vals = vals[2].findSplit("|");
-        if(vals[0] != "") {
+        if (vals[0] != "")
+        {
             auto f = vals[0].split("/");
             this.cdna_position = Some(f[0].to!long);
-            if(f.length == 2) 
+            if (f.length == 2)
                 this.cdna_length = Some(f[1].to!long);
         }
 
         vals = vals[2].findSplit("|");
-        if(vals[0] != "") {
+        if (vals[0] != "")
+        {
             auto f = vals[0].split("/");
             this.cds_position = Some(f[0].to!long);
-            if(f.length == 2) 
+            if (f.length == 2)
                 this.cds_length = Some(f[1].to!long);
         }
 
         vals = vals[2].findSplit("|");
-        if(vals[0] != "") {
+        if (vals[0] != "")
+        {
             auto f = vals[0].split("/");
             this.protein_position = Some(f[0].to!long);
-            if(f.length == 2) 
+            if (f.length == 2)
                 this.protein_length = Some(f[1].to!long);
         }
 
         vals = vals[2].findSplit("|");
-        if(vals[0] != "")
+        if (vals[0] != "")
             this.distance_to_feature = Some(vals[0].to!long);
 
         vals = vals[2].findSplit("|");
 
-        if(vals[0] != "")
+        if (vals[0] != "")
             this.errors_warnings_info = Some(vals[0]);
     }
 
-    void serialize(ref VcfRecordSerializer serializer) {
+    void serialize(ref VcfRecordSerializer serializer)
+    {
         auto s = serializer.structBegin;
-        
+
         serializer.putKey("allele");
         serializer.putSymbol(this.allele);
 
@@ -303,20 +317,21 @@ struct Annotation {
         auto l = serializer.listBegin;
         foreach (e; effect)
         {
-            serializer.putSymbol(enumToString(e));    
+            serializer.putSymbol(enumToString(e));
         }
         serializer.listEnd(l);
-        
 
         serializer.putKey("impact");
         serializer.putSymbol(enumToString(impact));
 
-        if(!this.gene_name.isNone) {
+        if (!this.gene_name.isNone)
+        {
             serializer.putKey("gene_name");
             serializer.putSymbol(this.gene_name.unwrap);
         }
 
-        if(!this.gene_id.isNone) {
+        if (!this.gene_id.isNone)
+        {
             serializer.putKey("gene_id");
             serializer.putSymbol(this.gene_id.unwrap);
         }
@@ -327,88 +342,103 @@ struct Annotation {
         serializer.putKey("feature_id");
         serializer.putSymbol(this.feature_id);
 
-        if(!this.transcript_biotype.isNone) {
+        if (!this.transcript_biotype.isNone)
+        {
             serializer.putKey("transcript_biotype");
             serializer.putSymbol(this.transcript_biotype.unwrap);
         }
 
-        if(!this.rank.isNone) {
+        if (!this.rank.isNone)
+        {
             serializer.putKey("rank");
             serializer.putValue(this.rank.unwrap);
         }
 
-        if(!this.rtotal.isNone) {
+        if (!this.rtotal.isNone)
+        {
             serializer.putKey("rtotal");
             serializer.putValue(this.rtotal.unwrap);
         }
-        
+
         serializer.putKey("hgvs_c");
         serializer.putSymbol(this.hgvs_c);
 
-        if(!this.hgvs_p.isNone) {
+        if (!this.hgvs_p.isNone)
+        {
             serializer.putKey("hgvs_p");
             serializer.putSymbol(this.hgvs_p.unwrap);
         }
 
-        if(!this.cdna_position.isNone) {
+        if (!this.cdna_position.isNone)
+        {
             serializer.putKey("cdna_position");
             serializer.putValue(this.cdna_position.unwrap);
         }
-        if(!this.cdna_length.isNone) {
+        if (!this.cdna_length.isNone)
+        {
             serializer.putKey("cdna_length");
             serializer.putValue(this.cdna_length.unwrap);
         }
-        
-        if(!this.cds_position.isNone) {
+
+        if (!this.cds_position.isNone)
+        {
             serializer.putKey("cds_position");
             serializer.putValue(this.cds_position.unwrap);
         }
-        if(!this.cds_length.isNone) {
+        if (!this.cds_length.isNone)
+        {
             serializer.putKey("cds_length");
             serializer.putValue(this.cds_length.unwrap);
         }
 
-        if(!this.protein_position.isNone) {
+        if (!this.protein_position.isNone)
+        {
             serializer.putKey("protein_position");
             serializer.putValue(this.protein_position.unwrap);
         }
-        if(!this.protein_length.isNone) {
+        if (!this.protein_length.isNone)
+        {
             serializer.putKey("protein_length");
             serializer.putValue(this.protein_length.unwrap);
         }
 
-        if(!this.distance_to_feature.isNone) {
+        if (!this.distance_to_feature.isNone)
+        {
             serializer.putKey("distance_to_feature");
             serializer.putValue(this.distance_to_feature.unwrap);
         }
 
-        if(!this.errors_warnings_info.isNone) {
+        if (!this.errors_warnings_info.isNone)
+        {
             serializer.putKey("errors_warnings_info");
             serializer.putSymbol(this.errors_warnings_info.unwrap);
         }
 
         serializer.structEnd(s);
     }
-    
+
 }
 
-unittest{
+unittest
+{
     import libmucor.serde.deser;
-    string ann = "A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"~
-                "protein_coding|1/6|ENST00000381657.2:c.-21-26C>A|||||,A|intron_variant|MODIFIER"~
-                "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding|1/7|ENST00000381663.3:c.-21-26C>A||"~
-                "|||";
+
+    string ann = "A|intron_variant|MODIFIER|PLCXD1|ENSG00000182378|Transcript|ENST00000381657|"
+        ~ "protein_coding|1/6|ENST00000381657.2:c.-21-26C>A|||||,A|intron_variant|MODIFIER"
+        ~ "|PLCXD1|ENSG00000182378|Transcript|ENST00000381663|protein_coding|1/7|ENST00000381663.3:c.-21-26C>A||"
+        ~ "|||";
     auto anns = Annotations(ann);
     import std.stdio;
     import mir.ser.ion;
     import mir.ion.stream;
     import mir.ion.conv;
+
     auto parsed = anns.array;
     enum annFields = serdeGetSerializationKeysRecurse!Annotation.removeSystemSymbols;
 
-    assert(serializeVcfToIon(parsed[0], annFields).ion2text  == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:ENST00000381657,transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:'ENST00000381657.2:c.-21-26C>A'}`);
+    assert(serializeVcfToIon(parsed[0], annFields).ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:ENST00000381657,transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:'ENST00000381657.2:c.-21-26C>A'}`);
     assert(serializeVcfToIon(parsed[1], annFields).ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:ENST00000381663,transcript_biotype:protein_coding,rank:1,rtotal:7,hgvs_c:'ENST00000381663.3:c.-21-26C>A'}`);
 
     // assert(serializeVcfToIon(Effect._5_prime_UTR_premature_start_codon_gain_variant).ion2text == "'5_prime_UTR_premature_start_codon_gain_variant'");
-    
+
 }

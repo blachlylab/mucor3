@@ -8,18 +8,21 @@ enum None = null;
 
 /// Indicate a some option
 /// dummy type
-struct SomeType(T) {
+struct SomeType(T)
+{
     T val;
     alias val this;
 }
 
 /// Create Some value
-auto Some(T)(T val) {
+auto Some(T)(T val)
+{
     return SomeType!T(val);
 }
 
 /// An Optional value type
-struct Option(T) {
+struct Option(T)
+{
     private T val;
     bool isNone = true;
 
@@ -44,22 +47,30 @@ struct Option(T) {
     }
 
     /// unwrap to inner val
-    auto unwrap() {
+    auto unwrap()
+    {
         assert(!this.isNone, "Tried to unwrap None option");
         return this.val;
     }
 
     /// check if equals another result
-    bool opEquals(const Option!T val) const {
-        if(!isNone && !val.isNone) return this.val == val.val;
-        else if(isNone && val.isNone) return true;
-        else return false;
+    bool opEquals(const Option!T val) const
+    {
+        if (!isNone && !val.isNone)
+            return this.val == val.val;
+        else if (isNone && val.isNone)
+            return true;
+        else
+            return false;
     }
 
     /// check if equals Some!T
-    bool opEquals(const SomeType!T value) const {
-        if(isNone) return false;
-        else return this.val == value;
+    bool opEquals(const SomeType!T value) const
+    {
+        if (isNone)
+            return false;
+        else
+            return this.val == value;
     }
 
     /// check if equals None
@@ -73,13 +84,15 @@ struct Option(T) {
         return this.isNone;
     }
 
-    void serialize(S)(ref S serializer){
-        if(!isNone)
+    void serialize(S)(ref S serializer)
+    {
+        if (!isNone)
             serializer.putValue(this.val);
     }
 }
 
-unittest {
+unittest
+{
     import std.conv;
 
     Option!int v;
@@ -92,11 +105,12 @@ unittest {
 
 }
 
-alias OptionValueType(O: Option!(I), I) = I;
+alias OptionValueType(O : Option!(I), I) = I;
 
 /// check if generic type is an Option
-template isOption(T) {
-    static if(__traits(compiles, OptionValueType!T))
+template isOption(T)
+{
+    static if (__traits(compiles, OptionValueType!T))
         enum isOption = true;
     else
         enum isOption = false;
@@ -105,48 +119,58 @@ template isOption(T) {
 static assert(isOption!(Option!string));
 static assert(!isOption!(string));
 
-
-
 /// Indicate a Ok result
 /// dummy type
-struct OkType(T) {
+struct OkType(T)
+{
     private T val;
     alias val this;
 }
 
 /// Create Ok value
-auto Ok(T)(T val) {
+auto Ok(T)(T val)
+{
     return OkType!T(val);
 }
 
 /// Error result type
-struct ErrType(E) {
+struct ErrType(E)
+{
     E err;
 
-    string toString() const @safe {
-        static if(is(Unqual!E == char*)) {
+    string toString() const @safe
+    {
+        static if (is(Unqual!E == char*))
+        {
             import std.string;
+
             assert(this.err, "Error value is null ptr");
             return fromStringz(err);
-        } else static if(isSomeString!E) {
+        }
+        else static if (isSomeString!E)
+        {
             return err.to!string;
-        } else {
+        }
+        else
+        {
             return err.toString;
         }
     }
 }
 
 /// Create Err value
-auto Err(T)(T err) {
+auto Err(T)(T err)
+{
     return ErrType!T(err);
 }
 
-struct Result(V, E) {
+struct Result(V, E)
+{
 
     private V value;
     private ErrType!E err;
     private bool isErr;
-    
+
     void opAssign(Result!(V, E) val)
     {
         this.value = val.value;
@@ -166,42 +190,54 @@ struct Result(V, E) {
         this.isErr = true;
     }
 
-    auto error() {
+    auto error()
+    {
         assert(this.isErr, "Not an Err!");
         return this.err;
     }
 
-    ref auto unwrap() {
+    ref auto unwrap()
+    {
         assert(!this.isErr, this.err.toString);
         return this.value;
     }
 
     /// check if equals another result
-    bool opEquals(const Result!(V, E) val) const {
-        if(isErr && val.isErr) return this.err == err;
-        else if(!isErr && !val.isErr) return this.value == val.value;
-        else return false;
+    bool opEquals(const Result!(V, E) val) const
+    {
+        if (isErr && val.isErr)
+            return this.err == err;
+        else if (!isErr && !val.isErr)
+            return this.value == val.value;
+        else
+            return false;
     }
 
     /// check if equals Ok!T
-    bool opEquals(const OkType!V val) const {
-        if(isErr) return false;
-        else return this.value == val;
+    bool opEquals(const OkType!V val) const
+    {
+        if (isErr)
+            return false;
+        else
+            return this.value == val;
     }
 
     /// check if equals None
     bool opEquals(const ErrType!E err) const
     {
-        if(isErr) return this.err == err;
-        else return false;
+        if (isErr)
+            return this.err == err;
+        else
+            return false;
     }
 }
 
-alias ResultValueType(R: Result!(V, E), V, E) = V;
-alias ResultErrorType(R: Result!(V, E), V, E) = E;
+alias ResultValueType(R : Result!(V, E), V, E) = V;
+alias ResultErrorType(R : Result!(V, E), V, E) = E;
 
-template isResult(T) {
-    static if(__traits(compiles, ResultValueType!T))
+template isResult(T)
+{
+    static if (__traits(compiles, ResultValueType!T))
         enum isResult = true;
     else
         enum isResult = false;
@@ -211,48 +247,64 @@ static assert(isResult!(Result!(string, string)));
 static assert(!isResult!(string));
 
 /// map inner value of option or Result
-template map(alias fun) {
-    auto map(T)(T val) {
-        static if(isOption!T) {
+template map(alias fun)
+{
+    auto map(T)(T val)
+    {
+        static if (isOption!T)
+        {
             alias rt = ReturnType!(fun!(OptionValueType!T));
             Option!rt ret;
-            if(val.isNone) {
+            if (val.isNone)
+            {
                 ret = None;
-            } else {
+            }
+            else
+            {
                 ret = Some(fun(val.unwrap));
             }
             return ret;
-        } else static if(isResult!T) {
+        }
+        else static if (isResult!T)
+        {
             alias rt = ReturnType!(fun!(ResultValueType!T));
             Result!(rt, ResultErrorType!T) ret;
-            if(val.isErr) {
+            if (val.isErr)
+            {
                 ret = val.error;
-            } else {
+            }
+            else
+            {
                 ret = OkType!rt(fun(val.unwrap));
             }
             return ret;
         }
     }
-    
+
 }
 
 /// map Result error type
-template mapErr(alias fun){
+template mapErr(alias fun)
+{
     auto mapErr(T)(T val)
     {
         static assert(isResult!T);
         alias rt = ReturnType!(fun!(ResultErrorType!T));
         Result!(ResultValueType!T, rt) ret;
-        if(val.isErr) {
+        if (val.isErr)
+        {
             ret = ErrType!rt(fun(val.err.err));
-        } else {
+        }
+        else
+        {
             ret = OkType!(ResultValueType!T)(val.unwrap);
         }
         return ret;
     }
 }
 
-unittest {
+unittest
+{
 
     Result!(int, const(char)[]) v;
     v = Err!(const(char)[])("help");

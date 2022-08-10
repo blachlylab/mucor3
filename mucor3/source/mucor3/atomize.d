@@ -3,7 +3,7 @@ import std.stdio;
 import std.getopt;
 import std.parallelism;
 
-import libmucor.atomize: parseVCF;
+import libmucor.atomize : parseVCF;
 import libmucor.error;
 
 bool multiSample;
@@ -25,11 +25,11 @@ one-to-one VCF record representation, use the -s and -m flags.
 
 void atomize(string[] args)
 {
-    auto res = getopt(args, config.bundling, 
-        "threads|t", "extra threads for parsing the VCF file", &threads, 
-        "multi-sample|s", "don't split (and duplicate) records by sample", &multiSample,
-        "multi-allelic|m", "don't split (and duplicate) records by sample", &multiAllelic,
-        "flatten|f", "flatten sub-objects", &flatten);
+    auto res = getopt(args, config.bundling, "threads|t",
+            "extra threads for parsing the VCF file", &threads, "multi-sample|s",
+            "don't split (and duplicate) records by sample",
+            &multiSample, "multi-allelic|m", "don't split (and duplicate) records by sample",
+            &multiAllelic, "flatten|f", "flatten sub-objects", &flatten);
 
     if (res.helpWanted | (args.length < 2))
     {

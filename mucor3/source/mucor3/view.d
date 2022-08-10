@@ -12,31 +12,35 @@ bool json;
 
 void view_main(string[] args)
 {
-    auto res = getopt(args, config.bundling,
-        "json|j", "output json rather than ion text", &json);
+    auto res = getopt(args, config.bundling, "json|j", "output json rather than ion text", &json);
     File input;
     if (res.helpWanted)
     {
-        defaultGetoptPrinter("",res.options);
+        defaultGetoptPrinter("", res.options);
         exit(0);
-    } else if(args.length > 2) {
+    }
+    else if (args.length > 2)
+    {
         stderr.writeln("view usage: mucor3 view [options] <ion file in>");
         exit(1);
     }
-    
-    if(args.length == 1)
+
+    if (args.length == 1)
         input = stdin;
-    else if(args.length == 2)
+    else if (args.length == 2)
         input = File(args[1]);
 
     auto rdr = VcfIonDeserializer(input);
-        
+
     foreach (rec; rdr)
     {
         auto r = rec.unwrap;
-        if(json) {
+        if (json)
+        {
             writeln(vcfIonToJson(r.withSymbols(r.symbols.table)));
-        } else {
+        }
+        else
+        {
             writeln(vcfIonToText(r.withSymbols(r.symbols.table)));
         }
     }

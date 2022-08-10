@@ -14,17 +14,16 @@ alias FieldTypes = Variant!(long, float, long[], float[], bool, string);
 
 template isArrayNotString(T)
 {
-    static if(isArray!T && !isSomeString!T)
+    static if (isArray!T && !isSomeString!T)
         enum isArrayNotString = true;
     else
         enum isArrayNotString = false;
 }
 
-struct FieldValue {
-    @serdeIgnore
-    FieldTypes data;
-    @serdeIgnore
-    bool isNull = true;
+struct FieldValue
+{
+    @serdeIgnore FieldTypes data;
+    @serdeIgnore bool isNull = true;
 
     void opAssign(T)(T value)
     {
@@ -32,23 +31,16 @@ struct FieldValue {
         this.isNull = false;
     }
 
-    void reset() {
-        match!(
-            suit!(isArrayNotString, (x) {
-                x.length = 0;
-                isNull = true;
-            }),
-            suit!(templateNot!isArrayNotString, (x) {
-                isNull = true;
-            }),
-        )(this.data);
+    void reset()
+    {
+        match!(suit!(isArrayNotString, (x) { x.length = 0; isNull = true; }),
+                suit!(templateNot!isArrayNotString, (x) { isNull = true; }),)(this.data);
     }
 
-    void serialize(ref VcfRecordSerializer serializer) {
-        match!(
-            (string x) => serializer.putSymbol(x),
-            (x) => serializeValue(serializer.serializer, x),
-        )(this.data);
+    void serialize(ref VcfRecordSerializer serializer)
+    {
+        match!((string x) => serializer.putSymbol(x),
+                (x) => serializeValue(serializer.serializer, x),)(this.data);
     }
 
 }

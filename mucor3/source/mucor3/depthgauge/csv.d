@@ -54,7 +54,7 @@ struct Table
         foreach (line; lines)
         {
             auto split = line.splitter(delim);
-            auto rec = split.take(startSamples-1).array;
+            auto rec = split.take(startSamples - 1).array;
             records ~= Record(rec, sam);
         }
         matrix = createMatrix();

@@ -247,7 +247,7 @@ pragma(inline, true):
                     if (this.itr == kh.kh_end())
                         return true;
                     // Handle the case of deleted keys
-                    else if (__kh_used(this.kh.used, this.itr) == 0)
+    else if (__kh_used(this.kh.used, this.itr) == 0)
                     {
                         while (__kh_used(this.kh.used, this.itr) == 0)
                         {
@@ -281,8 +281,7 @@ pragma(inline, true):
     }
     else
     {
-        pragma(inline, true)
-        void insert(const(KT) key)
+        pragma(inline, true) void insert(const(KT) key)
         {
             int absent;
             static if (cached)
@@ -292,8 +291,7 @@ pragma(inline, true):
             auto x = this.kh_put(ins, &absent);
         }
 
-        pragma(inline, true)
-        kh_t intersection(const(kh_t) other) const
+        pragma(inline, true) kh_t intersection(const(kh_t) other) const
         {
             kh_t ret;
             foreach (k; this.byKey)
@@ -304,8 +302,7 @@ pragma(inline, true):
             return ret;
         }
 
-        pragma(inline, true)
-        kh_t difference(const(kh_t) other) const
+        pragma(inline, true) kh_t difference(const(kh_t) other) const
         {
             kh_t ret;
             foreach (k; other.byKey)
@@ -316,8 +313,7 @@ pragma(inline, true):
             return ret;
         }
 
-        pragma(inline, true)
-        kh_t set_union(const(kh_t) other) const
+        pragma(inline, true) kh_t set_union(const(kh_t) other) const
         {
             kh_t ret;
             foreach (k; this.byKey)
@@ -349,7 +345,8 @@ pragma(inline, true):
 
         void opOpAssign(string op)(ref const(kh_t) other)
         {
-            import std.array: array;
+            import std.array : array;
+
             static if (op == "&")
             {
                 foreach (k; this.byKey.array)
@@ -357,7 +354,7 @@ pragma(inline, true):
                     if (!(k in other))
                         this.remove(k);
                 }
-                
+
             }
             else static if (op == "-")
             {
@@ -378,15 +375,18 @@ pragma(inline, true):
             }
         }
 
-        auto opEquals(const(kh_t) other) const {
+        auto opEquals(const(kh_t) other) const
+        {
             foreach (key; this.byKey)
             {
-                if(!(key in other)) return false;
+                if (!(key in other))
+                    return false;
             }
 
             foreach (key; other.byKey)
             {
-                if(!(key in this)) return false;
+                if (!(key in this))
+                    return false;
             }
             return true;
         }
@@ -764,8 +764,9 @@ template kh_hash(T)
     } // end pragma(inline, true)
 } // end template kh_hash
 
-auto collect(R)(R range) {
-    khashlSet!(ElementType!R) * set = new khashlSet!(ElementType!R);
+auto collect(R)(R range)
+{
+    khashlSet!(ElementType!R)* set = new khashlSet!(ElementType!R);
     foreach (e; range)
     {
         set.insert(e);
@@ -908,7 +909,8 @@ unittest
     assert(*fw == 21);
 }
 
-unittest {
+unittest
+{
     import std.array : array;
 
     khashlSet!(string) a;

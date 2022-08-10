@@ -1,6 +1,6 @@
 module libmucor.serde;
 
-import mir.ion.symbol_table: IonSymbolTable, IonSystemSymbolTable_v1;
+import mir.ion.symbol_table : IonSymbolTable, IonSystemSymbolTable_v1;
 import mir.ion.value;
 import mir.utility : _expect;
 import mir.bignum.integer;
@@ -19,14 +19,15 @@ size_t SEED2 = 0x2e1869d4e0b37fcb;
 const(char[])[] removeSystemSymbols(const(char[])[] keys) @safe pure nothrow
 {
     const(char[])[] ret;
-    F: foreach (key; keys) switch(key)
+    F: foreach (key; keys) switch (key)
     {
         static foreach (skey; IonSystemSymbolTable_v1)
         {
-            case skey: continue F;
+    case skey:
+            continue F;
         }
-        default:
-            ret ~= key;
+    default:
+        ret ~= key;
     }
     return ret;
 }
@@ -40,11 +41,15 @@ BigInt!2 hashIon(ubyte[] data)
     return ret;
 }
 
-void handleIonError(IonErrorCode err){
-    debug {
+void handleIonError(IonErrorCode err)
+{
+    debug
+    {
         assert(!err, ionErrorMsg(err));
-    } else {
-        if(_expect(err, false))
+    }
+    else
+    {
+        if (_expect(err, false))
             log_err(__FUNCTION__, "Ion error: %s", ionErrorMsg(err));
     }
 }

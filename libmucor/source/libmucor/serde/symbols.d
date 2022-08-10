@@ -3,8 +3,8 @@ module libmucor.serde.symbols;
 import mir.ion.exception;
 import mir.ion.type_code;
 import mir.ion.value;
-import mir.utility: _expect;
-import mir.appender: ScopedBuffer;
+import mir.utility : _expect;
+import mir.appender : ScopedBuffer;
 import mir.ion.symbol_table;
 import mir.ion.stream;
 import mir.serde : serdeGetSerializationKeysRecurse;
@@ -16,7 +16,8 @@ import libmucor.serde;
 import libmucor.serde.deser : parseValue;
 import libmucor.khashl;
 
-struct SymbolTableBuilder {
+struct SymbolTableBuilder
+{
 
     IonSerializer!(1024, null, false) serializer;
 
@@ -34,30 +35,35 @@ struct SymbolTableBuilder {
     bool first = true;
 
     /// insert symbol  
-    size_t insert(const(char)[] key) {
+    size_t insert(const(char)[] key)
+    {
         auto p = key in currentSymbolsMap;
-        if(p)
+        if (p)
             return *p;
         p = key in newSymbolsMap;
-        if(p)
+        if (p)
             return *p;
         newSymbolsMap[key] = numSymbols++;
         syms ~= key;
         return numSymbols - 1;
     }
 
-    ubyte[] getRawSymbols() {
+    ubyte[] getRawSymbols()
+    {
         import std.algorithm;
         import std.array;
-        return cast(ubyte[])this.syms.joiner.array;
+
+        return cast(ubyte[]) this.syms.joiner.array;
     }
 
     // $ion_symbol_table::
     // {
     //     symbols:[ ... ]
     // }
-    const(ubyte)[] serialize() {
-        if(this.syms.length > 0) {
+    const(ubyte)[] serialize()
+    {
+        if (this.syms.length > 0)
+        {
             this.serializer.initializeNoTable;
 
             auto annotationWrapperState = serializer.annotationWrapperBegin;
@@ -66,7 +72,8 @@ struct SymbolTableBuilder {
             auto annotationsState = serializer.annotationsEnd(annotationWrapperState);
 
             auto structState = serializer.structBegin();
-            if(_expect(!first, true)){
+            if (_expect(!first, true))
+            {
                 serializer.putKeyId(IonSystemSymbol.imports);
                 serializer.putSymbolId(IonSystemSymbol.ion_symbol_table);
             }
@@ -93,10 +100,12 @@ struct SymbolTableBuilder {
     }
 }
 
-struct SymbolTable {
+struct SymbolTable
+{
     const(char[])[] table;
 
-    void createFromHeaderConfig(ref HeaderConfig hdrInfo) {
+    void createFromHeaderConfig(ref HeaderConfig hdrInfo)
+    {
         IonSymbolTable!false tmptable;
         tmptable.initialize;
         tmptable.insert("CHROM");
@@ -109,16 +118,17 @@ struct SymbolTable {
         tmptable.insert("INFO");
         tmptable.insert("checksum");
         tmptable.insert("sample");
-        if(hdrInfo.fmts.byAllele.names.length > 0 || hdrInfo.fmts.other.names.length > 0)
+        if (hdrInfo.fmts.byAllele.names.length > 0 || hdrInfo.fmts.other.names.length > 0)
             tmptable.insert("FORMAT");
-        foreach (f; hdrInfo.filters){
+        foreach (f; hdrInfo.filters)
+        {
             tmptable.insert(f);
         }
         foreach (sam; hdrInfo.samples)
         {
             tmptable.insert(sam);
         }
-        if(hdrInfo.fmts.byAllele.names.length > 0 || hdrInfo.infos.byAllele.names.length > 0)
+        if (hdrInfo.fmts.byAllele.names.length > 0 || hdrInfo.infos.byAllele.names.length > 0)
             tmptable.insert("byAllele");
         foreach (name; hdrInfo.infos.byAllele.names)
         {
@@ -132,14 +142,16 @@ struct SymbolTable {
 
         foreach (name; hdrInfo.infos.annotations.names)
         {
-            if(name == "ANN"){
-                
+            if (name == "ANN")
+            {
+
                 import mir.serde : SerdeTarget, serdeGetSerializationKeysRecurse;
+
                 enum annFields = serdeGetSerializationKeysRecurse!Annotation.removeSystemSymbols;
                 static foreach (const(string) key; annFields)
                 {
-                    tmptable.insert(key);    
-                }   
+                    tmptable.insert(key);
+                }
             }
             tmptable.insert(name);
         }
@@ -154,12 +166,13 @@ struct SymbolTable {
             tmptable.insert(name);
         }
         tmptable.finalize;
-        auto d = cast(const(ubyte)[])tmptable.data;
+        auto d = cast(const(ubyte)[]) tmptable.data;
         auto err = this.loadSymbolTable(d);
         assert(!err, ionErrorMsg(err));
     }
 
-    void createFromStrings(string[] symbols) {
+    void createFromStrings(string[] symbols)
+    {
         IonSymbolTable!false tmptable;
         tmptable.initialize;
         tmptable.insert("CHROM");
@@ -234,16 +247,19 @@ struct SymbolTable {
                     bool preserveCurrentSymbols;
                     IonList symbols;
 
-                    foreach (IonErrorCode symbolTableError, size_t symbolTableKeyId, IonDescribedValue elementValue; symbolTableStruct)
+                    foreach (IonErrorCode symbolTableError,
+                            size_t symbolTableKeyId, IonDescribedValue elementValue;
+                        symbolTableStruct)
                     {
                         error = symbolTableError;
                         if (error)
                             goto C;
                         switch (symbolTableKeyId)
                         {
-                            case IonSystemSymbol.imports:
+                        case IonSystemSymbol.imports:
                             {
-                                if (preserveCurrentSymbols || (elementValue.descriptor.type != IonTypeCode.symbol && elementValue.descriptor.type != IonTypeCode.list))
+                                if (preserveCurrentSymbols || (elementValue.descriptor.type != IonTypeCode.symbol
+                                        && elementValue.descriptor.type != IonTypeCode.list))
                                 {
                                     error = IonErrorCode.invalidLocalSymbolTable;
                                     goto C;
@@ -265,9 +281,10 @@ struct SymbolTable {
                                 preserveCurrentSymbols = true;
                                 break;
                             }
-                            case IonSystemSymbol.symbols:
+                        case IonSystemSymbol.symbols:
                             {
-                                if (symbols != symbols.init || elementValue.descriptor.type != IonTypeCode.list)
+                                if (symbols != symbols.init
+                                        || elementValue.descriptor.type != IonTypeCode.list)
                                 {
                                     error = IonErrorCode.invalidLocalSymbolTable;
                                     goto C;
@@ -280,7 +297,7 @@ struct SymbolTable {
                                     goto C;
                                 break;
                             }
-                            default:
+                        default:
                             {
                                 //CHECK: should other symbols be ignored?
                                 continue;
@@ -293,7 +310,8 @@ struct SymbolTable {
                         resetSymbolTable();
                     }
 
-                    foreach (IonErrorCode symbolsError, IonDescribedValue symbolValue; symbols)
+                    foreach (IonErrorCode symbolsError, IonDescribedValue symbolValue;
+                            symbols)
                     {
                         error = symbolsError;
                         if (error)
@@ -307,8 +325,8 @@ struct SymbolTable {
                 }
             }
             // TODO: continue work
-            C:
-                return error;
+        C:
+            return error;
         }
         return error;
     }
@@ -318,10 +336,11 @@ struct SymbolTable {
         return this.table[index];
     }
 
-    auto toBytes() {
+    auto toBytes()
+    {
         IonSymbolTable!true tmptable;
         tmptable.initialize;
-        foreach (const(char[]) key; this.table[10..$])
+        foreach (const(char[]) key; this.table[10 .. $])
         {
             tmptable.insert(key);
         }

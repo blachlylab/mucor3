@@ -15,11 +15,11 @@ import asdf : deserializeAsdf = deserialize, parseJsonByLine, Asdf;
 import libmucor.wideint : uint128;
 import libmucor.khashl;
 import libmucor.serde;
-import libmucor: setup_global_pool;
+import libmucor : setup_global_pool;
 import std.algorithm.searching : balancedParens;
 import std.parallelism;
 import std.getopt;
-import core.stdc.stdlib: exit;
+import core.stdc.stdlib : exit;
 import libmucor.query;
 
 int threads = -1;
@@ -31,19 +31,17 @@ string query_str;
 void query_main(string[] args)
 {
 
-    auto res = getopt(args, config.bundling,
-            "threads|t", "threads for running mucor", &threads,
-            config.required,
-            "prefix|p", "index output prefix", &prefix,
-            config.required,
-            "query|q", "filter vcf data using varquery syntax", &query_str);
+    auto res = getopt(args, config.bundling, "threads|t",
+            "threads for running mucor", &threads, config.required, "prefix|p",
+            "index output prefix", &prefix, config.required, "query|q",
+            "filter vcf data using varquery syntax", &query_str);
 
     setup_global_pool(threads);
     // set_log_level(LogLevel.Trace);
 
     if (res.helpWanted)
     {
-        defaultGetoptPrinter("",res.options);
+        defaultGetoptPrinter("", res.options);
         exit(0);
     }
     // set_log_level(LogLevel.Debug);
@@ -67,21 +65,20 @@ void query_main(string[] args)
 void index_main(string[] args)
 {
 
-    auto res = getopt(args, config.bundling,
-            "threads|t", "threads for running mucor", &threads,
-            config.required,
-            "prefix|p", "index output prefix", &prefix,
-            "query|q", "only index data that pertains to a specific query", &query_str);
+    auto res = getopt(args, config.bundling, "threads|t",
+            "threads for running mucor", &threads, config.required, "prefix|p",
+            "index output prefix", &prefix, "query|q",
+            "only index data that pertains to a specific query", &query_str);
     setup_global_pool(threads);
 
     if (res.helpWanted)
     {
-        defaultGetoptPrinter("",res.options);
+        defaultGetoptPrinter("", res.options);
         exit(0);
     }
     if (args.length == 1)
     {
-        defaultGetoptPrinter("",res.options);
+        defaultGetoptPrinter("", res.options);
         log_err(__FUNCTION__, "Please specify json files");
         exit(1);
     }

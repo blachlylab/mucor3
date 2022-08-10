@@ -1,13 +1,15 @@
 module libmucor.query.expr.notvalue;
 
-import std.typecons: Tuple;
+import std.typecons : Tuple;
 import libmucor.query.value;
 import libmucor.query.tokens;
 
-struct NotValue {
+struct NotValue
+{
     Value value;
 
-    this(Tokenized tokens){
+    this(Tokenized tokens)
+    {
         tokens.popFront;
         this.value = Value(tokens.getFrontInner!string);
     }
@@ -17,4 +19,3 @@ struct NotValue {
         return "!" ~ this.value.toString;
     }
 }
-

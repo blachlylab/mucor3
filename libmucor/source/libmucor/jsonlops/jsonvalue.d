@@ -18,7 +18,6 @@ import std.typecons : Tuple, tuple;
 import std.exception : enforce;
 import libmucor.query.value : isNumericStringAnInteger;
 
-
 alias JsonValueTypes = SumType!(const(char)[], double, long, bool);
 
 /// Struct that represents JSON data

@@ -14,36 +14,30 @@ import std.format : format;
 import libmucor.wideint;
 import libmucor.khashl;
 import libmucor.error;
-import std.conv: to;
+import std.conv : to;
 
-void indexJsonFiles(string binary, string query_str, string[] files, string indexFolder, int threads, ulong fileCacheSize, ulong smallsSize)
+void indexJsonFiles(string binary, string query_str, string[] files,
+        string indexFolder, int threads, ulong fileCacheSize, ulong smallsSize)
 {
     auto cmdline = [
-        binary, 
-        "index", 
-        "-p", indexFolder, 
-        "-t", threads.to!string, 
-        "-f", fileCacheSize.to!string, 
-        "-i", smallsSize.to!string,
-        "-q", query_str, 
+        binary, "index", "-p", indexFolder, "-t", threads.to!string, "-f",
+        fileCacheSize.to!string, "-i", smallsSize.to!string, "-q", query_str,
     ] ~ files;
     auto pid = spawnProcess(cmdline);
     if (wait(pid) != 0)
     {
         log_err(__FUNCTION__, "mucor index failed");
     }
-    
+
 }
 
-void queryJsonFiles(string binary, string query_str, string[] files, string indexFolder, int threads, string outfile)
+void queryJsonFiles(string binary, string query_str, string[] files,
+        string indexFolder, int threads, string outfile)
 {
     auto ofile = File(outfile, "w");
     auto cmdline = [
-        binary, 
-        "query", 
-        "-p", indexFolder, 
-        "-t", threads.to!string,
-        "-q", query_str, 
+        binary, "query", "-p", indexFolder, "-t", threads.to!string, "-q",
+        query_str,
     ] ~ files;
     auto pid = spawnProcess(cmdline, std.stdio.stdin, ofile);
     if (wait(pid) != 0)
