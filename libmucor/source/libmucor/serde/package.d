@@ -6,15 +6,20 @@ import mir.utility : _expect;
 import mir.bignum.integer;
 import libmucor.spookyhash;
 import libmucor.error;
+public import libmucor.memory;
+public import htslib.bgzf;
 
 public import libmucor.serde.ser;
 public import libmucor.serde.deser;
 public import libmucor.serde.symbols;
 
+
 public import mir.serde : SerdeTarget;
 
 size_t SEED1 = 0x48e9a84eeeb9f629;
 size_t SEED2 = 0x2e1869d4e0b37fcb;
+
+alias Bgzf = SafePtr!(BGZF, bgzf_close);
 
 const(char[])[] removeSystemSymbols(const(char[])[] keys) @safe pure nothrow
 {
@@ -41,7 +46,7 @@ BigInt!2 hashIon(ubyte[] data)
     return ret;
 }
 
-void handleIonError(IonErrorCode err)
+void handleIonError(IonErrorCode err) @nogc nothrow
 {
     debug
     {

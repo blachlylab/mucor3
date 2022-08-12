@@ -1,6 +1,6 @@
 module libmucor.query.eval;
 
-import std.sumtype;
+import mir.algebraic;
 import std.functional : partial;
 import std.traits : EnumMembers;
 import std.typecons : Tuple, tuple;

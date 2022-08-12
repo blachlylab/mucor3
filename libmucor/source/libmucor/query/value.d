@@ -1,6 +1,6 @@
 module libmucor.query.value;
 
-import std.sumtype;
+import mir.algebraic;
 import std.functional : partial;
 import std.traits : EnumMembers;
 import std.typecons : Tuple;
@@ -16,7 +16,7 @@ alias LongRange = Tuple!(long, "start", long, "end");
 alias DoubleRange = Tuple!(double, "start", double, "end");
 
 /// Values can be any of string, double, or long
-alias ValueExpr = SumType!(bool, double, long, string, DoubleRange, LongRange);
+alias ValueExpr = Variant!(bool, double, long, string, DoubleRange, LongRange);
 
 struct Value
 {

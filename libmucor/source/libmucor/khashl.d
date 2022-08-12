@@ -43,6 +43,7 @@ enum AC_VERSION_KHASHL_H = "0.1";
 import core.stdc.stdlib;
 import core.stdc.string;
 import core.stdc.limits;
+import std.container.array;
 
 /* compiler specific configuration */
 
@@ -55,17 +56,18 @@ alias khiter_t = khint_t;
 
 pragma(inline, true)
 {
-    auto __kh_used(T)(const(khint32_t)[] flag, T i)
+    @nogc nothrow:
+    auto __kh_used(T)(const(Array!khint32_t) flag, T i)
     {
         return (flag[i >> 5] >> (i & 0x1fU) & 1U);
     }
 
-    void __kh_set_used(T)(khint32_t[] flag, T i)
+    void __kh_set_used(T)(Array!khint32_t flag, T i)
     {
         (flag[i >> 5] |= 1U << (i & 0x1fU));
     }
 
-    void __kh_set_unused(T)(khint32_t[] flag, T i)
+    void __kh_set_unused(T)(Array!khint32_t flag, T i)
     {
         (flag[i >> 5] &= ~(1U << (i & 0x1fU)));
     }
@@ -107,6 +109,7 @@ alias StringSet = khashlSet!(string, true);
 
 struct khashl(KT, VT, bool kh_is_map = true, bool cached = false) if (!isSigned!KT) // @suppress(dscanner.style.phobos_naming_convention)
 {
+    nothrow:
     static assert(kh_is_map || is(VT == ubyte));
 
     alias __hash_func = kh_hash!KT.kh_hash_func;
@@ -124,8 +127,8 @@ struct khashl(KT, VT, bool kh_is_map = true, bool cached = false) if (!isSigned!
     }
 
     khint_t bits, count;
-    khint32_t[] used;
-    Bucket[] keys;
+    Array!khint32_t used;
+    Array!Bucket keys;
 
 pragma(inline, true):
     // ~this()
@@ -211,7 +214,7 @@ pragma(inline, true):
 
         /// Get or create if does not exist; mirror built-in hashmap
         /// https://dlang.org/spec/hash-map.html#inserting_if_not_present
-        VT* require(const(KT) key, lazy const(VT) initval)
+        VT* require(const(KT) key, const(VT) initval)
         {
             static assert(kh_is_map == true, "require() not sensible in a hash set");
             Bucket ins;
@@ -345,11 +348,10 @@ pragma(inline, true):
 
         void opOpAssign(string op)(ref const(kh_t) other)
         {
-            import std.array : array;
 
             static if (op == "&")
             {
-                foreach (k; this.byKey.array)
+                foreach (k; this.byKey)
                 {
                     if (!(k in other))
                         this.remove(k);
@@ -358,7 +360,7 @@ pragma(inline, true):
             }
             else static if (op == "-")
             {
-                foreach (k; this.byKey.array)
+                foreach (k; this.byKey)
                 {
                     if (k in other)
                         this.remove(k);
@@ -440,12 +442,9 @@ pragma(inline, true):
 
     void kh_clear()
     {
-        if (this.used)
-        {
-            uint32_t n_buckets = 1U << this.bits;
-            this.used[] = 0;
-            this.count = 0;
-        }
+        uint32_t n_buckets = 1U << this.bits;
+        this.used[] = 0;
+        this.count = 0;
     }
 
     void kh_release()
@@ -468,7 +467,7 @@ pragma(inline, true):
     khint_t kh_getp(const(Bucket)* key) const
     {
         khint_t i, last, n_buckets, mask;
-        if (this.keys == [])
+        if (this.keys.length == 0)
             return 0;
         n_buckets = 1U << this.bits;
         mask = n_buckets - 1U;
@@ -495,7 +494,7 @@ pragma(inline, true):
 
     int kh_resize(khint_t new_n_buckets)
     {
-        khint32_t[] new_used;
+        Array!khint32_t new_used;
         khint_t j = 0, x = new_n_buckets, n_buckets, new_bits, new_mask;
         while ((x >>= 1) != 0)
             ++j;
@@ -505,11 +504,11 @@ pragma(inline, true):
         new_n_buckets = 1U << new_bits;
         if (this.count > (new_n_buckets >> 1) + (new_n_buckets >> 2))
             return 0; /* requested size is too small */
-        new_used = new khint32_t[__kh_fsize(new_n_buckets)];
+        new_used.length = __kh_fsize(new_n_buckets);
         // memset(new_used, 0, __kh_fsize(new_n_buckets) * khint32_t.sizeof);
-        if (!new_used.ptr)
+        if (!new_used.data.ptr)
             return -1; /* not enough memory */
-        n_buckets = this.keys.ptr ? 1U << this.bits : 0U;
+        n_buckets = this.keys.data.ptr ? 1U << this.bits : 0U;
         if (n_buckets < new_n_buckets)
         { /* expand */
             this.keys.length = new_n_buckets;
@@ -563,7 +562,7 @@ pragma(inline, true):
     khint_t kh_putp(const(Bucket)* key, int* absent)
     {
         khint_t n_buckets, i, last, mask;
-        n_buckets = this.keys.ptr ? 1U << this.bits : 0U;
+        n_buckets = this.keys.data.ptr ? 1U << this.bits : 0U;
         *absent = -1;
         if (this.count >= (n_buckets >> 1) + (n_buckets >> 2))
         { /* rehashing */
@@ -605,7 +604,7 @@ pragma(inline, true):
     int kh_del(khint_t i)
     {
         khint_t j = i, k, mask, n_buckets;
-        if (this.keys == null)
+        if (this.keys.length == 0)
             return 0;
         n_buckets = 1U << this.bits;
         mask = n_buckets - 1U;
@@ -659,7 +658,7 @@ pragma(inline, true):
 
     auto kh_capacity() const
     {
-        return this.keys.ptr ? 1U << this.bits : 0U;
+        return this.keys.data.ptr ? 1U << this.bits : 0U;
     }
 
 }
@@ -667,7 +666,7 @@ pragma(inline, true):
 /** --- BEGIN OF HASH FUNCTIONS --- */
 template kh_hash(T)
 {
-    pragma(inline, true)
+    pragma(inline, true) nothrow @nogc
     {
         auto kh_hash_func(T)(const(T) key)
                 if (is(T == uint) || is(T == uint32_t) || is(T == khint32_t))
@@ -779,7 +778,7 @@ auto collect(R)(R range)
 /// This allows it to access both the store hash and the key itself.
 template kh_equal(T, bool cached)
 {
-    pragma(inline, true)
+    pragma(inline, true) nothrow @nogc
     {
         /// Assert that we are using a bucket type with key member
         static assert(hasMember!(T, "key"));

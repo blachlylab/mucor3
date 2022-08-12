@@ -3,7 +3,6 @@ module libmucor.atomize.ann;
 import std.stdio;
 import std.algorithm : splitter, map, count, canFind, countUntil;
 import std.array : array, split;
-import std.conv : to;
 import std.range : enumerate, chunks;
 import std.traits : ReturnType;
 import std.typecons : No;
@@ -20,6 +19,8 @@ import libmucor.serde.ser;
 import mir.ser;
 import mir.ser.interfaces;
 import mir.serde : serdeGetSerializationKeysRecurse;
+import mir.parse : fromString;
+import std.container.array;
 
 /// Structured VCF String field 
 /// List of objects
@@ -28,48 +29,45 @@ struct Annotations
     @serdeIgnoreOut /// slice of original string 
     string original;
     @serdeIgnoreOut /// range of individual annotations
-    ReturnType!(getRange) annotations;
-
+    string frontVal;
+    string other;
+    bool empty;
+    
+    nothrow pragma(inline, true):
     this(string val)
     {
         // if types empty, all types are encoded as strings
         this.original = val;
-        this.annotations = getRange;
-    }
-
-    /// helper function
-    auto getRange()
-    {
-        return original.splitter(",");
-    }
-
-    /// get number of annotations
-    auto length()
-    {
-        return getRange.count;
+        this.other = this.original;
+        this.popFront;
     }
 
     /// range functions
     auto front()
     {
-        return Annotation(this.annotations.front);
+        return Annotation(this.frontVal);
     }
 
     /// range functions
     void popFront()
     {
-        this.annotations.popFront;
-    }
-
-    /// range functions
-    auto empty()
-    {
-        return this.annotations.empty;
+        if(other == "") {
+            this.empty = true;
+            return;
+        }
+        auto v = this.other.findSplit(',');
+        if(v == ["", ""]) {
+            this.frontVal = this.other;
+            this.other = "";
+        } else {
+            this.frontVal = v[0];
+            this.other = v[1];
+        }
     }
 
     auto opIndex(size_t i)
     {
-        return Annotation(getRange.drop(i).front);
+        return Annotations(original).drop(i).front;
     }
 
     auto toString()
@@ -140,7 +138,8 @@ enum Effect
     non_coding_transcript_variant,
     duplication,
     bidirectional_gene_fusion,
-    structural_interaction_variant
+    structural_interaction_variant,
+    protein_protein_contact
 }
 
 struct Annotation
@@ -149,7 +148,7 @@ struct Annotation
     string allele;
 
     /// Annotation (a.k.a. effect or consequence): Annotated using Sequence Ontology terms. Multiple effects can be concatenated using ‘&’.
-    Effect[] effect;
+    Array!Effect effect;
 
     /// Putative_impact: A simple estimation of putative impact / deleteriousness : {HIGH, MODERATE, LOW, MODIFIER}
     Modifier impact;
@@ -215,92 +214,120 @@ struct Annotation
     /// WARNING_REF_DOES_NOT_MATCH_GENOME). All these errors, warnings or information
     /// messages messages are optional.
     Option!string errors_warnings_info;
-
+    
+    nothrow pragma(inline, true):
     this(string ann)
     {
-        import std.algorithm : findSplit;
 
-        auto vals = ann.findSplit("|");
+        auto vals = ann.findSplit('|');
         this.allele = vals[0];
 
-        vals = vals[2].findSplit("|");
-        this.effect = vals[0].splitter("&").map!(x => enumFromStr!Effect(x)).array;
+        vals = vals[1].findSplit('|');
+        auto s = vals[0].findSplit('&');
+        if(s != ["", ""]) {
+            this.effect ~= enumFromStr!Effect(s[0]);
+            while(s != ["", ""]){
+                this.effect ~= enumFromStr!Effect(s[0]);
+                s = s[1].findSplit('&');
+            }
+        } else {
+            this.effect ~= enumFromStr!Effect(vals[0]);
+        }
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         this.impact = enumFromStr!Modifier(vals[0]);
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         if (vals[0] != "")
         {
             this.gene_name = Some(vals[0]);
         }
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         if (vals[0] != "")
         {
             this.gene_id = Some(vals[0]);
         }
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         this.feature_type = vals[0];
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         this.feature_id = vals[0];
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         if (vals[0] != "")
         {
             this.transcript_biotype = Some(vals[0]);
         }
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         if (vals[0] != "")
         {
-            auto f = vals[0].split("/");
-            this.rank = Some(f[0].to!long);
-            if (f.length == 2)
-                this.rtotal = Some(f[1].to!long);
+            auto f = vals[0].findSplit('/');
+            long r1;
+            f[0].fromString(r1);
+            this.rank = Some(r1);
+            if (f.length == 2) {
+                f[1].fromString(r1);
+                this.rtotal = Some(r1);
+            }
         }
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         this.hgvs_c = vals[0];
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         if (vals[0] != "")
             this.hgvs_p = Some(vals[0]);
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         if (vals[0] != "")
         {
-            auto f = vals[0].split("/");
-            this.cdna_position = Some(f[0].to!long);
-            if (f.length == 2)
-                this.cdna_length = Some(f[1].to!long);
+            auto f = vals[0].findSplit('/');
+            long r1;
+            f[0].fromString(r1);
+            this.cdna_position = Some(r1);
+            if (f.length == 2) {
+                f[1].fromString(r1);
+                this.cdna_length = Some(r1);
+            }
         }
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         if (vals[0] != "")
         {
-            auto f = vals[0].split("/");
-            this.cds_position = Some(f[0].to!long);
-            if (f.length == 2)
-                this.cds_length = Some(f[1].to!long);
+            auto f = vals[0].findSplit('/');
+            long r1;
+            f[0].fromString(r1);
+            this.cds_position = Some(r1);
+            if (f.length == 2) {
+                f[1].fromString(r1);
+                this.cds_length = Some(r1);
+            }
         }
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
         if (vals[0] != "")
         {
-            auto f = vals[0].split("/");
-            this.protein_position = Some(f[0].to!long);
-            if (f.length == 2)
-                this.protein_length = Some(f[1].to!long);
+            auto f = vals[0].findSplit('/');
+            long r1;
+            f[0].fromString(r1);
+            this.protein_position = Some(r1);
+            if (f.length == 2) {
+                f[1].fromString(r1);
+                this.protein_length = Some(r1);
+            }
         }
 
-        vals = vals[2].findSplit("|");
-        if (vals[0] != "")
-            this.distance_to_feature = Some(vals[0].to!long);
+        vals = vals[1].findSplit('|');
+        if (vals[0] != "") {
+            long r1;
+            vals[0].fromString(r1);
+            this.distance_to_feature = Some(r1);
+        }
 
-        vals = vals[2].findSplit("|");
+        vals = vals[1].findSplit('|');
 
         if (vals[0] != "")
             this.errors_warnings_info = Some(vals[0]);
@@ -435,10 +462,21 @@ unittest
 
     auto parsed = anns.array;
     enum annFields = serdeGetSerializationKeysRecurse!Annotation.removeSystemSymbols;
-
     assert(serializeVcfToIon(parsed[0], annFields).ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:ENST00000381657,transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:'ENST00000381657.2:c.-21-26C>A'}`);
     assert(serializeVcfToIon(parsed[1], annFields).ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:ENST00000381663,transcript_biotype:protein_coding,rank:1,rtotal:7,hgvs_c:'ENST00000381663.3:c.-21-26C>A'}`);
 
     // assert(serializeVcfToIon(Effect._5_prime_UTR_premature_start_codon_gain_variant).ion2text == "'5_prime_UTR_premature_start_codon_gain_variant'");
 
+}
+
+
+auto findSplit(string val, char splitChar) @nogc nothrow @trusted {
+    import core.stdc.string : memchr;
+    string[2] ret;
+    auto p = cast(char*)memchr(val.ptr, splitChar, (cast(char[])val).length);
+    if(!p) return ret;
+    auto len = ((cast(ulong)p) - (cast(ulong)val.ptr));
+    ret[0] = val[0 .. len];
+    ret[1] = cast(string)p[1 .. val.length - len];
+    return ret;
 }

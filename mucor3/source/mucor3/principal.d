@@ -191,7 +191,7 @@ void filterAnnotationToPrincipalIsoform(VCFRecord rec, string annotationFile,
     {
         log_warn(__FUNCTION__, "Couldn't choose best isoform for record at %s: %d",
                 rec.chrom, rec.pos.pos);
-        auto newAnn = anns.getRange.front;
+        auto newAnn = Annotations(anns.original).frontVal;
         rec.addInfo(infoField, newAnn);
         return;
     }
@@ -202,7 +202,7 @@ void filterAnnotationToPrincipalIsoform(VCFRecord rec, string annotationFile,
     {
         if (f == best["ID"])
         {
-            newAnn = anns.getRange.drop(i).front;
+            newAnn = Annotations(anns.original).drop(i).frontVal;
             break;
         }
     }

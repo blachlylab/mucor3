@@ -56,7 +56,7 @@ void query_main(string[] args)
     sw.stop;
     sw.reset;
     sw.start;
-    query(stdout, idx, query_str);
+    query("-", idx, query_str);
     log_info(__FUNCTION__, "Time to query/filter records: %s seconds", sw.peek.total!"seconds");
     // parseQuery("(key1:val1 AND key2:(val2 OR val3 OR val4) AND key3:1-2) OR key4:val4 OR key5:(val5 AND val6)",idx);
     // parseQuery("key1:val1 AND key2:(val2 OR val3) AND key4:val4 AND key5:(val5 OR val6)",idx);
@@ -85,7 +85,7 @@ void index_main(string[] args)
     StopWatch sw;
 
     // set_log_level(LogLevel.Trace);
-    auto data = VcfIonDeserializer(File(args[1]));
+    auto data = VcfIonDeserializer(args[1]);
     index(data, prefix);
 
 }

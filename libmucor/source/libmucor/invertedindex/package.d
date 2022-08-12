@@ -492,7 +492,7 @@ unittest
 
 }
 
-auto query(ref File outfile, ref InvertedIndex idx, string queryStr)
+auto query(string outfn, ref InvertedIndex idx, string queryStr)
 {
     StopWatch sw;
     sw.start;
@@ -510,7 +510,7 @@ auto query(ref File outfile, ref InvertedIndex idx, string queryStr)
     SymbolTable table;
     auto tdata = cast(const(ubyte)[]) idx.store.getSharedSymbolTable.unwrap.unwrap;
     table.loadSymbolTable(tdata);
-    auto serializer = VcfSerializer(outfile, cast(string[]) table.table[10 .. $], SerdeTarget.ion);
+    auto serializer = VcfSerializer(outfn, cast(string[]) table.table[10 .. $], SerdeTarget.ion);
     foreach (d; idx.convertIdsToIon(idxs))
     {
         serializer.putData(d);
@@ -551,23 +551,19 @@ unittest
         rmdirRecurse(dbname);
 
     {
-        auto f = File("/tmp/test2.ion", "wb");
-        parseVCF("../test/data/vcf_file.vcf", -1, false, false, f);
+        parseVCF("../test/data/vcf_file.vcf", -1, false, false, "/tmp/test2.ion");
     }
 
     {
-        auto f = File("/tmp/test2.ion");
-        auto rdr = VcfIonDeserializer(f);
+        auto rdr = VcfIonDeserializer("/tmp/test2.ion");
         index(rdr, dbname);
 
-        f = File("/tmp/test3.ion", "w");
         InvertedIndex idx = InvertedIndex(dbname);
         // idx.store.print;
-        query(f, idx, "QUAL > 60");
+        query("/tmp/test3.ion", idx, "QUAL > 60");
     }
     {
-        auto f = File("/tmp/test3.ion");
-        auto rdr = VcfIonDeserializer(f);
+        auto rdr = VcfIonDeserializer("/tmp/test3.ion");
 
         foreach (rec; rdr)
         {

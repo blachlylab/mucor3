@@ -40,7 +40,7 @@ struct InvertedIndexStore
         opts.initialize;
         opts.createIfMissing = true;
         opts.errorIfExists = false;
-        opts.compression = CompressionType.None;
+        opts.compression = CompressionType.Bzip2;
         opts.setMergeOperator(createAppendMergeOperator);
 
         RocksBlockBasedOptions bbopts;

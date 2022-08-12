@@ -1,5 +1,5 @@
 module libmucor.query.tokens;
-import std.sumtype;
+import mir.algebraic;
 
 import libmucor.query.util;
 import std.range;
@@ -45,20 +45,20 @@ enum Parenthesis : string
     Right = ")",
 }
 
-alias Operators = SumType!(Parenthesis, ValueOp, BinaryLogicalOp, UnaryLogicalOp, KeyOp,);
+alias Operators = Variant!(Parenthesis, ValueOp, BinaryLogicalOp, UnaryLogicalOp, KeyOp,);
 
 struct KeyOrValue
 {
     string data;
 }
 
-alias TokenizedTypes = SumType!(Operators, string);
+alias TokenizedTypes = Variant!(Operators, string);
 
 T getInner(T)(TokenizedTypes v)
 {
     import std.traits;
 
-    static if (staticIndexOf!(T, Operators.Types) != -1)
+    static if (staticIndexOf!(T, Operators.AllowedTypes) != -1)
     {
         auto matchOp = (Operators o) => o.tryMatch!((T x) => x);
         return v.tryMatch!((Operators x) => matchOp(x));

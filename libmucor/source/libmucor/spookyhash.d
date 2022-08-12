@@ -66,6 +66,7 @@ import std.stdio;
 
 struct SpookyHash
 {
+@nogc nothrow @trusted:
 public:
     //
     // SpookyHash: hash a single message in one call, produce 128-bit output

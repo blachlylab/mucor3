@@ -13,7 +13,7 @@ bool json;
 void view_main(string[] args)
 {
     auto res = getopt(args, config.bundling, "json|j", "output json rather than ion text", &json);
-    File input;
+    string input;
     if (res.helpWanted)
     {
         defaultGetoptPrinter("", res.options);
@@ -26,9 +26,9 @@ void view_main(string[] args)
     }
 
     if (args.length == 1)
-        input = stdin;
+        input = "-";
     else if (args.length == 2)
-        input = File(args[1]);
+        input = args[1];
 
     auto rdr = VcfIonDeserializer(input);
 

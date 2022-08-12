@@ -1,6 +1,6 @@
 module libmucor.query.util;
 
-import std.sumtype;
+import mir.algebraic;
 import std.functional : partial;
 import std.traits : EnumMembers;
 import std.typecons : Tuple, tuple;
@@ -142,6 +142,8 @@ void validateParenthesis(string query)
             log_err_no_exit("parseQuery",
                     "Unmatched ')' here: " ~ (' '.repeat.take(closeIdx).array.idup) ~ "v");
             log_err("parseQuery", "QueryFragment:      %s", query);
+            debug throw new Exception("An error occured");
+            else return;
         }
         if (openIdx != -1 && closeIdx == -1)
         {
@@ -150,6 +152,8 @@ void validateParenthesis(string query)
             log_err_no_exit("parseQuery",
                     "Unmatched '(' here: " ~ (' '.repeat.take(openIdx).array.idup) ~ "v");
             log_err("parseQuery", "QueryFragment:      %s", query);
+            debug throw new Exception("An error occured");
+            else return;
         }
         if (closeIdx < openIdx)
         {
@@ -158,6 +162,8 @@ void validateParenthesis(string query)
             log_err_no_exit("parseQuery",
                     "Unmatched ')' here: " ~ (' '.repeat.take(closeIdx).array.idup) ~ "v");
             log_err("parseQuery", "QueryFragment:      %s", query);
+            debug throw new Exception("An error occured");
+            else return;
         }
         validateParenthesis(query[openIdx + 1 .. closeIdx]);
         if (closeIdx < query.length)

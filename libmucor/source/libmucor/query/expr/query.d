@@ -1,6 +1,6 @@
 module libmucor.query.expr.query;
 
-import std.sumtype;
+import mir.algebraic;
 import std.typecons : Tuple;
 import libmucor.query : queryErr;
 import libmucor.query.key;
@@ -12,7 +12,7 @@ import libmucor.query.util;
 import libmucor.query.eval;
 import libmucor.invertedindex;
 
-alias BasicQueryExpr = SumType!(Value,/// key op value
+alias BasicQueryExpr = Variant!(Value,/// key op value
         KeyValue,/// key op
         UnaryKeyOp);
 
@@ -76,14 +76,14 @@ struct BasicQuery
     }
 }
 
-alias QueryExpr = SumType!(BasicQuery, Tuple!(Key, "lhs", This*, "rhs"),
+alias QueryExpr = Variant!(BasicQuery, Tuple!(Key, "lhs", This*, "rhs"),
         Tuple!(UnaryLogicalOp, "op", This*, "negated"), Tuple!(This*, "sub"),
         Tuple!(BinaryLogicalOp, "op", This*, "lhs", This*, "rhs"),);
 
-alias ComplexKeyValue = QueryExpr.Types[1];
-alias NotQueryExpr = QueryExpr.Types[2];
-alias SubQueryExpr = QueryExpr.Types[3];
-alias ComplexQuery = QueryExpr.Types[4];
+alias ComplexKeyValue = QueryExpr.AllowedTypes[4];
+alias NotQueryExpr = QueryExpr.AllowedTypes[2];
+alias SubQueryExpr = QueryExpr.AllowedTypes[0];
+alias ComplexQuery = QueryExpr.AllowedTypes[3];
 
 struct Query
 {
@@ -203,7 +203,7 @@ QueryExpr* parseQueryRecurse(Tokenized tokens)
         return new QueryExpr(NotQueryExpr(x, parseQueryRecurse(toks[1 .. $])));
     }, (_x) {
         queryErr(toks.original, toks.idxs[0], "Unexpected operator");
-        return null;
+        return new QueryExpr(null);
     });
 
     auto isValueOp1 = (Operators v) => v.match!((ValueOp x) => true, (_x) => false,);

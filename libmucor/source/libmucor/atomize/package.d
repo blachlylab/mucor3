@@ -26,7 +26,7 @@ import mir.ser;
 import mir.serde : SerdeTarget;
 
 /// Parse VCF to JSONL
-void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, ref File output)
+void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, string outfn)
 {
     setup_global_pool(threads);
     //open vcf
@@ -38,7 +38,7 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, ref Fi
     int output_count = 0;
     auto recIR = VcfRec(vcf.vcfhdr);
     // loop over records and parse
-    auto ser = VcfSerializer(output, recIR.hdrInfo, SerdeTarget.ion);
+    auto ser = VcfSerializer(outfn, recIR.hdrInfo, SerdeTarget.ion);
     if (multiSample && multiAllele)
     {
         foreach (x; vcf)
@@ -85,9 +85,9 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, ref Fi
     }
     if (vcf_row_count > 0)
     {
-        log_info(__FUNCTION__, "Parsed %,3d records in %d seconds",
+        log_info(__FUNCTION__, "Parsed %d records in %d seconds",
                 vcf_row_count, sw.peek.total!"seconds");
-        log_info(__FUNCTION__, "Output %,3d json objects", output_count);
+        log_info(__FUNCTION__, "Output %d json objects", output_count);
         log_info(__FUNCTION__, "Avg. time per VCF record: %d usecs",
                 sw.peek.total!"usecs" / vcf_row_count);
     }
@@ -98,16 +98,14 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, ref Fi
 unittest
 {
     {
-        auto f = File("/tmp/test.ion", "wb");
-        parseVCF("../test/data/vcf_file.vcf", -1, false, false, f);
+        parseVCF("../test/data/vcf_file.vcf", -1, false, false, "/tmp/test.ion");
     }
     import std.file : read;
     import mir.ion.conv;
     import mir.ser.text;
     import libmucor.serde.deser;
 
-    auto f = File("/tmp/test.ion");
-    auto rdr = VcfIonDeserializer(f);
+    auto rdr = VcfIonDeserializer("/tmp/test.ion");
 
     foreach (rec; rdr)
     {

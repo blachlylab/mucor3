@@ -8,7 +8,8 @@ import std.array;
 import std.conv;
 
 import libmucor.hts_endian;
-import libmucor.fp80;
+version(RealNumbers) import libmucor.fp80;
+else import std.bitmanip : nativeToBigEndian, bigEndianToNative;
 import option;
 
 import drocks.database;
@@ -23,7 +24,7 @@ import core.stdc.stdlib : free;
 alias uint128 = BigInt!2;
 alias uint256 = BigInt!4;
 
-size_t toHash(uint128 x) nothrow @safe
+size_t toHash(uint128 x) nothrow @safe @nogc
 {
     ulong p = 0x5555555555555555; // pattern of alternating 0 and 1
     ulong c = 17316035218449499591; // random uneven integer constant; 
@@ -103,7 +104,8 @@ enum IndexValueType : char
 union IndexValue
 {
     const(char)[] s;
-    FP80 n;
+    version(RealNumbers) FP80 n;
+    else double n;
     bool b;
 }
 
@@ -120,7 +122,9 @@ struct CompositeKey
         static if (isNumeric!T)
         {
             vtype = IndexValueType.Number;
-            this.val.n = FP80(val);
+            version(RealNumbers) this.val.n = FP80(val);
+            else this.val.n = double(val);
+
         }
         else static if (is(T == bool))
         {
@@ -141,7 +145,8 @@ struct CompositeKey
         case IndexValueType.Bool:
             return "%s::%s::%s".format(key, cast(char) vtype, val.b);
         case IndexValueType.Number:
-            return "%s::%s::%s".format(key, cast(char) vtype, val.n.toString);
+            version(RealNumbers) return "%s::%s::%s".format(key, cast(char) vtype, val.n.toString);
+            else return "%s::%s::%s".format(key, cast(char) vtype, val.n.to!string);
         case IndexValueType.String:
             return "%s::%s::%s".format(key, cast(char) vtype, val.s);
         }
@@ -178,7 +183,12 @@ auto serialize(T)(T val)
             arr ~= cast(ubyte) val.val.b;
             return arr;
         case IndexValueType.Number:
-            arr ~= nativeToBigEndian(val.val.n);
+            version(RealNumbers) arr ~= nativeToBigEndian(val.val.n);
+            else {
+                import std.bitmanip : nativeToBigEndian;
+                val.val.n = -val.val.n;
+                arr ~= nativeToBigEndian(val.val.n);
+            }
             return arr;
         case IndexValueType.String:
             return arr ~ cast(ubyte[]) val.val.s;
@@ -253,9 +263,16 @@ T deserialize(T, bool useGC = false)(ubyte[] val)
             ret.val.b = cast(bool) val[ret.key.length + 2];
             break;
         case IndexValueType.Number:
-            ret.val.n = bigEndianToNative(val[ret.key.length + 2 .. ret.key.length + 2 + 10][0 .. 10]);
+            version(RealNumbers)
+                ret.val.n = bigEndianToNative(val[ret.key.length + 2 .. ret.key.length + 2 + 10][0 .. 10]);
+            else {
+                ret.val.n = bigEndianToNative!double(val[ret.key.length + 2 .. ret.key.length + 2 + 8][0 .. 8]);
+                ret.val.n = - ret.val.n;
+            }
+
             break;
         case IndexValueType.String:
+            
             ret.val.s = cast(const(char)[]) val[ret.key.length + 2 .. $];
             break;
         }
@@ -299,8 +316,12 @@ T deserialize(T, bool useGC = false)(ubyte[] val)
     else
         static assert(0);
 
-    if (!useGC)
+    if (!useGC) {
+        import core.memory : GC;
+        GC.removeRange(val.ptr);
         free(val.ptr);
+
+    }
     val = [];
     return ret;
 }

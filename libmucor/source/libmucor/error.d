@@ -28,12 +28,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-import std.format;
 import std.stdio;
-import core.stdc.stdlib : exit;
+import core.stdc.stdlib : exit, free;
+import libmucor.utility;
 
+@nogc nothrow @trusted pragma(inline, true) : // @suppress(dscanner.trust_too_much)
 /// Log levels.
-enum LogLevel // @suppress(dscanner.style.phobos_naming_convention)
+enum LogLevel
 {
     Off = 0, ///< All logging disabled.
     Err = 1, ///< Logging of errs only.
@@ -62,6 +63,10 @@ LogLevel get_log_level()
  */
 shared int verbose = 4;
 
+static immutable string[] LogLevelMsg = ["","[Err::%s]: %s","", "[Warn::%s]: %s", "[Info::%s]: %s", "[Debug::%s]: %s", "[Trace::%s]: %s"];
+static immutable string[] LogLevelColorPrefix = ["","\x1b[0;31m", "", "\x1b[0;33m", "\x1b[0;32m", "\x1b[0;36m", "\x1b[1;36m"];
+static immutable string LogLevelColorPostfix = "\x1b[0m";
+
 /*! Logs an event.
 * \param severity      Severity of the event:
 *                      - Err means that something went wrong so that a task could not be completed.
@@ -72,30 +77,47 @@ shared int verbose = 4;
 * \param context       Context where the event occurred. Typically set to "__func__".
 * \param format        Format string with placeholders, like printf.
 */
-void log(Args...)(LogLevel severity, string context, string fmt, Args args)
+
+void log(LogLevel level, Args...)(string ctx, string fmt, Args args)
 {
-    final switch (severity)
+    if (get_log_level >= level)
     {
-    case LogLevel.Err:
-        log_err(context, fmt, args);
-        break;
-    case LogLevel.Warn:
-        log_warn(context, fmt, args);
-        break;
-    case LogLevel.Info:
-        log_info(context, fmt, args);
-        break;
-    case LogLevel.Debug:
-        log_debug(context, fmt, args);
-        break;
-    case LogLevel.Trace:
-        log_trace(context, fmt, args);
-        break;
-    case LogLevel.Off:
-        break;
+        static if(args.length == 0){
+            auto tmp = format(LogLevelMsg[level], ctx, fmt);
+            auto tmp2 = format("%s%s%s", LogLevelColorPrefix[level], tmp, LogLevelColorPostfix);
+            ewrite(tmp2);
+            ewrite("\n");
+            free(cast(void*)tmp.ptr);
+            free(cast(void*)tmp2.ptr);
+        } else {
+            auto tmp = format(LogLevelMsg[level], ctx, fmt);
+            auto tmp2 = format(tmp, args);
+            auto tmp3 = format("%s%s%s", LogLevelColorPrefix[level], tmp2, LogLevelColorPostfix);
+            ewrite(tmp3);
+            ewrite("\n");
+            free(cast(void*)tmp.ptr);
+            free(cast(void*)tmp2.ptr);
+            free(cast(void*)tmp3.ptr);
+        }
     }
+
 }
 
+void log_err_no_exit(Args...)(string ctx, string fmt, Args args) {
+    log!(LogLevel.Err, Args)(ctx, fmt, args);
+}
+void log_warn(Args...)(string ctx, string fmt, Args args) {
+    log!(LogLevel.Warn, Args)(ctx, fmt, args);
+}
+void log_info(Args...)(string ctx, string fmt, Args args) {
+    log!(LogLevel.Info, Args)(ctx, fmt, args);
+}
+void log_debug(Args...)(string ctx, string fmt, Args args) {
+    log!(LogLevel.Debug, Args)(ctx, fmt, args);
+}
+void log_trace(Args...)(string ctx, string fmt, Args args) {
+    log!(LogLevel.Trace, Args)(ctx, fmt, args);
+}
 // pragma(inline, true):
 /**! Logs an event with severity Err and default context. Parameters: format, ... */
 //#define log_err(...) log(Err, __func__, __VA_ARGS__)
@@ -103,80 +125,27 @@ void log_err(Args...)(string ctx, string fmt, Args args)
 {
     if (get_log_level >= LogLevel.Err)
     {
-        string open_err_color = "\x1b[0;31m";
-        string close_color = "\x1b[0m";
-        fmt = format("[Err::%s]: ", ctx) ~ fmt;
-        stderr.writeln(open_err_color, format(fmt, args), close_color);
-        debug throw new Exception("An error occured");
-    else exit(1);
+        static if(args.length == 0){
+            auto tmp = format(LogLevelMsg[LogLevel.Err], ctx, fmt);
+            auto tmp2 = format("%s%s%s", LogLevelColorPrefix[LogLevel.Err], tmp, LogLevelColorPostfix);
+            ewrite(tmp2);
+            ewrite("\n");
+            free(cast(void*)tmp.ptr);
+            free(cast(void*)tmp2.ptr);
+        } else {
+            auto tmp = format(LogLevelMsg[LogLevel.Err], ctx, fmt);
+            auto tmp2 = format(tmp, args);
+            auto tmp3 = format("%s%s%s", LogLevelColorPrefix[LogLevel.Err], tmp2, LogLevelColorPostfix);
+            ewrite(tmp3);
+            ewrite("\n");
+            free(cast(void*)tmp.ptr);
+            free(cast(void*)tmp2.ptr);
+            free(cast(void*)tmp3.ptr);
+        }
+        debug {}
+        else exit(1);
     }
 
-}
-
-// pragma(inline, true):
-/**! Logs an event with severity Err and default context. Parameters: format, ... */
-//#define log_err(...) log(Err, __func__, __VA_ARGS__)
-void log_err_no_exit(Args...)(string ctx, string fmt, Args args)
-{
-    if (get_log_level >= LogLevel.Err)
-    {
-        string open_err_color = "\x1b[0;31m";
-        string close_color = "\x1b[0m";
-        fmt = format("[Err::%s]: ", ctx) ~ fmt;
-        stderr.writeln(open_err_color, format(fmt, args), close_color);
-    }
-
-}
-/**! Logs an event with severity Warn and default context. Parameters: format, ... */
-//#define log_warn(...) log(Warn, __func__, __VA_ARGS__)
-void log_warn(Args...)(string ctx, string fmt, Args args)
-{
-    if (get_log_level >= LogLevel.Warn)
-    {
-        string open_warn_color = "\x1b[0;33m";
-        string close_color = "\x1b[0m";
-        fmt = format("[Warn::%s]: ", ctx) ~ fmt;
-        stderr.writeln(open_warn_color, format(fmt, args), close_color);
-    }
-}
-
-/**! Logs an event with severity Info and default context. Parameters: format, ... */
-//#define log_info(...) log(Info, __func__, __VA_ARGS__)
-void log_info(Args...)(string ctx, string fmt, Args args)
-{
-    if (get_log_level >= LogLevel.Info)
-    {
-        string open_info_color = "\x1b[0;32m";
-        string close_color = "\x1b[0m";
-        fmt = format("[Info::%s]: ", ctx) ~ fmt;
-        stderr.writeln(open_info_color, format(fmt, args), close_color);
-    }
-}
-
-/**! Logs an event with severity Debug and default context. Parameters: format, ... */
-//#define log_debug(...) log(Debug, __func__, __VA_ARGS__)
-void log_debug(Args...)(string ctx, string fmt, Args args)
-{
-    if (get_log_level >= LogLevel.Debug)
-    {
-        string open_debug_color = "\x1b[0;36m";
-        string close_color = "\x1b[0m";
-        fmt = format("[Debug::%s]: ", ctx) ~ fmt;
-        stderr.writeln(open_debug_color, format(fmt, args), close_color);
-    }
-}
-
-/**! Logs an event with severity Trace and default context. Parameters: format, ... */
-//#define log_trace(...) log(Trace, __func__, __VA_ARGS__)
-void log_trace(Args...)(string ctx, string fmt, Args args)
-{
-    if (get_log_level == LogLevel.Trace)
-    {
-        string open_trace_color = "\x1b[1;36m";
-        string close_color = "\x1b[0m";
-        fmt = format("[Trace::%s]: ", ctx) ~ fmt;
-        stderr.writeln(open_trace_color, format(fmt, args), close_color);
-    }
 }
 
 //
@@ -190,5 +159,5 @@ unittest
     log_debug(__FUNCTION__, "Test: debug");
     log_info(__FUNCTION__, "Test: info");
     log_warn(__FUNCTION__, "Test: warn");
-    assertThrown(log_err(__FUNCTION__, "Test: err"));
+    log_err_no_exit(__FUNCTION__, "Test: err");
 }

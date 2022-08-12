@@ -169,8 +169,8 @@ template pivot(fun...)
                         onVal = obj[on];
                     else if (obj[on.split("/")] != Asdf.init)
                         onVal = obj[on.split("/")];
-                    else
-                        log_err(__FUNCTION__, "Record doesn't have on val: %s, %s", on, obj);
+                    else {}
+                        // log_err(__FUNCTION__, "Record doesn't have on val: %s, %s", on, obj);
 
                     string onStr;
 

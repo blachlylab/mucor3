@@ -15,6 +15,9 @@ import std.stdio;
 import std.traits : ReturnType;
 import std.container : Array;
 import core.sync.mutex : Mutex;
+import htslib.hfile;
+import libmucor.memory;
+import core.stdc.stdlib : malloc, free;
 
 struct VcfIonRecord
 {
@@ -63,32 +66,48 @@ struct VcfIonRecord
 ///     
 struct VcfIonDeserializer
 {
-    File inFile;
+    Bgzf inFile;
+
+    Array!(char) fn;
+
+    Array!(ubyte) buffer;
 
     SymbolTable* symbols;
 
-    ReturnType!(File.byChunk) chunks;
-
-    const(ubyte)[] buffer;
-
-    bool eof;
     bool empty;
     IonErrorCode error;
 
-    VcfIonRecord frontVal;
+    Mutex m;
 
-    this(File inFile, size_t bufferSize = 4096)
+    this(string fn, size_t bufferSize = 4096)
     {
-        this.symbols = new SymbolTable;
-        this.inFile = inFile;
-        this.chunks = this.inFile.byChunk(bufferSize);
+        this.m = new Mutex;
+        this.fn = Array!(char)(cast(char[])fn);
+        this.fn ~= '\0';
 
-        this.buffer = this.chunks.front.dup;
-        this.chunks.popFront;
-        error = readVersion(this.buffer);
+        char[2] mode = ['r','\0'];
+
+        this.inFile = Bgzf(bgzf_open(this.fn.data.ptr, mode.ptr));
+
+        this.symbols = new SymbolTable;
+
+        error = readVersion();
         handleIonError(error);
 
-        this.readSymbolTable();
+        IonDescriptor des;
+        error = parseDescriptor(des);
+        handleIonError(error);
+        
+        auto len = this.buffer.length;
+        this.buffer.length = len + des.L;
+
+        auto n = bgzf_read(inFile, this.buffer.data[len .. $].ptr, this.buffer.length - len); 
+        if(n != this.buffer.length - len) handleIonError(IonErrorCode.unexpectedEndOfData);
+
+        auto view = cast(const(ubyte)[])this.buffer.data();
+        error = this.symbols.loadSymbolTable(view);
+        handleIonError(error);
+
         this.popFront;
     }
 
@@ -99,100 +118,135 @@ struct VcfIonDeserializer
         if (error)
             ret = Err(ionErrorMsg(error));
         else
-            ret = Ok(frontVal);
+            ret = Ok(VcfIonRecord(this.symbols, IonValue(this.buffer.data.dup)));
         return ret;
     }
 
     void popFront()
     {
-        IonDescriptor des;
-        IonValue val;
-        readType(des);
-        if (des.type == IonTypeCode.annotations)
-        {
-            this.readSymbolTable();
-            readType(des);
-        }
 
-        if (this.eof && this.buffer.length == 0)
+        this.buffer.length = 0;
+        IonDescriptor des;
+        error = parseDescriptor(des);
+        if (_expect(error == IonErrorCode.eof, false))
         {
             this.empty = true;
             return;
         }
-
-        error = this.readValue(val, des);
-
         handleIonError(error);
 
-        this.frontVal = VcfIonRecord(this.symbols, val);
-    }
-
-    void loadMoreBytes()
-    {
-        if (_expect(!this.chunks.empty, true))
+        if (des.type == IonTypeCode.annotations)
         {
-            if (buffer.length > 0)
-            {
-                this.buffer = this.buffer ~ this.chunks.front;
-                this.chunks.popFront;
-            }
-            else
-            {
-                this.buffer = this.chunks.front.dup;
-                this.chunks.popFront;
-            }
-            return;
-        }
-        this.eof = true;
-    }
+            auto len = this.buffer.length;
+            this.buffer.length = len + des.L;
 
-    void readSymbolTable()
-    {
-        auto view = buffer[];
-        error = this.symbols.loadSymbolTable(view);
-        while (error == IonErrorCode.unexpectedEndOfData)
-        {
-            this.loadMoreBytes;
-            if (_expect(this.eof, false))
-            {
-                return;
-            }
-            view = buffer[];
+            auto n = bgzf_read(inFile, this.buffer.data[len .. $].ptr, this.buffer.length - len); 
+            if(n != this.buffer.length - len) handleIonError(IonErrorCode.unexpectedEndOfData);
+
+            auto view = cast(const(ubyte)[])this.buffer.data();
             error = this.symbols.loadSymbolTable(view);
+            handleIonError(error);
+
+            this.buffer.length = 0;
+
+            error = parseDescriptor(des);
+            handleIonError(error);
         }
-        handleIonError(error);
-        this.buffer = view;
+
+        auto len = this.buffer.length;
+        this.buffer.length = len + des.L;
+
+        auto n = bgzf_read(inFile, this.buffer.data[len .. $].ptr, this.buffer.length - len); 
+        if(n != this.buffer.length - len) handleIonError(IonErrorCode.unexpectedEndOfData);
     }
 
-    IonErrorCode readValue(ref IonValue val, ref IonDescriptor des)
+    IonErrorCode readVersion()
     {
-        while (des.L > buffer.length)
+        IonVersionMarker versionMarker;
+        ubyte[4] buf;
+        auto n = bgzf_read(inFile, buf.ptr, 4);
+        if(_expect(n != 4, false)) {
+            return IonErrorCode.unexpectedEndOfData;
+        }
+        auto error = parseVersion(buf[],versionMarker);
+        if (!error)
         {
-            this.loadMoreBytes;
-            if (_expect(this.eof, false))
+            if (versionMarker != IonVersionMarker(1, 0))
             {
-                return IonErrorCode.eof;
+                error = IonErrorCode.unexpectedVersionMarker;
             }
         }
+        return error;
+    }
 
-        val = IonValue(this.buffer[0 .. des.L]);
-        this.buffer = this.buffer[des.L .. $];
+    IonErrorCode parseDescriptor()(scope ref IonDescriptor descriptor) @trusted nothrow @nogc
+    {
+        version (LDC) pragma(inline, true);
+        auto res = bgzf_getc(inFile);
+        if (_expect(res == -1, false))
+            return IonErrorCode.eof;
+        ubyte descriptorData = cast(ubyte) res;
+
+        if (_expect(descriptorData > 0xEE, false))
+            return IonErrorCode.illegalTypeDescriptor;
+        
+        this.buffer ~= descriptorData;
+        descriptor = IonDescriptor(&descriptorData);
+
+        const L = descriptor.L;
+        const type = descriptor.type;
+        // if null
+        if (L == 0xF)
+            return IonErrorCode.none;
+        // if bool
+        if (type == IonTypeCode.bool_)
+        {
+            if (_expect(L > 1, false))
+                return IonErrorCode.illegalTypeDescriptor;
+            return IonErrorCode.none;
+        }
+        // if large
+        bool sortedStruct = descriptorData == 0xD1;
+        if (L == 0xE || sortedStruct)
+        {
+            if (auto error = parseVarUInt(descriptor.L))
+                return error;
+        }
         return IonErrorCode.none;
     }
 
-    void readType(ref IonDescriptor des)
+    package IonErrorCode parseVersion(const(ubyte)[] data, scope ref IonVersionMarker versionMarker) @safe pure nothrow @nogc
     {
-        error = parseDescriptor(this.buffer, des);
-        while (_expect(error == IonErrorCode.unexpectedEndOfData, false))
+        version (LDC) pragma(inline, true);
+        if (data.length < 4 || data[0] != 0xE0 || data[3] != 0xEA)
+            return IonErrorCode.cantParseValueStream;
+        versionMarker = IonVersionMarker(data[1], data[2]);
+        return IonErrorCode.none;
+    }
+
+    package IonErrorCode parseVarUInt(bool checkInput = true, U)(scope out U result) @trusted nothrow @nogc
+            if (is(U == ubyte) || is(U == ushort) || is(U == uint) || is(U == ulong))
+    {
+        version (LDC) pragma(inline, true);
+        enum mLength = U(1) << (U.sizeof * 8 / 7 * 7);
+        for (;;)
         {
-            this.loadMoreBytes;
-            if (_expect(this.eof, false))
+            ubyte b = cast(ubyte)bgzf_getc(inFile);
+            this.buffer ~= b;
+            result <<= 7;
+            result |= b & 0x7F;
+            if (cast(byte) b < 0)
+                return IonErrorCode.none;
+            static if (checkInput)
             {
-                return;
+                if (_expect(result >= mLength, false))
+                    return IonErrorCode.overflowInParseVarUInt;
             }
-            error = parseDescriptor(this.buffer, des);
+            else
+            {
+                assert(result < mLength);
+            }
         }
-        handleIonError(error);
     }
 
 }

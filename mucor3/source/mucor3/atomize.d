@@ -41,5 +41,5 @@ void atomize(string[] args)
     {
         log_warn(__FUNCTION__, "using -a also splits by allele");
     }
-    parseVCF(args[1], threads, multiSample, multiAllelic, stdout);
+    parseVCF(args[1], threads, multiSample, multiAllelic, "-");
 }

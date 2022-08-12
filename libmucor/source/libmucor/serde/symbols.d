@@ -9,12 +9,15 @@ import mir.ion.symbol_table;
 import mir.ion.stream;
 import mir.serde : serdeGetSerializationKeysRecurse;
 import mir.ser.ion : IonSerializer;
+import mir.string_map;
+import core.stdc.stdlib : malloc;
 
 import libmucor.atomize.header;
 import libmucor.atomize.ann;
 import libmucor.serde;
 import libmucor.serde.deser : parseValue;
 import libmucor.khashl;
+import std.container.array;
 
 struct SymbolTableBuilder
 {
@@ -22,38 +25,38 @@ struct SymbolTableBuilder
     IonSerializer!(1024, null, false) serializer;
 
     /// previously serialized symbol hashmap
-    khashl!(const(char)[], size_t, true) currentSymbolsMap;
+    khashl!(uint, size_t) currentSymbolsMap;
     /// new yet-to-be serialized symbol hashmap
-    khashl!(const(char)[], size_t, true) newSymbolsMap;
+    khashl!(uint, size_t) newSymbolsMap;
     /// new symbols
-    const(char)[][] syms;
+    Array!(const(char)[]) syms;
     /// concatenated new symbols
     /// just used for hashing
-    ubyte[] dataForHashing;
+    Array!(char) dataForHashing;
     /// total number of symbols
     size_t numSymbols = IonSystemSymbol.max + 1;
     bool first = true;
 
     /// insert symbol  
+    @nogc nothrow:
     size_t insert(const(char)[] key)
     {
-        auto p = key in currentSymbolsMap;
+        auto k = kh_hash!(const(char)[]).kh_hash_func(key);
+        auto p = k in currentSymbolsMap;
         if (p)
             return *p;
-        p = key in newSymbolsMap;
+        p = k in newSymbolsMap;
         if (p)
             return *p;
-        newSymbolsMap[key] = numSymbols++;
+        dataForHashing ~= cast(ubyte[])key;
+        newSymbolsMap[k] = numSymbols++;
         syms ~= key;
         return numSymbols - 1;
     }
 
     ubyte[] getRawSymbols()
     {
-        import std.algorithm;
-        import std.array;
-
-        return cast(ubyte[]) this.syms.joiner.array;
+        return cast(ubyte[]) dataForHashing.data;
     }
 
     // $ion_symbol_table::
@@ -81,10 +84,11 @@ struct SymbolTableBuilder
             auto listState = serializer.listBegin();
 
             auto n = currentSymbolsMap.kh_size + IonSystemSymbol.max + 1;
-            foreach (i, const(char)[] key; syms)
+            foreach (i, const(char)[] key; syms.data[])
             {
                 serializer.putValue(key);
-                currentSymbolsMap[key] = n + i;
+                auto k = kh_hash!(const(char)[]).kh_hash_func(key);
+                currentSymbolsMap[k] = n + i;
             }
 
             serializer.listEnd(listState);
@@ -92,6 +96,7 @@ struct SymbolTableBuilder
             serializer.annotationWrapperEnd(annotationsState, annotationWrapperState);
 
             this.syms.length = 0;
+            this.dataForHashing.length = 0;
             this.newSymbolsMap.kh_clear();
             this.first = false;
             return this.serializer.data;
@@ -320,7 +325,7 @@ struct SymbolTable
                         error = symbolValue.get(symbol);
                         if (error)
                             goto C;
-                        table ~= symbol;
+                        table ~= symbol.dup;
                     }
                 }
             }
