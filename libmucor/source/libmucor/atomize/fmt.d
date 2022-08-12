@@ -169,7 +169,18 @@ struct Fmt {
                 for (auto i = 0; i < genotypes.length; i++)
                 {
                     if(genotypes[i].isNull) continue;
-                    this.bySample[i].other[idx] = vals[i][0];
+                    final switch(hdrInfo.n) {
+                        case HeaderLengths.OnePerAllele:
+                        case HeaderLengths.OnePerAltAllele:
+                            this.bySample[i].byAllele[0][idx] = vals[i][0];
+                            break;
+                        case HeaderLengths.OnePerGenotype:
+                        case HeaderLengths.Fixed:
+                        case HeaderLengths.None:
+                        case HeaderLengths.Variable:
+                            this.bySample[i].other[idx] = vals[i][0];
+                            break;
+                    }
                 }
                 continue;
                 // float or float array

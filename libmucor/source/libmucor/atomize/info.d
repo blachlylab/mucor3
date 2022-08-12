@@ -112,7 +112,18 @@ struct Info {
             final switch (info.type)
             {
             case BcfRecordType.Char:
-                other[idx] = info.to!string;
+                final switch(hdrInfo.n) {
+                    case HeaderLengths.OnePerAllele:
+                    case HeaderLengths.OnePerAltAllele:
+                        byAllele[0][idx] = info.to!string;
+                        break;
+                    case HeaderLengths.OnePerGenotype:
+                    case HeaderLengths.Fixed:
+                    case HeaderLengths.None:
+                    case HeaderLengths.Variable:
+                        other[idx] = info.to!string;
+                        break;
+                }
                 continue;
                 // float or float array
             case BcfRecordType.Float:

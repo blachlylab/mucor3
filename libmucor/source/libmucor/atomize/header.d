@@ -154,7 +154,7 @@ struct HeaderConfig
         return this.remapIdxs[idx];
     }
 
-    auto toString() {
+    auto toString() const {
         import std.format;
         string ret = "[\n";
         for(auto i = 0; i < this.remapIdxs.length;i++) {
