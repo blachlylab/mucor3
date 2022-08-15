@@ -8,6 +8,7 @@
 	"name": "drocks",
     "sourceFiles": ["rocksdb/librocksdb.a"],
     "libs": ["bz2", "stdc++", "zstd"],
+	"preGenerateCommands": ["cd rocksdb; make static_lib"],
 	"dependencies": {
 		"option" : {
 			"path": "../option"
