@@ -1,28 +1,15 @@
 module libmucor.atomize;
 
-import std.stdio;
-import std.algorithm : map, each;
-import std.array : array, split;
-import std.datetime.stopwatch : StopWatch, AutoStart;
-import std.math : isNaN;
-import std.parallelism;
-import core.sync.mutex : Mutex;
-
-import dhtslib.vcf;
-import dhtslib.coordinates;
-import htslib;
 import libmucor.atomize.record;
-import libmucor.atomize.header;
 import libmucor.serde.ser;
-
-import libmucor.khashl : khashl;
-import libmucor.jsonlops;
 import libmucor.error;
 import libmucor : setup_global_pool;
-import std.parallelism : parallel;
 
-import mir.ser.interfaces;
-import mir.ser;
+import std.stdio;
+import std.datetime.stopwatch : StopWatch, AutoStart;
+
+import dhtslib.vcf;
+
 import mir.serde : SerdeTarget;
 
 /// Parse VCF to JSONL
@@ -98,7 +85,7 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, string
 unittest
 {
     {
-        parseVCF("../test/data/vcf_file.vcf", -1, false, false, "/tmp/test.ion");
+        parseVCF("test/data/vcf_file.vcf", -1, false, false, "/tmp/test.ion");
     }
     import std.file : read;
     import mir.ion.conv;

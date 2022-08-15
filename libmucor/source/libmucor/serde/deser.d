@@ -15,8 +15,6 @@ import std.stdio;
 import std.traits : ReturnType;
 import std.container : Array;
 import core.sync.mutex : Mutex;
-import htslib.hfile;
-import libmucor.memory;
 import core.stdc.stdlib : malloc, free;
 
 struct VcfIonRecord

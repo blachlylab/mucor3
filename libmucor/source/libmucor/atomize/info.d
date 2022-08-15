@@ -1,24 +1,18 @@
 module libmucor.atomize.info;
 
-import mir.ser.interfaces;
-import mir.ser;
-import mir.serde;
-
-import dhtslib.vcf;
-import std.string : fromStringz;
-import std.algorithm : map, any;
-
-import libmucor.khashl;
 import libmucor.atomize.header;
 import libmucor.atomize.field;
 import libmucor.atomize.ann;
 import libmucor.serde.ser;
-import libmucor.error;
+
+import std.algorithm : map, any;
+
+import dhtslib.vcf;
 
 struct InfoAlleleValues
 {
-    @serdeIgnore FieldValue[] fields;
-    @serdeIgnore bool isNull = true;
+    FieldValue[] fields;
+    bool isNull = true;
 
     void reset()
     {
@@ -57,11 +51,11 @@ struct InfoAlleleValues
 struct Info
 {
     Annotation _dummy;
-    @serdeIgnore InfoAlleleValues[] byAllele;
-    @serdeIgnore FieldValue[] other;
-    @serdeIgnore Annotations[] annFields;
-    @serdeIgnore const(HeaderConfig) cfg;
-    @serdeIgnore size_t numByAlleleFields;
+    InfoAlleleValues[] byAllele;
+    FieldValue[] other;
+    Annotations[] annFields;
+    const(HeaderConfig) cfg;
+    size_t numByAlleleFields;
 
     this(HeaderConfig cfg)
     {
@@ -227,11 +221,11 @@ struct Info
 struct InfoSingleAlt
 {
     Annotation _dummy;
-    @serdeIgnore InfoAlleleValues alleleValues;
-    @serdeIgnore FieldValue[] other;
-    @serdeIgnore Annotations[] annFields;
-    @serdeIgnore const(HeaderConfig) cfg;
-    @serdeIgnore string allele;
+    InfoAlleleValues alleleValues;
+    FieldValue[] other;
+    Annotations[] annFields;
+    const(HeaderConfig) cfg;
+    string allele;
 
     this(Info info, size_t altIdx, string allele)
     {

@@ -1,14 +1,12 @@
 module libmucor.atomize.field;
 
+import libmucor.serde.ser;
+
 import std.traits;
 import std.meta;
 
 import mir.algebraic;
-import mir.ser.interfaces;
 import mir.ser;
-import mir.serde;
-
-import libmucor.serde.ser;
 
 alias FieldTypes = Variant!(long, float, long[], float[], bool, string);
 
@@ -22,8 +20,8 @@ template isArrayNotString(T)
 
 struct FieldValue
 {
-    @serdeIgnore FieldTypes data;
-    @serdeIgnore bool isNull = true;
+    FieldTypes data;
+    bool isNull = true;
 
     void opAssign(T)(T value)
     {

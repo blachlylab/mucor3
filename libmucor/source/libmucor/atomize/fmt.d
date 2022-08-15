@@ -1,21 +1,18 @@
 module libmucor.atomize.fmt;
 
-import std.algorithm : map, any;
-
-import mir.ser.interfaces;
-import mir.ser;
-import mir.serde;
-
-import dhtslib.vcf;
-import libmucor.khashl;
 import libmucor.atomize.field;
 import libmucor.atomize.header;
 import libmucor.serde.ser;
 
+import std.algorithm : map, any;
+
+import dhtslib.vcf;
+
+
 struct FmtValues
 {
-    @serdeIgnore FieldValue[] fields;
-    @serdeIgnore bool isNull = true;
+    FieldValue[] fields;
+    bool isNull = true;
 
     void reset()
     {
@@ -59,9 +56,9 @@ struct FmtValues
  */
 struct FmtSampleValues
 {
-    @serdeIgnore FmtValues[] byAllele;
-    @serdeIgnore FmtValues other;
-    @serdeIgnore bool isNull = true;
+    FmtValues[] byAllele;
+    FmtValues other;
+    bool isNull = true;
 
     void reset()
     {
@@ -105,10 +102,10 @@ struct FmtSampleValues
  */
 struct Fmt
 {
-    @serdeIgnore FmtSampleValues[] bySample;
-    @serdeIgnoreOut Genotype[] genotypes;
-    @serdeIgnore const(HeaderConfig) cfg;
-    @serdeIgnore size_t numByAlleleFields;
+    FmtSampleValues[] bySample;
+    Genotype[] genotypes;
+    const(HeaderConfig) cfg;
+    size_t numByAlleleFields;
 
     this(HeaderConfig cfg)
     {
@@ -315,8 +312,8 @@ struct Fmt
 
 struct FmtSingleSample
 {
-    @serdeIgnore FmtSampleValues sampleValues;
-    @serdeIgnore const(HeaderConfig) cfg;
+    FmtSampleValues sampleValues;
+    const(HeaderConfig) cfg;
 
     this(Fmt fmt, size_t samIdx)
     {
@@ -332,9 +329,9 @@ struct FmtSingleSample
 
 struct FmtSingleAlt
 {
-    @serdeIgnore FmtValues alleleValues;
-    @serdeIgnore FmtValues other;
-    @serdeIgnore const(HeaderConfig) cfg;
+    FmtValues alleleValues;
+    FmtValues other;
+    const(HeaderConfig) cfg;
 
     this(FmtSingleSample fmt, size_t altIdx)
     {

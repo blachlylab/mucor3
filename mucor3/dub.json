@@ -21,6 +21,11 @@
 			"targetType": "executable"
 		},
 		{
+			"name": "realnumbers",
+			"targetType": "executable",
+			"versions": ["RealNumbers"]
+		},
+		{
 			"name": "SSE4",
 			"targetType": "executable",
 			"dflags-ldc": ["-mattr=+sse4.2"]

@@ -1,18 +1,16 @@
 module libmucor.atomize.record;
-import mir.ser;
-import mir.ser.interfaces;
-import mir.bignum.integer;
+import libmucor.atomize.fmt;
+import libmucor.atomize.info;
+import libmucor.atomize.header;
+import libmucor.serde;
 
 import std.math : isNaN;
 
 import dhtslib.vcf;
 import dhtslib.coordinates;
-import libmucor.atomize.fmt;
-import libmucor.atomize.info;
-import libmucor.atomize.ann;
-import libmucor.atomize.header;
-import libmucor.serde.ser;
-import libmucor.serde;
+
+import mir.ser;
+import mir.bignum.integer;
 
 auto hashAndFinalize(ref VcfRecordSerializer serializer, size_t s) {
     import core.stdc.stdlib : malloc, free;
@@ -33,28 +31,21 @@ auto hashAndFinalize(ref VcfRecordSerializer serializer, size_t s) {
 struct VcfRequiredFields(bool singleSample, bool singleAlt)
 {
 
-    @serdeKeys("CHROM")
     string chrom;
 
-    @serdeKeys("POS")
     long pos;
 
-    @serdeKeys("ID")
-    @serdeIgnoreOutIf!`a == "."` string id;
+    string id;
 
-    @serdeKeys("REF")
     string ref_;
 
-    @serdeKeys("ALT")
     static if (singleAlt)
         string alt;
     else
         string[] alt;
 
-    @serdeIgnoreOutIf!isNaN @serdeKeys("QUAL")
     float qual;
 
-    @serdeKeys("FILTER")
     string[] filter;
 
     static if (singleSample)
@@ -124,13 +115,11 @@ struct VcfRec
     ReqFields required;
     alias required this;
 
-    @serdeKeys("INFO")
     Info info;
 
-    @serdeKeys("FORMAT")
     Fmt fmt;
     // Annotations[] anns;
-    @serdeIgnoreOut HeaderConfig hdrInfo;
+    HeaderConfig hdrInfo;
 
     this(VCFHeader hdr)
     {
@@ -172,16 +161,14 @@ struct VcfRec
 struct VcfRecSingleSample
 {
     alias ReqFields = VcfRequiredFields!(true, false);
-    @serdeIgnoreOut ReqFields required;
+    ReqFields required;
     alias required this;
 
-    @serdeKeys("INFO")
     Info info;
 
-    @serdeKeys("FORMAT")
     FmtSingleSample fmt;
     // Annotations[] anns;
-    @serdeIgnoreOut HeaderConfig hdrInfo;
+    HeaderConfig hdrInfo;
 
     this(VcfRec rec, size_t samIdx)
     {
@@ -216,15 +203,13 @@ struct VcfRecSingleSample
 struct VcfRecSingleAlt
 {
     alias ReqFields = VcfRequiredFields!(true, true);
-    @serdeIgnoreOut ReqFields required;
+    ReqFields required;
     alias required this;
 
-    @serdeKeys("INFO")
     InfoSingleAlt info;
 
-    @serdeKeys("FORMAT")
     FmtSingleAlt fmt;
-    @serdeIgnoreOut HeaderConfig hdrInfo;
+    HeaderConfig hdrInfo;
 
     this(VcfRecSingleSample rec, size_t altIdx)
     {
@@ -261,8 +246,9 @@ unittest
     import std.stdio;
     import libmucor.serde;
     import mir.ion.conv;
+    
 
-    auto vcf = VCFReader("../test/data/vcf_file.vcf", -1, UnpackLevel.All);
+    auto vcf = VCFReader("test/data/vcf_file.vcf", -1, UnpackLevel.All);
 
     auto hdrInfo = HeaderConfig(vcf.vcfhdr);
     auto rec = vcf.front;

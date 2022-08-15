@@ -26,6 +26,17 @@ struct Option(T)
     private T val;
     bool isNone = true;
 
+    this(SomeType!T val) {
+        this.val = val;
+        this.isNone = false;
+    }
+
+    /// assign with None
+    this(typeof(null) _null)
+    {
+        this.isNone = true;
+    }
+
     /// assign with Some!T
     void opAssign(Option!T val)
     {

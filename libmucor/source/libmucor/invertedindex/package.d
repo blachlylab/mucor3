@@ -1,35 +1,22 @@
 module libmucor.invertedindex;
+
 import libmucor.invertedindex.record;
 import libmucor.invertedindex.store;
 import libmucor.serde;
+import libmucor.khashl;
+import libmucor.error;
+import libmucor.query;
+
+import std.algorithm : map, filter, reduce;
+import std.array : array, replace;
+import std.conv : to;
+import std.string : indexOf;
+import std.stdio;
+import std.parallelism;
 import std.algorithm : balancedParens;
 import std.datetime.stopwatch : StopWatch;
 
 import mir.ion.value;
-import mir.ion.conv;
-
-import std.algorithm.setops;
-import std.algorithm : sort, uniq, map, filter, joiner, each, cartesianProduct, reduce;
-import std.range : iota, takeExactly;
-import std.array : array, replace;
-import std.conv : to;
-import std.format : format;
-import std.string : indexOf;
-import std.stdio;
-import std.file : exists;
-import std.exception : enforce;
-
-import asdf : deserializeAsdf = deserialize, Asdf, AsdfNode, parseJson, serializeToAsdf;
-import libmucor.jsonlops.jsonvalue;
-import libmucor.query.eval;
-import libmucor.serde : VcfIonRecord;
-
-import libmucor.khashl;
-import libmucor.error;
-import libmucor.query;
-import std.sumtype;
-import std.typecons : Tuple;
-import std.parallelism;
 
 char sep = '/';
 
@@ -551,7 +538,7 @@ unittest
         rmdirRecurse(dbname);
 
     {
-        parseVCF("../test/data/vcf_file.vcf", -1, false, false, "/tmp/test2.ion");
+        parseVCF("test/data/vcf_file.vcf", -1, false, false, "/tmp/test2.ion");
     }
 
     {

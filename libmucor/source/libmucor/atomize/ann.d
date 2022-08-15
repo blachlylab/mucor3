@@ -1,34 +1,24 @@
 module libmucor.atomize.ann;
 
-import std.stdio;
-import std.algorithm : splitter, map, count, canFind, countUntil;
-import std.array : array, split;
-import std.range : enumerate, chunks;
-import std.traits : ReturnType;
-import std.typecons : No;
-import std.range;
-
-import dhtslib.vcf;
-import htslib.hts_log;
-import libmucor.jsonlops;
-import libmucor.error;
-import libmucor.option;
+import option;
 import libmucor.atomize.util;
 import libmucor.serde;
-import libmucor.serde.ser;
-import mir.ser;
-import mir.ser.interfaces;
-import mir.serde : serdeGetSerializationKeysRecurse;
-import mir.parse : fromString;
+
+import std.array : array;
+import std.range;
 import std.container.array;
+
+import mir.ser;
+import mir.parse : fromString;
+
 
 /// Structured VCF String field 
 /// List of objects
 struct Annotations
 {
-    @serdeIgnoreOut /// slice of original string 
+    /// slice of original string 
     string original;
-    @serdeIgnoreOut /// range of individual annotations
+    /// range of individual annotations
     string frontVal;
     string other;
     bool empty;

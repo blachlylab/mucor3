@@ -1,6 +1,5 @@
 module libmucor.atomize.header;
 
-import libmucor.khashl;
 import dhtslib.vcf;
 
 struct HdrFieldInfo

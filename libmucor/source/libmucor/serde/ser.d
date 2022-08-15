@@ -102,7 +102,29 @@ struct VcfRecordSerializer
 /// Serialize multiple vcf records to a file
 /// in ion format
 /// Uses a global/shared VCF symbol table
+/// along with local symbol tables
 /// 
+/// Initial symbol table is built from vcf header. As new symbols are
+/// added from records, local symbol tables are written.
+/// 
+/// Layout of an ion file created from VCF:
+///
+/// $ion_1_0   // ion version bytes
+/// $ion_symbol_table::{  // primary symbol table
+///     symbols: ["CHROM", "POS", "REF" ... ]
+/// }
+/// $ion_symbol_table::{  // local symbol table that adds symbols to primary going forward
+///     imports:$ion_symbol_table,
+///     symbols: ["1", "A", "G", ... ]
+/// }
+/// {ion struct} // actual vcf record as ion
+/// {ion struct} // note: local symbol table only needed if new symbols are introduced
+/// {ion struct}
+/// $ion_symbol_table::{ // new symbols are introduced
+///     imports:$ion_symbol_table,
+///     symbols: ["2", "T", "G", ... ]
+/// }
+/// {ion struct}
 /// When this is serialized we serialize as such:
 /// [ion 4 byte prefix] + [shared symbol table ] + [ion data records]
 struct VcfSerializer
