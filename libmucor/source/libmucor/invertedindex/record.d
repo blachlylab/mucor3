@@ -6,6 +6,7 @@ import std.algorithm : std_map = map;
 import std.format;
 import std.array;
 import std.conv;
+import std.container.array;
 
 import libmucor.hts_endian;
 version(RealNumbers) import libmucor.fp80;
@@ -44,44 +45,44 @@ struct RecordStore(K, V)
 
     Result!(Option!(V), string) opIndex(K key)
     {
-        alias innerFun = (Option!(ubyte[]) x) => x.map!(y => deserialize!V(y));
-        return (*this.family)[serialize(key)].map!(x => innerFun(x));
+        alias innerFun = (Option!(Array!ubyte) x) => x.map!(y => deserialize!V(y));
+        return (*this.family)[serialize(key).data()].map!(x => innerFun(x));
     }
 
     auto opIndexAssign(V value, K key)
     {
-        return (*this.family)[serialize(key)] = serialize(value);
+        return (*this.family)[serialize(key).data()] = serialize(value).data();
     }
 
     static if (isArray!V && !isSomeString!V)
     {
         auto opIndexOpAssign(string op : "~")(ForeachType!V value, K key)
         {
-            this.family.opIndexOpAssign!op(serialize(value), serialize(key));
+            this.family.opIndexOpAssign!op(serialize(value).data(), serialize(key).data());
         }
     }
 
     auto byKeyValue()
     {
         auto r = this.family.iter;
-        return r.std_map!(x => tuple(deserialize!(K, true)(x[0]), deserialize!(V, true)(x[1])));
+        return r.std_map!(x => tuple(deserialize!(K, true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
     }
 
     auto filterOp(string op)(K key)
     {
         auto r = this.family.iter;
         static if (op == "<")
-            return r.lt(serialize(key)).std_map!(x => tuple(deserialize!(K,
-                    true)(x[0]), deserialize!(V, true)(x[1])));
+            return r.lt(serialize(key).data()).std_map!(x => tuple(deserialize!(K,
+                    true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
         else static if (op == "<=")
-            return r.lte(serialize(key)).std_map!(x => tuple(deserialize!(K,
-                    true)(x[0]), deserialize!(V, true)(x[1])));
+            return r.lte(serialize(key).data()).std_map!(x => tuple(deserialize!(K,
+                    true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
         else static if (op == ">")
-            return r.gt(serialize(key)).std_map!(x => tuple(deserialize!(K,
-                    true)(x[0]), deserialize!(V, true)(x[1])));
+            return r.gt(serialize(key).data()).std_map!(x => tuple(deserialize!(K,
+                    true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
         else static if (op == ">=")
-            return r.gte(serialize(key)).std_map!(x => tuple(deserialize!(K,
-                    true)(x[0]), deserialize!(V, true)(x[1])));
+            return r.gte(serialize(key).data()).std_map!(x => tuple(deserialize!(K,
+                    true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
         else
             static assert(0);
     }
@@ -89,8 +90,8 @@ struct RecordStore(K, V)
     auto filterRange(K start, K end)
     {
         auto r = this.family.iter;
-        return r.gte(serialize(start)).lt(serialize(end))
-            .std_map!(x => tuple(deserialize!(K, true)(x[0]), deserialize!(V, true)(x[1])));
+        return r.gte(serialize(start).data()).lt(serialize(end).data())
+            .std_map!(x => tuple(deserialize!(K, true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
     }
 }
 
@@ -111,7 +112,7 @@ union IndexValue
 
 struct CompositeKey
 {
-    const(char)[] key;
+    Array!char key;
     IndexValueType vtype;
 
     IndexValue val;
@@ -163,18 +164,19 @@ struct CompositeKey
 alias Hash2IonStore = RecordStore!(uint128, IonData);
 alias KVIndex = RecordStore!(CompositeKey, uint128[]);
 
-alias IonData = immutable(ubyte)[];
+alias IonData = Array!ubyte;
 
-auto serialize(T)(T val)
+auto serialize(T)(T val) @nogc nothrow @trusted
 {
     static if (is(T == IonData))
-        return cast(ubyte[]) val;
+        return val;
     else static if (isSomeString!T)
-        return cast(ubyte[]) val;
+        return Array!ubyte(cast(ubyte[]) val);
     else static if (is(T == CompositeKey))
     {
-        ubyte[] arr;
-        arr ~= cast(ubyte[]) val.key;
+        
+        Array!ubyte arr;
+        arr ~= cast(ubyte[]) val.key.data;
         arr ~= '\0';
         arr ~= cast(ubyte) val.vtype;
         final switch (val.vtype)
@@ -227,17 +229,18 @@ auto serialize(T)(T val)
     }
     else static if (is(T == uint128))
     {
-        ubyte[16] arr;
-        u64_to_le(val.data[0], arr.ptr);
-        u64_to_le(val.data[1], arr.ptr + 8);
+        Array!ubyte arr;
+        arr.length = 16;
+        u64_to_le(val.data[0], arr.data().ptr);
+        u64_to_le(val.data[1], arr.data().ptr + 8);
         return arr;
     }
     else static if (isArray!T)
     {
-        ubyte[] arr;
+        Array!ubyte arr;
         foreach (v; val)
         {
-            arr ~= serialize(v);
+            arr ~= serialize(v).data();
         }
         return arr;
 
@@ -246,16 +249,16 @@ auto serialize(T)(T val)
         static assert(0);
 }
 
-T deserialize(T, bool useGC = false)(ubyte[] val)
+T deserialize(T, bool useGC = false)(Array!ubyte val)
 {
     T ret;
     static if (is(T == IonData))
-        ret = val.dup;
+        return val;
     else static if (is(T == CompositeKey))
     {
-        import std.string;
+        import core.stdc.string : strlen;
 
-        ret.key = fromStringz(cast(char*) val.ptr);
+        ret.key = Array!char(val.data[0..strlen(cast(const(char)*)val.data.ptr)]);
         ret.vtype = cast(IndexValueType) val[ret.key.length + 1];
         final switch (ret.vtype)
         {
@@ -264,18 +267,19 @@ T deserialize(T, bool useGC = false)(ubyte[] val)
             break;
         case IndexValueType.Number:
             version(RealNumbers)
-                ret.val.n = bigEndianToNative(val[ret.key.length + 2 .. ret.key.length + 2 + 10][0 .. 10]);
+                ret.val.n = bigEndianToNative(val.data[ret.key.length + 2 .. ret.key.length + 2 + 10][0 .. 10]);
             else {
-                ret.val.n = bigEndianToNative!double(val[ret.key.length + 2 .. ret.key.length + 2 + 8][0 .. 8]);
+                ret.val.n = bigEndianToNative!double(val.data[ret.key.length + 2 .. ret.key.length + 2 + 8][0 .. 8]);
                 ret.val.n = - ret.val.n;
             }
 
             break;
         case IndexValueType.String:
             
-            ret.val.s = cast(const(char)[]) val[ret.key.length + 2 .. $];
+            ret.val.s = cast(const(char)[]) val.data[ret.key.length + 2 .. $];
             break;
         }
+        return ret;
     }
     else static if (isArray!T && isSomeString!(ForeachType!T))
     {
@@ -297,33 +301,26 @@ T deserialize(T, bool useGC = false)(ubyte[] val)
             // copy to string[]
             ret[i] = cast(ForeachType!T) arr;
         }
-
+        return ret;
     }
     else static if (is(T == uint128))
     {
-        ret = uint128([le_to_u64(val.ptr), le_to_u64(val.ptr + 8)]);
+        ret = uint128([le_to_u64(val.data().ptr), le_to_u64(val.data().ptr + 8)]);
+        return ret;
     }
     else static if (is(T == uint128[]))
     {
         ret.length = val.length / 16;
-        auto p = val.ptr;
+        auto p = val.data().ptr;
         for (auto i = 0; i < ret.length; i++)
         {
             ret[i] = uint128([le_to_u64(p), le_to_u64(p + 8)]);
             p += 16;
         }
+        return ret;
     }
     else
         static assert(0);
-
-    if (!useGC) {
-        import core.memory : GC;
-        GC.removeRange(val.ptr);
-        free(val.ptr);
-
-    }
-    val = [];
-    return ret;
 }
 
 unittest
@@ -373,13 +370,13 @@ unittest
     auto h2 = uint128.fromHexString("44630f65ef0a4cb1b065629923ccf249");
     auto h3 = uint128.fromHexString("f43fe659c1ed4d55b90b1b30a57eb92a");
 
-    records[h1] = `{key1:test,key2:1.2,key3:[1,2],key4:"test"}`.text2ion;
-    records[h2] = `{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`.text2ion;
-    records[h3] = `{key1:test3,key3:[1]}`.text2ion;
+    records[h1] = Array!ubyte(cast(ubyte[])`{key1:test,key2:1.2,key3:[1,2],key4:"test"}`.text2ion);
+    records[h2] = Array!ubyte(cast(ubyte[])`{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`.text2ion);
+    records[h3] = Array!ubyte(cast(ubyte[])`{key1:test3,key3:[1]}`.text2ion);
 
-    assert(records[h1].unwrap.unwrap.ion2text == `{key1:test,key2:1.2,key3:[1,2],key4:"test"}`);
-    assert(records[h2].unwrap.unwrap.ion2text == `{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`);
-    assert(records[h3].unwrap.unwrap.ion2text == `{key1:test3,key3:[1]}`);
+    assert(records[h1].unwrap.unwrap.data.ion2text == `{key1:test,key2:1.2,key3:[1,2],key4:"test"}`);
+    assert(records[h2].unwrap.unwrap.data.ion2text == `{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`);
+    assert(records[h3].unwrap.unwrap.data.ion2text == `{key1:test3,key3:[1]}`);
     idx[CompositeKey("key1", "test")] ~= h1;
     idx[CompositeKey("key1", "test2")] ~= h2;
     idx[CompositeKey("key1", "test3")] ~= h3;

@@ -23,8 +23,7 @@ DEALINGS IN THE SOFTWARE.  */
 
 import core.stdc.config;
 
-@system:
-@nogc:
+@system @nogc nothrow:
 
 /*
  * Compile-time endianness tests.
@@ -114,7 +113,8 @@ private struct int8_t
 {
     byte _val;
     alias _val this;
-
+    @system @nogc nothrow:
+    
     pragma(inline, true) this(byte x) @nogc
     {
         _val = x;
@@ -152,6 +152,7 @@ private struct int16_t
     short _val;
     alias _val this;
 
+    @system @nogc nothrow:
     pragma(inline, true) this(short x) @nogc
     {
         _val = x;

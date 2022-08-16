@@ -14,6 +14,7 @@ import std.file : isDir, exists;
 import std.array : array;
 import std.string : fromStringz, toStringz;
 import std.format : format;
+import std.container : Array;
 
 import core.memory : GC;
 import core.stdc.string : strlen;
@@ -186,9 +187,9 @@ struct RocksDB
         return this.get(key, &this.columnFamilies[familyName]);
     }
 
-    RocksResult!(Option!(ubyte[])) get(const(ubyte)[] key, ColumnFamily* family = null)
+    RocksResult!(Option!(Array!ubyte)) get(const(ubyte)[] key, ColumnFamily* family = null)
     {
-        RocksResult!(Option!(ubyte[])) ret;
+        RocksResult!(Option!(Array!ubyte)) ret;
         size_t len;
         char* err;
         ubyte* value;
@@ -208,11 +209,10 @@ struct RocksDB
         }
         else
         {
-            Option!(ubyte[]) val;
+            Option!(Array!ubyte) val;
             if (value)
             {
-                GC.addRange(value, len);
-                val = Some(cast(ubyte[]) value[0 .. len]);
+                val = Some(Array!ubyte(cast(ubyte[])value[0 .. len]));
             }
             else
             {

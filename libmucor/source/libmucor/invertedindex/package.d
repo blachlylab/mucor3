@@ -15,6 +15,7 @@ import std.stdio;
 import std.parallelism;
 import std.algorithm : balancedParens;
 import std.datetime.stopwatch : StopWatch;
+import std.container.array;
 
 import mir.ion.value;
 
@@ -63,7 +64,7 @@ struct InvertedIndex
         auto keys = this.store.getIonKeys;
         if (wildcard == -1)
         {
-            if (!(key in *keys))
+            if (!(Array!char(key) in *keys))
             {
                 return [];
             }
@@ -76,7 +77,7 @@ struct InvertedIndex
         {
             key = key.replace("*", ".*");
             auto reg = regex("^" ~ key ~ "$");
-            ret = keys.byKey.filter!(x => !(x.matchFirst(reg).empty)).array;
+            ret = keys.byKey.filter!(x => !(x.data().matchFirst(reg).empty)).map!(x => x.data.dup).array;
             if (ret.length == 0)
             {
                 log_warn(__FUNCTION__,
@@ -224,6 +225,7 @@ unittest
     }
     {
         auto idx = InvertedIndex(dbname);
+        idx.store.print;
         assert(idx.query("test2", "foo").byKey.array == [checksums[0]]);
         assert(idx.queryRange("test3", 1, 3).byKey.array == [
                 checksums[0], checksums[1]
@@ -495,12 +497,13 @@ auto query(string outfn, ref InvertedIndex idx, string queryStr)
     sw.stop;
     log_info(__FUNCTION__, "%d records matched your query", idxs.count);
     SymbolTable table;
-    auto tdata = cast(const(ubyte)[]) idx.store.getSharedSymbolTable.unwrap.unwrap;
-    table.loadSymbolTable(tdata);
+    auto tdata = idx.store.getSharedSymbolTable.unwrap.unwrap;
+    auto tarr = cast(const(ubyte)[])tdata.data();
+    table.loadSymbolTable(tarr);
     auto serializer = VcfSerializer(outfn, cast(string[]) table.table[10 .. $], SerdeTarget.ion);
     foreach (d; idx.convertIdsToIon(idxs))
     {
-        serializer.putData(d);
+        serializer.putData(d.data());
     }
 }
 

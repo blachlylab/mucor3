@@ -13,6 +13,7 @@ import std.algorithm : map, filter, joiner, each;
 import std.range : inputRangeObject, InputRangeObject, chain;
 import std.array : array;
 import std.traits;
+import std.container : Array;
 
 import mir.ion.value;
 import mir.ser.ion;
@@ -63,8 +64,9 @@ struct InvertedIndexStore
             if (!existing.isNone)
             {
                 this.currentSymbolTable = new SymbolTable;
-                auto d = cast(const(ubyte)[]) existing.unwrap;
-                this.currentSymbolTable.loadSymbolTable(d);
+                auto d = existing.unwrap;
+                auto arr = cast(const(ubyte)[]) d.data();
+                this.currentSymbolTable.loadSymbolTable(arr);
                 this.newSymbolTable = new SymbolTableBuilder;
                 foreach (key; this.currentSymbolTable.table[10 .. $])
                 {
@@ -82,9 +84,9 @@ struct InvertedIndexStore
 
     /// load string keys from db that have been observed in data
     /// i.e INFO/ANN, CHROM, POS, ...
-    khashlSet!(const(char)[])* getIonKeys()
+    khashlSet!(Array!char)* getIonKeys()
     {
-        return this.idx.byKeyValue().map!(x => cast(const(char)[])(x[0].key.dup)).collect;
+        return this.idx.byKeyValue().map!(x => x[0].key).collect;
     }
 
     void storeSharedSymbolTable(SymbolTable* lastSymbolTable)
@@ -98,12 +100,12 @@ struct InvertedIndexStore
             table.insert(key.dup);
         }
         table.finalize;
-        this.db[serialize("sharedTable")] = table.data;
+        this.db[serialize("sharedTable").data()] = table.data;
     }
 
     auto getSharedSymbolTable()
     {
-        return this.db[serialize("sharedTable")];
+        return this.db[serialize("sharedTable").data()];
     }
 
     void insert(IonStructWithSymbols data)
@@ -118,7 +120,7 @@ struct InvertedIndexStore
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
 
-        this.records[hash] = serializeIon(data);
+        this.records[hash] = Array!ubyte(serializeIon(data));
 
         foreach (key, value; data)
         {
@@ -160,7 +162,7 @@ struct InvertedIndexStore
         handleIonError(err);
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
-        this.records[hash] = cast(immutable(ubyte)[]) rec.toBytes;
+        this.records[hash] = Array!ubyte(rec.toBytes);
 
         foreach (key, value; data)
         {

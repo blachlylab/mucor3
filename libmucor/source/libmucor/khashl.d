@@ -668,6 +668,10 @@ template kh_hash(T)
 {
     pragma(inline, true) nothrow @nogc
     {
+        auto kh_hash_func(T: Array!char)(const(T) key)
+        {
+            return kh_hash_func(key.data);
+        }
         auto kh_hash_func(T)(const(T) key)
                 if (is(T == uint) || is(T == uint32_t) || is(T == khint32_t))
         {
@@ -833,6 +837,17 @@ template kh_equal(T, bool cached)
                 return (a.hash == b.hash) && (a.key == b.key);
             else
                 return (a.key == b.key);
+        }
+
+        bool kh_hash_equal(T)(const(T) a, const(T) b)
+                if (is(typeof(__traits(getMember, T, "key")) == Array!char))
+        {
+            /// If using hash-caching we check equality of the hashes first 
+            /// before checking the equality of keys themselves 
+            static if (cached)
+                return (a.hash == b.hash) && (a.key.data == b.key.data);
+            else
+                return (a.key.data == b.key.data);
         }
 
         auto kh_hash_equal(T)(const(T) a, const(T) b)
