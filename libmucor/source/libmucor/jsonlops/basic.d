@@ -464,7 +464,7 @@ auto getAllKeys(Asdf obj, char[] sep = ['/'])
         }
     }
 
-    khashlSet!(string, true) ret;
+    khashlSet!(string, true, true) ret;
     foreach (k; GetAllKeys(obj))
         ret.insert(k.idup);
 

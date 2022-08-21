@@ -18,7 +18,7 @@ import libmucor.serde;
 import libmucor.serde.deser : parseValue;
 import libmucor.khashl;
 import std.container.array;
-
+import memory;
 struct SymbolTableBuilder
 {
 
@@ -29,10 +29,10 @@ struct SymbolTableBuilder
     /// new yet-to-be serialized symbol hashmap
     khashl!(uint, size_t) newSymbolsMap;
     /// new symbols
-    Array!(const(char)[]) syms;
+    Buffer!(const(char)[]) syms;
     /// concatenated new symbols
     /// just used for hashing
-    Array!(char) dataForHashing;
+    Buffer!(char) dataForHashing;
     /// total number of symbols
     size_t numSymbols = IonSystemSymbol.max + 1;
     bool first = true;
@@ -48,7 +48,7 @@ struct SymbolTableBuilder
         p = k in newSymbolsMap;
         if (p)
             return *p;
-        dataForHashing ~= cast(ubyte[])key;
+        dataForHashing ~= cast(char[])key;
         newSymbolsMap[k] = numSymbols++;
         syms ~= key;
         return numSymbols - 1;
@@ -56,7 +56,7 @@ struct SymbolTableBuilder
 
     ubyte[] getRawSymbols()
     {
-        return cast(ubyte[]) dataForHashing.data;
+        return cast(ubyte[]) dataForHashing[];
     }
 
     // $ion_symbol_table::
@@ -84,7 +84,7 @@ struct SymbolTableBuilder
             auto listState = serializer.listBegin();
 
             auto n = currentSymbolsMap.kh_size + IonSystemSymbol.max + 1;
-            foreach (i, const(char)[] key; syms.data[])
+            foreach (i, const(char)[] key; syms[])
             {
                 serializer.putValue(key);
                 auto k = kh_hash!(const(char)[]).kh_hash_func(key);
@@ -97,7 +97,10 @@ struct SymbolTableBuilder
 
             this.syms.length = 0;
             this.dataForHashing.length = 0;
-            this.newSymbolsMap.kh_clear();
+            this.dataForHashing.deallocate;
+            this.syms.deallocate;
+            
+            this.newSymbolsMap.kh_release;
             this.first = false;
             return this.serializer.data;
         }
@@ -107,7 +110,9 @@ struct SymbolTableBuilder
 
 struct SymbolTable
 {
-    const(char[])[] table;
+    Buffer!(char) rawdata;
+    Buffer!(size_t) lengths;
+    @nogc nothrow:
 
     void createFromHeaderConfig(ref HeaderConfig hdrInfo)
     {
@@ -200,14 +205,42 @@ struct SymbolTable
         assert(!err, ionErrorMsg(err));
     }
 
+    auto dup() {
+        SymbolTable t;
+        t.rawdata = this.rawdata.dup;
+        t.lengths = this.lengths.dup;
+        return t;
+    }
+
+    void deallocate() {
+        this.rawdata.deallocate;
+        this.lengths.deallocate;
+    }
+
+    auto table() {
+        Buffer!(char[]) arr;
+        auto a = rawdata[];
+        foreach (l; lengths)
+        {
+            arr ~= a[0..l];
+            a = a[l..$];
+        }
+        return arr;
+    }
+
     /// scraped and modified from here: 
     IonErrorCode loadSymbolTable(ref const(ubyte)[] d)
     {
 
-        void resetSymbolTable()
+        void resetSymbolTable() @nogc nothrow 
         {
-            table = [];
-            table ~= IonSystemSymbolTable_v1;
+            lengths.length = 0;
+            rawdata.length = 0;
+            foreach (key; IonSystemSymbolTable_v1)
+            {
+                rawdata ~= cast(char[])key;
+                lengths ~= key.length;
+            }
         }
 
         IonErrorCode error;
@@ -325,7 +358,8 @@ struct SymbolTable
                         error = symbolValue.get(symbol);
                         if (error)
                             goto C;
-                        table ~= symbol.dup;
+                        rawdata ~= cast(char[])symbol;
+                        lengths ~= symbol.length;
                     }
                 }
             }
@@ -343,7 +377,7 @@ struct SymbolTable
 
     auto toBytes()
     {
-        IonSymbolTable!true tmptable;
+        IonSymbolTable!false tmptable;
         tmptable.initialize;
         foreach (const(char[]) key; this.table[10 .. $])
         {

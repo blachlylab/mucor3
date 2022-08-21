@@ -14,7 +14,7 @@ import std.file : isDir, exists;
 import std.array : array;
 import std.string : fromStringz, toStringz;
 import std.format : format;
-import std.container : Array;
+import memory;
 
 import core.memory : GC;
 import core.stdc.string : strlen;
@@ -187,9 +187,9 @@ struct RocksDB
         return this.get(key, &this.columnFamilies[familyName]);
     }
 
-    RocksResult!(Option!(Array!ubyte)) get(const(ubyte)[] key, ColumnFamily* family = null)
+    RocksResult!(Option!(Buffer!ubyte)) get(const(ubyte)[] key, ColumnFamily* family = null)
     {
-        RocksResult!(Option!(Array!ubyte)) ret;
+        RocksResult!(Option!(Buffer!ubyte)) ret;
         size_t len;
         char* err;
         ubyte* value;
@@ -209,10 +209,10 @@ struct RocksDB
         }
         else
         {
-            Option!(Array!ubyte) val;
+            Option!(Buffer!ubyte) val;
             if (value)
             {
-                val = Some(Array!ubyte(cast(ubyte[])value[0 .. len]));
+                val = Some(Buffer!ubyte(cast(ubyte[])value[0 .. len]));
             }
             else
             {
@@ -462,16 +462,16 @@ unittest
 
     // Test string putting and getting
     db[cast(ubyte[]) "key"] = cast(ubyte[]) "value";
-    assert(db[cast(ubyte[]) "key"].unwrap.unwrap == cast(ubyte[]) "value");
+    assert(db[cast(ubyte[]) "key"].unwrap.unwrap[] == cast(ubyte[]) "value");
     db[cast(ubyte[]) "key"] = cast(ubyte[]) "value2";
-    assert(db[cast(ubyte[]) "key"].unwrap.unwrap == cast(ubyte[]) "value2");
+    assert(db[cast(ubyte[]) "key"].unwrap.unwrap[] == cast(ubyte[]) "value2");
 
     ubyte[] key = ['\x00', '\x00'];
     ubyte[] value = ['\x01', '\x02'];
 
     // Test byte based putting / getting
     db[key] = value;
-    assert(db[key].unwrap.unwrap == value);
+    assert(db[key].unwrap.unwrap[] == value);
     db.remove(key);
 
     // Benchmarks
@@ -488,7 +488,7 @@ unittest
     {
         for (int i = 0; i < times; i++)
         {
-            assert(db[cast(ubyte[]) i.to!string].unwrap.unwrap == cast(ubyte[]) i.to!string);
+            assert(db[cast(ubyte[]) i.to!string].unwrap.unwrap[] == cast(ubyte[]) i.to!string);
         }
     }
 

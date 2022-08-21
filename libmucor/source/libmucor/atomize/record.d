@@ -70,19 +70,19 @@ struct VcfRequiredFields(bool singleSample, bool singleAlt)
         }
 
         serializer.putKey("REF");
-        serializer.putSymbol(this.ref_);
+        serializer.putValue(this.ref_);
 
         serializer.putKey("ALT");
         static if (singleAlt)
         {
-            serializer.putSymbol(this.alt);
+            serializer.putValue(this.alt);
         }
         else
         {
             auto l = serializer.listBegin;
             foreach (ref string key; this.alt)
             {
-                serializer.putSymbol(key);
+                serializer.putValue(key);
             }
             serializer.listEnd(l);
         }

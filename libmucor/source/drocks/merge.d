@@ -40,7 +40,7 @@ extern (C) @system nothrow @nogc
             const(size_t)* operands_list_length, int num_operands,
             ubyte* success, size_t* new_value_length)
     {
-        import core.stdc.stdio;
+        import htslib.kroundup;
 
         auto sum = 0;
         for (int i = 0; i < num_operands; i++)
@@ -133,9 +133,9 @@ unittest
 
     // Test string putting and getting
     db[cast(ubyte[]) "key"] = cast(ubyte[]) "value";
-    assert(db[cast(ubyte[]) "key"].unwrap.unwrap == cast(ubyte[]) "value");
+    assert(db[cast(ubyte[]) "key"].unwrap.unwrap[] == cast(ubyte[]) "value");
     db[cast(ubyte[]) "key"] = cast(ubyte[]) "value2";
-    assert(db[cast(ubyte[]) "key"].unwrap.unwrap == cast(ubyte[]) "value2");
+    assert(db[cast(ubyte[]) "key"].unwrap.unwrap[] == cast(ubyte[]) "value2");
 
     db[cast(ubyte[]) "key"] ~= cast(ubyte[]) "value3";
     db[cast(ubyte[]) "key"] ~= cast(ubyte[]) "value4";
@@ -143,8 +143,8 @@ unittest
     db[cast(ubyte[]) "key2"] ~= cast(ubyte[]) "value3";
     db[cast(ubyte[]) "key2"] ~= cast(ubyte[]) "value4";
 
-    assert(db[cast(ubyte[]) "key"].unwrap.unwrap == cast(ubyte[]) "value2value3value4");
-    assert(db[cast(ubyte[]) "key2"].unwrap.unwrap == cast(ubyte[]) "value3value4");
+    assert(db[cast(ubyte[]) "key"].unwrap.unwrap[] == cast(ubyte[]) "value2value3value4");
+    assert(db[cast(ubyte[]) "key2"].unwrap.unwrap[] == cast(ubyte[]) "value3value4");
 
     import std.file;
 

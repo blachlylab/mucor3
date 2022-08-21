@@ -9,12 +9,9 @@
 	"dependencies": {
 		"asdf": "~>0.7.8",
 		"dhtslib": "~>0.14.0+htslib-1.13",
-		"mir-ion": "~>1.1.0-rc3",
-		"drocks": {
-			"path": "../drocks"
-		},
-		"option": {
-			"path": "../option"
-		}
-	}
+		"mir-ion": "~>1.1.0-rc3"
+	},
+	"sourceFiles": ["../rocksdb/librocksdb.a"],
+    "libs": ["bz2", "stdc++", "zstd"],
+	"preGenerateCommands": ["cd ../rocksdb; make static_lib"]
 }

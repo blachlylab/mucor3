@@ -261,8 +261,10 @@ struct InfoSingleAlt
             auto l = serializer.listBegin;
             foreach (ann; anns)
             {
-                if (ann.allele != allele)
+                if (ann.allele != allele){
+                    ann.effect.deallocate;
                     continue;
+                }
                 ann.serialize(serializer);
             }
             serializer.listEnd(l);

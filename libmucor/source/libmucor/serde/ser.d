@@ -81,18 +81,16 @@ struct VcfRecordSerializer
         return serializer.listEnd(state);
     }
 
-    const(ubyte)[] finalize()
+    Buffer!ubyte finalize()
     {
         import std.stdio;
 
         serializer.finalize;
         auto symData = symbols.serialize;
-        return () @trusted { 
-            import core.stdc.stdlib : malloc;
-            auto len = symData.length + serializer.data.length;
-            auto data = (cast(ubyte*)malloc(len))[0..len];
-            data[0..symData.length] = symData[];
-            data[symData.length .. $] = serializer.data[];
+        return () @trusted {
+            Buffer!ubyte data;
+            data ~= cast(ubyte[])symData[];
+            data ~= serializer.data[];
             return data; 
         }();
     }
@@ -131,7 +129,7 @@ struct VcfSerializer
 {
     Bgzf outfile;
 
-    Array!(char) fn;
+    Buffer!(char) fn;
 
     SymbolTableBuilder symbols;
 
@@ -141,12 +139,12 @@ struct VcfSerializer
 
     this(string fn, ref HeaderConfig hdrInfo, SerdeTarget target)
     {
-        this.fn = Array!(char)(cast(char[])fn);
+        this.fn = Buffer!(char)(cast(char[])fn);
         this.fn ~= '\0';
 
         char[2] mode = ['w','\0'];
 
-        this.outfile = Bgzf(bgzf_open(this.fn.data.ptr, mode.ptr));
+        this.outfile = Bgzf(bgzf_open(this.fn.ptr, mode.ptr));
         initializeTableFromHeader(hdrInfo);
         writeSharedTable;
         this.target = target;
@@ -172,12 +170,12 @@ struct VcfSerializer
 
     this(string fn, string[] symbols, SerdeTarget target)
     {
-        this.fn = Array!(char)(cast(char[])fn);
+        this.fn = Buffer!(char)(cast(char[])fn);
         this.fn ~= '\0';
 
         char[2] mode = ['w','\0'];
 
-        this.outfile = Bgzf(bgzf_open(this.fn.data.ptr, mode.ptr));
+        this.outfile = Bgzf(bgzf_open(this.fn.ptr, mode.ptr));
         initializeTableFromStrings(symbols);
         writeSharedTable;
         this.target = target;
@@ -275,8 +273,7 @@ struct VcfSerializer
         if(_expect(err < 0, false)) {
             log_err(__FUNCTION__, "Error writing data");
         }
-        free(cast(void*)d.ptr);
-        d = [];
+        d.deallocate;
     }
 
     void putData(const(ubyte)[] d)
@@ -289,11 +286,14 @@ struct VcfSerializer
 
     void writeSharedTable()
     {
-        auto d = ionPrefix ~ symbols.serialize;
+        Buffer!ubyte d;
+        d ~= cast(ubyte[])ionPrefix;
+        d ~= cast(ubyte[])symbols.serialize[];
         auto err = bgzf_write(this.outfile, d.ptr, d.length);
         if(_expect(err < 0, false)) {
             log_err(__FUNCTION__, "Error writing data");
         }
+        d.deallocate;
     }
 
 }
@@ -303,7 +303,7 @@ auto serializeVcfToIon(T)(T val, string[] symbols = [], SerdeTarget serdeTarget 
 {
     VcfSerializer ser = VcfSerializer(symbols, serdeTarget);
     val.serialize(ser.recSerializer);
-    return ionPrefix ~ ser.recSerializer.finalize;
+    return ionPrefix ~ ser.recSerializer.finalize[].dup;
 }
 
 /// used for debug/testing 
@@ -312,5 +312,5 @@ auto serializeVcfToIon(T)(T val, ref HeaderConfig hdrInfo, SerdeTarget serdeTarg
 {
     VcfSerializer ser = VcfSerializer(hdrInfo, serdeTarget);
     val.serialize(ser.recSerializer);
-    return ionPrefix ~ ser.recSerializer.finalize;
+    return ionPrefix ~ ser.recSerializer.finalize[].dup;
 }

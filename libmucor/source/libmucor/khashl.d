@@ -32,6 +32,7 @@ import asdf;
 import libmucor.invertedindex.record : uint256, uint128, toHash;
 import libmucor.jsonlops.jsonvalue : JSONValue;
 import std.sumtype : match;
+import std.algorithm : swap;
 
 /*!
   @header
@@ -43,7 +44,7 @@ enum AC_VERSION_KHASHL_H = "0.1";
 import core.stdc.stdlib;
 import core.stdc.string;
 import core.stdc.limits;
-import std.container.array;
+import memory;
 
 /* compiler specific configuration */
 
@@ -57,17 +58,17 @@ alias khiter_t = khint_t;
 pragma(inline, true)
 {
     @nogc nothrow:
-    auto __kh_used(T)(const(Array!khint32_t) flag, T i)
+    auto __kh_used(T, L)(ref L flag, T i)
     {
         return (flag[i >> 5] >> (i & 0x1fU) & 1U);
     }
 
-    void __kh_set_used(T)(Array!khint32_t flag, T i)
+    void __kh_set_used(T, L)(ref L flag, T i)
     {
         (flag[i >> 5] |= 1U << (i & 0x1fU));
     }
 
-    void __kh_set_unused(T)(Array!khint32_t flag, T i)
+    void __kh_set_unused(T, L)(ref L flag, T i)
     {
         (flag[i >> 5] &= ~(1U << (i & 0x1fU)));
     }
@@ -100,14 +101,14 @@ pragma(inline, true)
     checking the key equalitys and the put and get methods to make sure they don't recompute the hashes.
 **/
 
-template khashlSet(KT, bool cached = false)
+template khashlSet(KT, bool cached = false, bool useGC = false)
 {
-    alias khashlSet = khashl!(KT, ubyte, false, cached);
+    alias khashlSet = khashl!(KT, ubyte, false, cached, useGC);
 }
 
 alias StringSet = khashlSet!(string, true);
 
-struct khashl(KT, VT, bool kh_is_map = true, bool cached = false) if (!isSigned!KT) // @suppress(dscanner.style.phobos_naming_convention)
+struct khashl(KT, VT, bool kh_is_map = true, bool cached = false, bool useGC = false) if (!isSigned!KT) // @suppress(dscanner.style.phobos_naming_convention)
 {
     nothrow:
     static assert(kh_is_map || is(VT == ubyte));
@@ -127,8 +128,8 @@ struct khashl(KT, VT, bool kh_is_map = true, bool cached = false) if (!isSigned!
     }
 
     khint_t bits, count;
-    Array!khint32_t used;
-    Array!Bucket keys;
+    Buffer!(khint32_t, useGC) used;
+    Buffer!(Bucket, useGC) keys;
 
 pragma(inline, true):
     // ~this()
@@ -450,18 +451,8 @@ pragma(inline, true):
     void kh_release()
     {
         this.kh_clear;
-        import std.algorithm : move;
-
-        KT key;
-        VT val;
-        khint_t itr;
-        while (itr < this.kh_end())
-        {
-            move(this.keys[itr].key, key);
-            static if (kh_is_map)
-                move(this.keys[itr].val, val);
-            itr++;
-        }
+        this.keys.deallocate;
+        this.used.deallocate;
     }
 
     khint_t kh_getp(const(Bucket)* key) const
@@ -494,7 +485,7 @@ pragma(inline, true):
 
     int kh_resize(khint_t new_n_buckets)
     {
-        Array!khint32_t new_used;
+        Buffer!(khint32_t, useGC) new_used;
         khint_t j = 0, x = new_n_buckets, n_buckets, new_bits, new_mask;
         while ((x >>= 1) != 0)
             ++j;
@@ -505,10 +496,11 @@ pragma(inline, true):
         if (this.count > (new_n_buckets >> 1) + (new_n_buckets >> 2))
             return 0; /* requested size is too small */
         new_used.length = __kh_fsize(new_n_buckets);
+        new_used[] = 0;
         // memset(new_used, 0, __kh_fsize(new_n_buckets) * khint32_t.sizeof);
-        if (!new_used.data.ptr)
+        if (!new_used.ptr)
             return -1; /* not enough memory */
-        n_buckets = this.keys.data.ptr ? 1U << this.bits : 0U;
+        n_buckets = this.keys.ptr ? 1U << this.bits : 0U;
         if (n_buckets < new_n_buckets)
         { /* expand */
             this.keys.length = new_n_buckets;
@@ -538,16 +530,18 @@ pragma(inline, true):
                 __kh_set_used(new_used, i);
                 if (i < n_buckets && __kh_used(this.used, i))
                 { /* kick out the existing element */
-                    {
-                        Bucket tmp = this.keys[i];
-                        this.keys[i] = key;
-                        key = tmp;
-                    }
+                    swap(this.keys[i], key);
+                    // {
+                    //     Bucket tmp = this.keys[i];
+                    //     this.keys[i] = key;
+                    //     key = tmp;
+                    // }
                     __kh_set_unused(this.used, i); /* mark it as deleted in the old hash table */
                 }
                 else
                 { /* write the element and jump out of the loop */
-                    this.keys[i] = key;
+                    swap(this.keys[i], key);
+                    // this.keys[i] = key;
                     break;
                 }
             }
@@ -555,6 +549,7 @@ pragma(inline, true):
         if (n_buckets > new_n_buckets) /* shrink the hash table */
             this.keys.length = new_n_buckets;
         // kfree(this.used); /* free the working space */
+        this.used.deallocate;
         this.used = new_used, this.bits = new_bits;
         return 0;
     }
@@ -562,7 +557,7 @@ pragma(inline, true):
     khint_t kh_putp(const(Bucket)* key, int* absent)
     {
         khint_t n_buckets, i, last, mask;
-        n_buckets = this.keys.data.ptr ? 1U << this.bits : 0U;
+        n_buckets = this.keys.ptr ? 1U << this.bits : 0U;
         *absent = -1;
         if (this.count >= (n_buckets >> 1) + (n_buckets >> 2))
         { /* rehashing */
@@ -658,7 +653,7 @@ pragma(inline, true):
 
     auto kh_capacity() const
     {
-        return this.keys.data.ptr ? 1U << this.bits : 0U;
+        return this.keys.ptr ? 1U << this.bits : 0U;
     }
 
 }
@@ -668,9 +663,9 @@ template kh_hash(T)
 {
     pragma(inline, true) nothrow @nogc
     {
-        auto kh_hash_func(T: Array!char)(const(T) key)
+        auto kh_hash_func(T: const Buffer!char)(T key)
         {
-            return kh_hash_func(key.data);
+            return kh_hash_func(key[]);
         }
         auto kh_hash_func(T)(const(T) key)
                 if (is(T == uint) || is(T == uint32_t) || is(T == khint32_t))
@@ -769,7 +764,12 @@ template kh_hash(T)
 
 auto collect(R)(R range)
 {
-    khashlSet!(ElementType!R)* set = new khashlSet!(ElementType!R);
+    static if(isSomeString!(ElementType!R)) {
+        khashlSet!(ElementType!R, true, true)* set = new khashlSet!(ElementType!R, true, true);
+    } else {
+        khashlSet!(ElementType!R)* set = new khashlSet!(ElementType!R);
+    }
+    
     foreach (e; range)
     {
         set.insert(e);
@@ -840,14 +840,14 @@ template kh_equal(T, bool cached)
         }
 
         bool kh_hash_equal(T)(const(T) a, const(T) b)
-                if (is(typeof(__traits(getMember, T, "key")) == Array!char))
+                if (is(typeof(__traits(getMember, T, "key")) == Buffer!char))
         {
             /// If using hash-caching we check equality of the hashes first 
             /// before checking the equality of keys themselves 
             static if (cached)
                 return (a.hash == b.hash) && (a.key.data == b.key.data);
             else
-                return (a.key.data == b.key.data);
+                return (a.key == b.key);
         }
 
         auto kh_hash_equal(T)(const(T) a, const(T) b)
@@ -927,8 +927,8 @@ unittest
 {
     import std.array : array;
 
-    khashlSet!(string) a;
-    khashlSet!(string) b;
+    khashlSet!(string, false, true) a;
+    khashlSet!(string, false, true) b;
 
     a.insert("test1");
     a.insert("test2");
@@ -946,4 +946,19 @@ unittest
     assert((a | b).byKey.array == ["test4", "test1", "test3", "test2"]);
     assert((a - b).byKey.array == ["test2"]);
     assert((b - a).byKey.array == ["test4"]);
+    a.kh_release;
+    b.kh_release;
+}
+
+unittest
+{
+    khashl!(uint, int) hm;
+    foreach(i;0..10000){
+        hm[i] = i;
+    }
+
+    foreach(i;0..10000){
+        assert(hm[i] == i);
+    }
+    hm.kh_release;
 }

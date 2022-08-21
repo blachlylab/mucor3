@@ -9,6 +9,7 @@ import std.conv;
 import std.container.array;
 
 import libmucor.hts_endian;
+import memory;
 version(RealNumbers) import libmucor.fp80;
 else import std.bitmanip : nativeToBigEndian, bigEndianToNative;
 import option;
@@ -45,44 +46,54 @@ struct RecordStore(K, V)
 
     Result!(Option!(V), string) opIndex(K key)
     {
-        alias innerFun = (Option!(Array!ubyte) x) => x.map!(y => deserialize!V(y));
-        return (*this.family)[serialize(key).data()].map!(x => innerFun(x));
+        alias innerFun = (Option!(Buffer!ubyte) x) => x.map!(y => deserialize!V(y));
+        auto k = serialize(key);
+        scope(exit) k.deallocate;
+        return (*this.family)[k[]].map!(x => innerFun(x));
     }
 
     auto opIndexAssign(V value, K key)
     {
-        return (*this.family)[serialize(key).data()] = serialize(value).data();
+        auto k = serialize(key);
+        auto v = serialize(value);
+        scope(exit) k.deallocate;
+        scope(exit) v.deallocate;
+        return (*this.family)[k[]] = v[];
     }
 
     static if (isArray!V && !isSomeString!V)
     {
         auto opIndexOpAssign(string op : "~")(ForeachType!V value, K key)
         {
-            this.family.opIndexOpAssign!op(serialize(value).data(), serialize(key).data());
+            auto k = serialize(key);
+            auto v = serialize(value);
+            scope(exit) k.deallocate;
+            scope(exit) v.deallocate;
+            this.family.opIndexOpAssign!op(v[], k[]);
         }
     }
 
     auto byKeyValue()
     {
         auto r = this.family.iter;
-        return r.std_map!(x => tuple(deserialize!(K, true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
+        return r.std_map!(x => tuple(deserialize!K(x[0]), deserialize!V(x[1])));
     }
 
     auto filterOp(string op)(K key)
     {
         auto r = this.family.iter;
         static if (op == "<")
-            return r.lt(serialize(key).data()).std_map!(x => tuple(deserialize!(K,
-                    true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
+            return r.lt(serialize(key)[]).std_map!(x => tuple(deserialize!(K,
+                    true)(x[0]), deserialize!V(x[1])));
         else static if (op == "<=")
-            return r.lte(serialize(key).data()).std_map!(x => tuple(deserialize!(K,
-                    true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
+            return r.lte(serialize(key)[]).std_map!(x => tuple(deserialize!(K,
+                    true)(x[0]), deserialize!V(x[1])));
         else static if (op == ">")
-            return r.gt(serialize(key).data()).std_map!(x => tuple(deserialize!(K,
-                    true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
+            return r.gt(serialize(key)[]).std_map!(x => tuple(deserialize!(K,
+                    true)(x[0]), deserialize!V(x[1])));
         else static if (op == ">=")
-            return r.gte(serialize(key).data()).std_map!(x => tuple(deserialize!(K,
-                    true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
+            return r.gte(serialize(key)[]).std_map!(x => tuple(deserialize!(K,
+                    true)(x[0]), deserialize!V(x[1])));
         else
             static assert(0);
     }
@@ -90,8 +101,8 @@ struct RecordStore(K, V)
     auto filterRange(K start, K end)
     {
         auto r = this.family.iter;
-        return r.gte(serialize(start).data()).lt(serialize(end).data())
-            .std_map!(x => tuple(deserialize!(K, true)(Array!ubyte(x[0])), deserialize!(V, true)(Array!ubyte(x[1]))));
+        return r.gte(serialize(start)[]).lt(serialize(end)[])
+            .std_map!(x => tuple(deserialize!K(x[0]), deserialize!V(x[1])));
     }
 }
 
@@ -112,7 +123,7 @@ union IndexValue
 
 struct CompositeKey
 {
-    Array!char key;
+    Buffer!char key;
     IndexValueType vtype;
 
     IndexValue val;
@@ -164,19 +175,19 @@ struct CompositeKey
 alias Hash2IonStore = RecordStore!(uint128, IonData);
 alias KVIndex = RecordStore!(CompositeKey, uint128[]);
 
-alias IonData = Array!ubyte;
+alias IonData = Buffer!ubyte;
 
 auto serialize(T)(T val) @nogc nothrow @trusted
 {
     static if (is(T == IonData))
         return val;
     else static if (isSomeString!T)
-        return Array!ubyte(cast(ubyte[]) val);
+        return Buffer!ubyte(cast(ubyte[]) val);
     else static if (is(T == CompositeKey))
     {
         
-        Array!ubyte arr;
-        arr ~= cast(ubyte[]) val.key.data;
+        Buffer!ubyte arr;
+        arr ~= cast(ubyte[]) val.key[];
         arr ~= '\0';
         arr ~= cast(ubyte) val.vtype;
         final switch (val.vtype)
@@ -193,7 +204,8 @@ auto serialize(T)(T val) @nogc nothrow @trusted
             }
             return arr;
         case IndexValueType.String:
-            return arr ~ cast(ubyte[]) val.val.s;
+            arr ~= cast(ubyte[]) val.val.s;
+            return arr;
         }
     }
     else static if (isArray!T && isSomeString!(ForeachType!T))
@@ -229,18 +241,18 @@ auto serialize(T)(T val) @nogc nothrow @trusted
     }
     else static if (is(T == uint128))
     {
-        Array!ubyte arr;
+        Buffer!ubyte arr;
         arr.length = 16;
-        u64_to_le(val.data[0], arr.data().ptr);
-        u64_to_le(val.data[1], arr.data().ptr + 8);
+        u64_to_le(val.data[0], arr.ptr);
+        u64_to_le(val.data[1], arr.ptr + 8);
         return arr;
     }
     else static if (isArray!T)
     {
-        Array!ubyte arr;
+        Buffer!ubyte arr;
         foreach (v; val)
         {
-            arr ~= serialize(v).data();
+            arr ~= serialize(v)[];
         }
         return arr;
 
@@ -249,16 +261,17 @@ auto serialize(T)(T val) @nogc nothrow @trusted
         static assert(0);
 }
 
-T deserialize(T, bool useGC = false)(Array!ubyte val)
+T deserialize(T, bool useGC = false)(Buffer!ubyte val)
 {
     T ret;
+    // if(val.ptr == null) return T.init;
     static if (is(T == IonData))
         return val;
     else static if (is(T == CompositeKey))
     {
         import core.stdc.string : strlen;
 
-        ret.key = Array!char(val.data[0..strlen(cast(const(char)*)val.data.ptr)]);
+        ret.key = Buffer!char(val[0..strlen(cast(const(char)*)val.ptr)]);
         ret.vtype = cast(IndexValueType) val[ret.key.length + 1];
         final switch (ret.vtype)
         {
@@ -267,16 +280,16 @@ T deserialize(T, bool useGC = false)(Array!ubyte val)
             break;
         case IndexValueType.Number:
             version(RealNumbers)
-                ret.val.n = bigEndianToNative(val.data[ret.key.length + 2 .. ret.key.length + 2 + 10][0 .. 10]);
+                ret.val.n = bigEndianToNative(val[ret.key.length + 2 .. ret.key.length + 2 + 10][0 .. 10]);
             else {
-                ret.val.n = bigEndianToNative!double(val.data[ret.key.length + 2 .. ret.key.length + 2 + 8][0 .. 8]);
+                ret.val.n = bigEndianToNative!double(val[ret.key.length + 2 .. ret.key.length + 2 + 8][0 .. 8]);
                 ret.val.n = - ret.val.n;
             }
 
             break;
         case IndexValueType.String:
             
-            ret.val.s = cast(const(char)[]) val.data[ret.key.length + 2 .. $];
+            ret.val.s = cast(const(char)[]) val[ret.key.length + 2 .. $];
             break;
         }
         return ret;
@@ -305,13 +318,13 @@ T deserialize(T, bool useGC = false)(Array!ubyte val)
     }
     else static if (is(T == uint128))
     {
-        ret = uint128([le_to_u64(val.data().ptr), le_to_u64(val.data().ptr + 8)]);
+        ret = uint128([le_to_u64(val.ptr), le_to_u64(val.ptr + 8)]);
         return ret;
     }
     else static if (is(T == uint128[]))
     {
-        ret.length = val.length / 16;
-        auto p = val.data().ptr;
+        ret.length = le_to_u64(val.ptr);
+        auto p = val.ptr + 16;
         for (auto i = 0; i < ret.length; i++)
         {
             ret[i] = uint128([le_to_u64(p), le_to_u64(p + 8)]);
@@ -327,6 +340,120 @@ unittest
 {
     auto h = uint128.fromHexString("e85b76fab7734ce9bebcd1e4517162e6");
     assert(deserialize!(uint128, true)(serialize(h)) == h);
+
+}
+
+
+extern (C) @system nothrow @nogc {
+    import rocksdb;
+    import drocks.options;
+    import drocks.merge;
+    import core.stdc.stdlib;
+
+    char* AppendFullMergeHash128(void* state, const(char)* key, size_t key_length,
+            const(char)* existing_value, size_t existing_value_length, const(char*)* operands_list,
+            const(size_t)* operands_list_length, int num_operands,
+            ubyte* success, size_t* new_value_length)
+    {
+        import htslib.kroundup;
+        import libmucor.hts_endian;
+
+        size_t num_new = 0;
+        for(auto i = 0; i < num_operands; i++) {
+            num_new += operands_list_length[i] / 16;
+        }
+    
+        auto np = cast(char*)existing_value;
+        size_t start, end;
+        if(existing_value == null) {
+
+            // get capacity
+            auto nc = num_new + 1;
+            kroundup_size_t(nc);
+            // allocate
+            np = cast(char *) malloc(nc*16);
+
+            nc--;
+            // set capacity
+            u64_to_le(0, cast(ubyte*) np);
+            u64_to_le(nc, cast(ubyte*) np + 8);
+            *new_value_length = (nc + 1)*16;
+
+            // copy new values
+            start = 16;
+            end = start + 16;
+        }
+
+        size_t num_elements = le_to_u64(cast(const(ubyte)*)np);
+        size_t capacity = le_to_u64(cast(const(ubyte)*)(np + 8));
+
+        if(num_elements + num_new > capacity) {
+            // get new capacity
+            auto nc = num_elements + num_new + 1;
+            kroundup_size_t(nc);
+            // allocate
+            np = cast(char *) malloc(nc*16);
+            // copy
+            np[0..existing_value_length] = existing_value[0 .. existing_value_length];
+
+            nc--;
+            // write len and cap
+            u64_to_le(num_elements, cast(ubyte*)np);
+            u64_to_le(nc, cast(ubyte*)(np + 8));
+
+            *new_value_length = (nc + 1)*16;
+
+            // copy new values
+            start = (num_elements + 1) * 16;
+            end = start + 16;
+        }
+
+        for (auto i = 0; i < num_operands; i++)
+        {
+            np[start .. start + operands_list_length[i]] = operands_list[i][0..operands_list_length[i]];
+            start += operands_list_length[i];
+        }
+
+        num_elements = num_elements + num_new;
+        u64_to_le(num_elements, cast(ubyte*)np);
+        *success = 1;
+        return np;
+    }
+
+    char* AppendPartialMergeHash128(void* state, const(char)* key, size_t key_length,
+            const(char*)* operands_list, const(size_t)* operands_list_length,
+            int num_operands, ubyte* success, size_t* new_value_length)
+    {
+        // auto ret = (cast(char*) malloc(num_operands * 16));
+        // size_t start = 0;
+        // size_t end = start + 16;
+        // for (auto i = 0; i < num_operands; i++)
+        // {
+        //     ret[start .. end] = operands_list[i][0..16];
+        //     start += 16;
+        //     end += 16;
+        // }
+        *new_value_length = 0;
+        *success = 0;
+        return null;
+    }
+
+    void AppendDtrHash128(void* state)
+    {
+
+    }
+
+    const(char)* AppendNameHash128(void* state)
+    {
+        return "AppendOperatorHash128\0";
+    }
+
+    auto createAppendHash128MergeOperator()
+    {
+        auto state = cast(merge_operator_state*) malloc(merge_operator_state.sizeof);
+        return rocksdb_mergeoperator_create(state, &AppendDtrHash128, &AppendFullMergeHash128,
+                &AppendPartialMergeHash128, null, &AppendNameHash128);
+    }
 
 }
 
@@ -353,7 +480,7 @@ unittest
     opts.createIfMissing = true;
     opts.errorIfExists = false;
     opts.compression = CompressionType.None;
-    opts.setMergeOperator(createAppendMergeOperator);
+    opts.setMergeOperator(createAppendHash128MergeOperator);
     opts.env = env;
     import std.file;
     import std.path;
@@ -370,13 +497,13 @@ unittest
     auto h2 = uint128.fromHexString("44630f65ef0a4cb1b065629923ccf249");
     auto h3 = uint128.fromHexString("f43fe659c1ed4d55b90b1b30a57eb92a");
 
-    records[h1] = Array!ubyte(cast(ubyte[])`{key1:test,key2:1.2,key3:[1,2],key4:"test"}`.text2ion);
-    records[h2] = Array!ubyte(cast(ubyte[])`{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`.text2ion);
-    records[h3] = Array!ubyte(cast(ubyte[])`{key1:test3,key3:[1]}`.text2ion);
+    records[h1] = Buffer!ubyte(cast(ubyte[])`{key1:test,key2:1.2,key3:[1,2],key4:"test"}`.text2ion);
+    records[h2] = Buffer!ubyte(cast(ubyte[])`{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`.text2ion);
+    records[h3] = Buffer!ubyte(cast(ubyte[])`{key1:test3,key3:[1]}`.text2ion);
 
-    assert(records[h1].unwrap.unwrap.data.ion2text == `{key1:test,key2:1.2,key3:[1,2],key4:"test"}`);
-    assert(records[h2].unwrap.unwrap.data.ion2text == `{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`);
-    assert(records[h3].unwrap.unwrap.data.ion2text == `{key1:test3,key3:[1]}`);
+    assert(records[h1].unwrap.unwrap[].ion2text == `{key1:test,key2:1.2,key3:[1,2],key4:"test"}`);
+    assert(records[h2].unwrap.unwrap[].ion2text == `{key1:test2,key2:3,key3:[1,2,3],key4:"test"}`);
+    assert(records[h3].unwrap.unwrap[].ion2text == `{key1:test3,key3:[1]}`);
     idx[CompositeKey("key1", "test")] ~= h1;
     idx[CompositeKey("key1", "test2")] ~= h2;
     idx[CompositeKey("key1", "test3")] ~= h3;

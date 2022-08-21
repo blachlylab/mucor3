@@ -35,13 +35,13 @@ void view_main(string[] args)
     foreach (rec; rdr)
     {
         auto r = rec.unwrap;
+        auto t = r.symbols.table;
+        auto a = cast(const(char[])[])t[];
+        scope(exit) r.deallocate;
+        scope(exit) t.deallocate;
         if (json)
-        {
-            writeln(vcfIonToJson(r.withSymbols(r.symbols.table)));
-        }
+            writeln(vcfIonToJson(r.withSymbols(a)));
         else
-        {
-            writeln(vcfIonToText(r.withSymbols(r.symbols.table)));
-        }
+            writeln(vcfIonToText(r.withSymbols(a)));
     }
 }

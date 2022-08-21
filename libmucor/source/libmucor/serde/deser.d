@@ -14,22 +14,26 @@ import option;
 import std.stdio;
 import std.traits : ReturnType;
 import std.container : Array;
-import core.sync.mutex : Mutex;
 import core.stdc.stdlib : malloc, free;
 
 struct VcfIonRecord
 {
 
-    SymbolTable* symbols;
+    SymbolTable symbols;
+    Buffer!ubyte data;
 
     IonValue val;
     IonDescribedValue des;
 
-    this(SymbolTable* st, IonValue val)
+    @nogc nothrow:
+
+    this(SymbolTable st, Buffer!ubyte val)
     {
-        this.val = val;
+        this.data = val;
         this.symbols = st;
-        auto err = val.describe(des);
+        
+        this.val = IonValue(data[]);
+        auto err = this.val.describe(des);
         handleIonError(err);
     }
 
@@ -49,6 +53,11 @@ struct VcfIonRecord
         return this.val.data;
     }
 
+    void deallocate() {
+        this.data.deallocate;
+        this.symbols.deallocate;
+    }
+
 }
 
 /// Deserialize VCF ion
@@ -66,28 +75,27 @@ struct VcfIonDeserializer
 {
     Bgzf inFile;
 
-    Array!(char) fn;
+    Buffer!(char) fn;
 
-    Array!(ubyte) buffer;
+    Buffer!(ubyte) buffer;
 
     SymbolTable* symbols;
 
     bool empty;
     IonErrorCode error;
 
-    Mutex m;
+    @nogc nothrow: 
 
     this(string fn, size_t bufferSize = 4096)
     {
-        this.m = new Mutex;
-        this.fn = Array!(char)(cast(char[])fn);
+        this.fn = Buffer!(char)(cast(char[])fn);
         this.fn ~= '\0';
 
         char[2] mode = ['r','\0'];
 
-        this.inFile = Bgzf(bgzf_open(this.fn.data.ptr, mode.ptr));
+        this.inFile = Bgzf(bgzf_open(this.fn.ptr, mode.ptr));
 
-        this.symbols = new SymbolTable;
+        this.symbols = callocate!SymbolTable(1);
 
         error = readVersion();
         handleIonError(error);
@@ -99,10 +107,10 @@ struct VcfIonDeserializer
         auto len = this.buffer.length;
         this.buffer.length = len + des.L;
 
-        auto n = bgzf_read(inFile, this.buffer.data[len .. $].ptr, this.buffer.length - len); 
+        auto n = bgzf_read(inFile, this.buffer[len .. $].ptr, this.buffer.length - len); 
         if(n != this.buffer.length - len) handleIonError(IonErrorCode.unexpectedEndOfData);
 
-        auto view = cast(const(ubyte)[])this.buffer.data();
+        auto view = cast(const(ubyte)[])this.buffer[];
         error = this.symbols.loadSymbolTable(view);
         handleIonError(error);
 
@@ -116,13 +124,12 @@ struct VcfIonDeserializer
         if (error)
             ret = Err(ionErrorMsg(error));
         else
-            ret = Ok(VcfIonRecord(this.symbols, IonValue(this.buffer.data.dup)));
+            ret = Ok(VcfIonRecord(this.symbols.dup, this.buffer.dup));
         return ret;
     }
 
     void popFront()
     {
-
         this.buffer.length = 0;
         IonDescriptor des;
         error = parseDescriptor(des);
@@ -137,11 +144,13 @@ struct VcfIonDeserializer
         {
             auto len = this.buffer.length;
             this.buffer.length = len + des.L;
+            this.buffer[len .. $] = 0;
 
-            auto n = bgzf_read(inFile, this.buffer.data[len .. $].ptr, this.buffer.length - len); 
+            auto n = bgzf_read(inFile, this.buffer[len .. $].ptr, this.buffer.length - len); 
             if(n != this.buffer.length - len) handleIonError(IonErrorCode.unexpectedEndOfData);
+            
+            auto view = cast(const(ubyte)[])this.buffer[];
 
-            auto view = cast(const(ubyte)[])this.buffer.data();
             error = this.symbols.loadSymbolTable(view);
             handleIonError(error);
 
@@ -153,8 +162,9 @@ struct VcfIonDeserializer
 
         auto len = this.buffer.length;
         this.buffer.length = len + des.L;
+        this.buffer[len .. $] = 0;
 
-        auto n = bgzf_read(inFile, this.buffer.data[len .. $].ptr, this.buffer.length - len); 
+        auto n = bgzf_read(inFile, this.buffer[len .. $].ptr, this.buffer.length - len); 
         if(n != this.buffer.length - len) handleIonError(IonErrorCode.unexpectedEndOfData);
     }
 

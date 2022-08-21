@@ -6,7 +6,7 @@ import mir.utility : _expect;
 import mir.bignum.integer;
 import libmucor.spookyhash;
 import libmucor.error;
-public import libmucor.memory;
+public import memory;
 public import htslib.bgzf;
 
 public import libmucor.serde.ser;

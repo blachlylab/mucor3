@@ -41,13 +41,12 @@ struct InvertedIndexStore
         opts.initialize;
         opts.createIfMissing = true;
         opts.errorIfExists = false;
-        opts.compression = CompressionType.Bzip2;
-        opts.setMergeOperator(createAppendMergeOperator);
+        opts.setMergeOperator(createAppendHash128MergeOperator);
 
         RocksBlockBasedOptions bbopts;
         bbopts.initialize;
         bbopts.cacheIndexAndFilterBlocks = true;
-        bbopts.setFilterPolicy(FilterPolicy.BloomFull, 18);
+        bbopts.setFilterPolicy(FilterPolicy.BloomFull, 15);
 
         opts.setBlockBasedOptions(bbopts);
         opts.unorderedWrites = true;
@@ -65,7 +64,7 @@ struct InvertedIndexStore
             {
                 this.currentSymbolTable = new SymbolTable;
                 auto d = existing.unwrap;
-                auto arr = cast(const(ubyte)[]) d.data();
+                auto arr = cast(const(ubyte)[]) d[];
                 this.currentSymbolTable.loadSymbolTable(arr);
                 this.newSymbolTable = new SymbolTableBuilder;
                 foreach (key; this.currentSymbolTable.table[10 .. $])
@@ -84,15 +83,15 @@ struct InvertedIndexStore
 
     /// load string keys from db that have been observed in data
     /// i.e INFO/ANN, CHROM, POS, ...
-    khashlSet!(Array!char)* getIonKeys()
+    khashlSet!(char[], true, true)* getIonKeys()
     {
-        return this.idx.byKeyValue().map!(x => x[0].key).collect;
+        return this.idx.byKeyValue().map!(x => x[0].key[].dup).collect;
     }
 
     void storeSharedSymbolTable(SymbolTable* lastSymbolTable)
     {
         import mir.ion.symbol_table : IonSymbolTable;
-
+        scope(exit) lastSymbolTable.deallocate;
         IonSymbolTable!false table;
         table.initialize;
         foreach (key; lastSymbolTable.table[10 .. $])
@@ -100,12 +99,17 @@ struct InvertedIndexStore
             table.insert(key.dup);
         }
         table.finalize;
-        this.db[serialize("sharedTable").data()] = table.data;
+        auto key = serialize("sharedTable");
+        scope(exit) key.deallocate;
+        this.db[key[]] = table.data;
+        
     }
 
     auto getSharedSymbolTable()
     {
-        return this.db[serialize("sharedTable").data()];
+        auto key = serialize("sharedTable");
+        scope(exit) key.deallocate;
+        return this.db[key[]];
     }
 
     void insert(IonStructWithSymbols data)
@@ -120,7 +124,8 @@ struct InvertedIndexStore
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
 
-        this.records[hash] = Array!ubyte(serializeIon(data));
+        auto buf = Buffer!ubyte(serializeIon(data));
+        this.records[hash] = buf;
 
         foreach (key, value; data)
         {
@@ -134,7 +139,8 @@ struct InvertedIndexStore
         IonStruct sval;
         IonInt hashValue;
         IonErrorCode err;
-
+        Buffer!(char[]) table;
+        scope(exit) table.deallocate;
         if (this.currentSymbolTable && rec.symbols.table != this.currentSymbolTable.table)
         {
             auto val = convertIonSymbols(rec);
@@ -144,16 +150,18 @@ struct InvertedIndexStore
 
             err = dval.get(sval);
             handleIonError(err);
-            data = sval.withSymbols(this.currentSymbolTable.table);
+            table = this.currentSymbolTable.table;
+            data = sval.withSymbols(cast(const(char[])[])table[]);
 
         }
         else
         {
             sval = rec.getObj;
-            data = sval.withSymbols(rec.symbols.table);
+            table = rec.symbols.table;
+            data = sval.withSymbols(cast(const(char[])[])table[]);
         }
 
-        data = sval.withSymbols(rec.symbols.table);
+        // data = sval.withSymbols(cast(const(char[])[])rec.symbols.table[]);
         if (_expect(!("checksum" in data), false))
         {
             log_err(__FUNCTION__, "record with no md5");
@@ -162,7 +170,7 @@ struct InvertedIndexStore
         handleIonError(err);
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
-        this.records[hash] = Array!ubyte(rec.toBytes);
+        this.records[hash] = Buffer!ubyte(rec.toBytes);
 
         foreach (key, value; data)
         {
@@ -195,6 +203,7 @@ struct InvertedIndexStore
             auto k = CompositeKey(key, l);
 
             this.idx[k] ~= checksum;
+            k.key.deallocate;
             return;
 
         case IonTypeCode.nInt:
@@ -208,6 +217,7 @@ struct InvertedIndexStore
             auto k = CompositeKey(key, l);
 
             this.idx[k] ~= checksum;
+            k.key.deallocate;
             return;
 
         case IonTypeCode.float_:
@@ -221,6 +231,7 @@ struct InvertedIndexStore
             auto k = CompositeKey(key, f);
 
             this.idx[k] ~= checksum;
+            k.key.deallocate;
             return;
         case IonTypeCode.decimal:
             IonDecimal val;
@@ -233,6 +244,7 @@ struct InvertedIndexStore
             auto k = CompositeKey(key, f);
 
             this.idx[k] ~= checksum;
+            k.key.deallocate;
             return;
         case IonTypeCode.symbol:
             IonSymbolID val;
@@ -244,6 +256,7 @@ struct InvertedIndexStore
             auto k = CompositeKey(key, s);
 
             this.idx[k] ~= checksum;
+            k.key.deallocate;
             return;
         case IonTypeCode.string:
             const(char)[] val;
@@ -253,6 +266,7 @@ struct InvertedIndexStore
             auto k = CompositeKey(key, val);
 
             this.idx[k] ~= checksum;
+            k.key.deallocate;
             return;
         case IonTypeCode.clob:
             debug assert(0, "We don't handle ion clob values");
@@ -308,7 +322,8 @@ struct InvertedIndexStore
         serializer.finalize;
         this.currentSymbolTable = new SymbolTable;
         auto d = this.newSymbolTable.serialize();
-        this.currentSymbolTable.loadSymbolTable(d);
+        auto arr =  cast(const(ubyte)[])d[];
+        this.currentSymbolTable.loadSymbolTable(arr);
         return IonValue(serializer.data.dup);
     }
 

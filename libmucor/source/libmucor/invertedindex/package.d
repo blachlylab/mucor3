@@ -64,7 +64,7 @@ struct InvertedIndex
         auto keys = this.store.getIonKeys;
         if (wildcard == -1)
         {
-            if (!(Array!char(key) in *keys))
+            if (!(key in *keys))
             {
                 return [];
             }
@@ -77,7 +77,7 @@ struct InvertedIndex
         {
             key = key.replace("*", ".*");
             auto reg = regex("^" ~ key ~ "$");
-            ret = keys.byKey.filter!(x => !(x.data().matchFirst(reg).empty)).map!(x => x.data.dup).array;
+            ret = keys.byKey.filter!(x => !(x[].matchFirst(reg).empty)).map!(x => x[].dup).array;
             if (ret.length == 0)
             {
                 log_warn(__FUNCTION__,
@@ -321,6 +321,7 @@ unittest
             if (!(key in *a))
                 writeln("notfound:", key);
         }
+        writeln((q1.evaluate(idx)).byKey.array);
         assert(*(q1.evaluate(idx)) == *([
                 checksums[0], checksums[6], checksums[5]
                 ].collect));
@@ -498,12 +499,12 @@ auto query(string outfn, ref InvertedIndex idx, string queryStr)
     log_info(__FUNCTION__, "%d records matched your query", idxs.count);
     SymbolTable table;
     auto tdata = idx.store.getSharedSymbolTable.unwrap.unwrap;
-    auto tarr = cast(const(ubyte)[])tdata.data();
+    auto tarr = cast(const(ubyte)[])tdata[];
     table.loadSymbolTable(tarr);
     auto serializer = VcfSerializer(outfn, cast(string[]) table.table[10 .. $], SerdeTarget.ion);
     foreach (d; idx.convertIdsToIon(idxs))
     {
-        serializer.putData(d.data());
+        serializer.putData(d[]);
     }
 }
 
@@ -517,7 +518,9 @@ void index(ref VcfIonDeserializer range, string prefix)
     shared(ulong) count;
     foreach (rec; parallel(range))
     {
-        idx.insert(rec.unwrap);
+        auto r = rec.unwrap;
+        idx.insert(r);
+        r.deallocate;
         count.atomicOp!"+="(1);
     }
     idx.store.storeSharedSymbolTable(range.symbols);
@@ -559,8 +562,8 @@ unittest
         {
             // writeln(r.symbolTable);
             auto r = rec.unwrap;
-            writeln(vcfIonToText(r.withSymbols(r.symbols.table)));
-            writeln(vcfIonToJson(r.withSymbols(r.symbols.table)));
+            writeln(vcfIonToText(r.withSymbols(cast(const(char[])[])r.symbols.table[])));
+            writeln(vcfIonToJson(r.withSymbols(cast(const(char[])[])r.symbols.table[])));
         }
     }
 }
