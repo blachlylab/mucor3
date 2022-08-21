@@ -129,23 +129,24 @@ if(!isPointer!T && isSomeFunction!destroyFun)
     }
 }
 
-struct ConstBuffer(T) {
-
-}
-
 struct Buffer(T, bool useGC = false) {
     T * ptr;
     private size_t len;
     private size_t capacity;
 
     @safe @nogc nothrow @live:
-
+    
+    /// create from malloc'd pointer
+    /// doesn't allocate
     this(T * ptr, size_t len) @trusted
     {
         this.ptr = ptr;
         this.len = this.capacity = len;
     }
 
+    /// create from slice
+    /// assumes GC'd slice
+    /// allocates exactly to length
     this(L)(L[] data) @trusted
     {
         this.reserveExactly(data.length);
@@ -153,31 +154,40 @@ struct Buffer(T, bool useGC = false) {
         memcpy(this.ptr, data.ptr, data.length * T.sizeof);
     }
 
+    /// deallocates data in this buffer
+    /// resets buffer for further use
     void deallocate() {
         free!T(this.ptr);
         this.ptr = null;
         this.len = this.capacity = 0;
     }
 
+    /// get length of buffer
     @property length() const {
         return this.len;
     }
 
+    /// sets length of buffer
+    /// allocates if bigger than capacity
     @property length(size_t size) {
         this.reserve(size);
         this.len = size;
     }
 
+    /// duplicates buffer
+    /// this is nogc
     @property dup() @trusted return scope {
         return Buffer!(T, useGC)(this.ptr[0 .. this.len]);
     }
 
+    /// reserve at least size number of elements of capacity
     void reserve(size_t size) @trusted {
         import htslib.kroundup;
         kroundup_size_t(size);
         this.reserveExactly(size);
     }
 
+    /// reserve exactly size number of elements of capacity
     void reserveExactly(size_t size) @trusted {
         
         /// if big enough,
@@ -198,12 +208,14 @@ struct Buffer(T, bool useGC = false) {
         this.capacity = size;
     }
 
+    /// append element to buffer
     void opOpAssign(string op : "~")(T value) @trusted
     {
         reserve(this.len + 1);
         this.ptr[this.len++] = value;
     }
 
+    /// append elements to buffer
     void opOpAssign(string op : "~")(T[] value) @trusted
     {
         reserve(this.len + value.length);
@@ -212,56 +224,67 @@ struct Buffer(T, bool useGC = false) {
         this.len += value.length;
     }
 
+    /// get element
     ref auto opIndex(size_t index) @trusted return scope
     {
         return this.ptr[index];
     }
 
+    /// ditto
     ref auto opIndex(size_t index) @trusted return scope const
     {
         return this.ptr[index];
     }
 
+    /// get slice of all elements
     ref auto opSlice() @trusted return scope
     {
         return this.ptr[0 .. this.len];
     }
 
+    /// ditto
     ref auto opSlice() @trusted return scope const
     {
         return this.ptr[0 .. this.len];
     }
 
+    /// get slice of elements
     ref auto opSlice(size_t start, size_t end) @trusted return scope
     {
         return this.ptr[start .. end];
     }
 
+    /// set slice of all elements to a value
     void opSliceAssign(T value) @trusted
     {
         this.ptr[0 .. this.len] = value;
     }
 
+    /// set slice of elements to a value
     auto opSliceAssign(T value, size_t start, size_t end) @trusted
     {
         this.ptr[start .. end] = value;
     }
 
+    /// set slice of elements to a slice of values
     auto opSliceAssign(T[] value, size_t start, size_t end) @trusted
     {
         this.ptr[start .. end] = value[];
     }
 
+    /// s
     bool opEquals(const Buffer!T other) const
     {
         return this[] == other[];
     }
 
+    /// 
     size_t opDollar()
     {
         return len;
     }
 
+    /// shrink buffer to length
     void shrink() {
         if(this.capacity == 0) this.deallocate;
         else {
