@@ -97,6 +97,9 @@ unittest
     foreach (rec; rdr)
     {
         auto r = rec.unwrap;
-        writeln(vcfIonToText(r.withSymbols(cast(const(char[])[])r.symbols.table[])));
+        auto t = r.symbols.table;
+        writeln(vcfIonToText(r.withSymbols(cast(const(char[])[])t[])));
+        t.deallocate;
+        r.deallocate;
     }
 }

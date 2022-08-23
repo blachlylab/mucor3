@@ -84,6 +84,7 @@ struct InvertedIndex
                         "Warning: Key wildcards sequence %s matched no keys in index!", keycopy);
             }
         }
+        keys.kh_release;
         log_debug(__FUNCTION__, "Key %s matched %d keys", keycopy, ret.length);
         return ret;
     }
@@ -505,6 +506,7 @@ auto query(string outfn, ref InvertedIndex idx, string queryStr)
     foreach (d; idx.convertIdsToIon(idxs))
     {
         serializer.putData(d[]);
+        d.deallocate;
     }
 }
 
@@ -562,8 +564,11 @@ unittest
         {
             // writeln(r.symbolTable);
             auto r = rec.unwrap;
-            writeln(vcfIonToText(r.withSymbols(cast(const(char[])[])r.symbols.table[])));
-            writeln(vcfIonToJson(r.withSymbols(cast(const(char[])[])r.symbols.table[])));
+            auto t = r.symbols.table;
+            writeln(vcfIonToText(r.withSymbols(cast(const(char[])[])t[])));
+            writeln(vcfIonToJson(r.withSymbols(cast(const(char[])[])t[])));
+            t.deallocate;
+            r.deallocate;
         }
     }
 }

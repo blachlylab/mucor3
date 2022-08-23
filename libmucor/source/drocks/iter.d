@@ -24,6 +24,21 @@ struct Iterator
 
     SafePtr!(rocksdb_iterator_t, rocksdb_iter_destroy) iter;
 
+    struct FrontVal {
+        Iterator * iter;
+
+        auto key()
+        {
+            return Buffer!ubyte(this.iter.key);
+        }
+
+        auto value()
+        {
+            return Buffer!ubyte(this.iter.value);
+        }
+
+    }
+
     this(this)
     {
         this.iter = iter;
@@ -109,6 +124,7 @@ struct Iterator
         }
 
         rocksdb_iter_next(this.iter);
+        this.frontKey.deallocate;
         this.frontKey = Buffer!ubyte(this.key);
     }
 
@@ -129,6 +145,7 @@ struct Iterator
         }
 
         rocksdb_iter_prev(this.iter);
+        this.backKey.deallocate;
         this.backKey = Buffer!ubyte(this.key);
     }
 
@@ -142,7 +159,7 @@ struct Iterator
         if (!forward)
             seek(frontKey[]);
         this.forward = true;
-        return [Buffer!ubyte(this.key), Buffer!ubyte(this.value)];
+        return FrontVal(&this);
     }
 
     auto back()
@@ -150,7 +167,7 @@ struct Iterator
         if (forward)
             seek(backKey[]);
         this.forward = false;
-        return [this.key, this.value];
+        return FrontVal(&this);
     }
 
     ubyte[] key()
@@ -261,10 +278,10 @@ unittest
     db[cast(ubyte[]) "key5"] = cast(ubyte[]) "5";
     db[cast(ubyte[]) "key6"] = cast(ubyte[]) "6";
 
-    assert(db.iter.map!(x => x[0][].idup).array == [
+    assert(db.iter.map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; }).array == [
             "key1", "key2", "key3", "key4", "key5", "key6"
             ]);
-    // assert(db.iter.retro.map!(x => x[0][].idup).array == [
+    // assert(db.iter.retro.map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; }).array == [
     //         "key6", "key5", "key4", "key3", "key2", "key1"
     //         ]);
 
@@ -273,8 +290,8 @@ unittest
     itr.popFront;
 
     auto itr2 = itr.save;
-    assert(itr2.map!(x => x[0][].idup).array == ["key3", "key4", "key5", "key6"]);
-    // assert(itr2.retro.map!(x => x[0][].idup).array == [
+    assert(itr2.map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; }).array == ["key3", "key4", "key5", "key6"]);
+    // assert(itr2.retro.map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; }).array == [
     //         "key6", "key5", "key4", "key3"
     //         ]);
 
@@ -283,32 +300,32 @@ unittest
     itr3.popBack;
     itr3.popBack;
 
-    assert(itr3.map!(x => x[0][].idup).array == ["key3", "key4"]);
-    // assert(itr3.retro.map!(x => x[0][].idup).array == ["key4", "key3"]);
+    assert(itr3.map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; }).array == ["key3", "key4"]);
+    // assert(itr3.retro.map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; }).array == ["key4", "key3"]);
 
-    assert(db.iter.gt(cast(ubyte[]) "key2").map!(x => x[0][].idup)
+    assert(db.iter.gt(cast(ubyte[]) "key2").map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; })
             .array == ["key3", "key4", "key5", "key6"]);
     auto t = db.iter.gt(cast(ubyte[]) "key2.1");
-    assert(db.iter.gt(cast(ubyte[]) "key2.1").map!(x => x[0][].idup)
+    assert(db.iter.gt(cast(ubyte[]) "key2.1").map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; })
             .array == ["key3", "key4", "key5", "key6"]);
 
-    assert(db.iter.gte(cast(ubyte[]) "key2").map!(x => x[0][].idup)
+    assert(db.iter.gte(cast(ubyte[]) "key2").map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; })
             .array == ["key2", "key3", "key4", "key5", "key6"]);
-    assert(db.iter.gte(cast(ubyte[]) "key1.5").map!(x => x[0][].idup)
+    assert(db.iter.gte(cast(ubyte[]) "key1.5").map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; })
             .array == ["key2", "key3", "key4", "key5", "key6"]);
 
-    assert(db.iter.lt(cast(ubyte[]) "key1").map!(x => x[0][].idup).array == []);
-    assert(db.iter.lt(cast(ubyte[]) "key2").map!(x => x[0][].idup).array == [
+    assert(db.iter.lt(cast(ubyte[]) "key1").map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; }).array == []);
+    assert(db.iter.lt(cast(ubyte[]) "key2").map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; }).array == [
             "key1",
             ]);
-    assert(db.iter.lt(cast(ubyte[]) "key2.1").map!(x => x[0][].idup).array == [
+    assert(db.iter.lt(cast(ubyte[]) "key2.1").map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; }).array == [
             "key1", "key2"
             ]);
 
-    assert(db.iter.lte(cast(ubyte[]) "key2").map!(x => x[0][].idup).array == [
+    assert(db.iter.lte(cast(ubyte[]) "key2").map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; }).array == [
             "key1", "key2"
             ]);
-    assert(db.iter.lte(cast(ubyte[]) "key1.5").map!(x => x[0][].idup).array == [
+    assert(db.iter.lte(cast(ubyte[]) "key1.5").map!((x) { auto k = x.key; scope(exit) k.deallocate; return k[].idup; }).array == [
             "key1"
             ]);
 }

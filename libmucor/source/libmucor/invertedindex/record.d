@@ -76,24 +76,60 @@ struct RecordStore(K, V)
     auto byKeyValue()
     {
         auto r = this.family.iter;
-        return r.std_map!(x => tuple(deserialize!K(x[0]), deserialize!V(x[1])));
+        return r.std_map!((x) {
+            auto k = x.key;
+            auto v = x.value; 
+            scope(exit) k.deallocate;
+            scope(exit) v.deallocate;
+            return tuple(deserialize!K(k), deserialize!V(v));
+        });
+    }
+
+    auto byKey() {
+        auto r = this.family.iter;
+        return r.std_map!((x) {
+            auto k = x.key;
+            scope(exit) k.deallocate;
+            return deserialize!K(k);
+        });
     }
 
     auto filterOp(string op)(K key)
     {
         auto r = this.family.iter;
+        auto k = serialize(key);
         static if (op == "<")
-            return r.lt(serialize(key)[]).std_map!(x => tuple(deserialize!(K,
-                    true)(x[0]), deserialize!V(x[1])));
+            return r.lt(k[]).std_map!((x) {
+                auto k = x.key;
+                auto v = x.value; 
+                scope(exit) k.deallocate;
+                scope(exit) v.deallocate;
+                return tuple(deserialize!K(k), deserialize!V(v));
+        });
         else static if (op == "<=")
-            return r.lte(serialize(key)[]).std_map!(x => tuple(deserialize!(K,
-                    true)(x[0]), deserialize!V(x[1])));
+            return r.lte(k[]).std_map!((x) {
+                auto k = x.key;
+                auto v = x.value; 
+                scope(exit) k.deallocate;
+                scope(exit) v.deallocate;
+                return tuple(deserialize!K(k), deserialize!V(v));
+        });
         else static if (op == ">")
-            return r.gt(serialize(key)[]).std_map!(x => tuple(deserialize!(K,
-                    true)(x[0]), deserialize!V(x[1])));
+            return r.gt(k[]).std_map!((x) {
+                auto k = x.key;
+                auto v = x.value; 
+                scope(exit) k.deallocate;
+                scope(exit) v.deallocate;
+                return tuple(deserialize!K(k), deserialize!V(v));
+        });
         else static if (op == ">=")
-            return r.gte(serialize(key)[]).std_map!(x => tuple(deserialize!(K,
-                    true)(x[0]), deserialize!V(x[1])));
+            return r.gte(k[]).std_map!((x) {
+                auto k = x.key;
+                auto v = x.value; 
+                scope(exit) k.deallocate;
+                scope(exit) v.deallocate;
+                return tuple(deserialize!K(k), deserialize!V(v));
+        });
         else
             static assert(0);
     }
@@ -101,8 +137,18 @@ struct RecordStore(K, V)
     auto filterRange(K start, K end)
     {
         auto r = this.family.iter;
-        return r.gte(serialize(start)[]).lt(serialize(end)[])
-            .std_map!(x => tuple(deserialize!K(x[0]), deserialize!V(x[1])));
+        auto s = serialize(start);
+        auto e = serialize(end);
+        scope(exit) s.deallocate;
+        scope(exit) e.deallocate;
+        return r.gte(s[]).lt(e[])
+            .std_map!((x) {
+                auto k = x.key;
+                auto v = x.value; 
+                scope(exit) k.deallocate;
+                scope(exit) v.deallocate;
+                return tuple(deserialize!K(k), deserialize!V(v));
+        });
     }
 }
 
@@ -289,7 +335,7 @@ T deserialize(T, bool useGC = false)(Buffer!ubyte val)
             break;
         case IndexValueType.String:
             
-            ret.val.s = cast(const(char)[]) val[ret.key.length + 2 .. $];
+            ret.val.s = cast(const(char)[]) val[ret.key.length + 2 .. $].dup;
             break;
         }
         return ret;
@@ -323,8 +369,8 @@ T deserialize(T, bool useGC = false)(Buffer!ubyte val)
     }
     else static if (is(T == uint128[]))
     {
-        ret.length = le_to_u64(val.ptr);
-        auto p = val.ptr + 16;
+        ret.length = val.length / 16;
+        auto p = val.ptr;
         for (auto i = 0; i < ret.length; i++)
         {
             ret[i] = uint128([le_to_u64(p), le_to_u64(p + 8)]);
@@ -355,67 +401,18 @@ extern (C) @system nothrow @nogc {
             const(size_t)* operands_list_length, int num_operands,
             ubyte* success, size_t* new_value_length)
     {
-        import htslib.kroundup;
-        import libmucor.hts_endian;
 
-        size_t num_new = 0;
-        for(auto i = 0; i < num_operands; i++) {
-            num_new += operands_list_length[i] / 16;
-        }
-    
-        auto np = cast(char*)existing_value;
-        size_t start, end;
-        if(existing_value == null) {
-
-            // get capacity
-            auto nc = num_new + 1;
-            kroundup_size_t(nc);
-            // allocate
-            np = cast(char *) malloc(nc*16);
-
-            nc--;
-            // set capacity
-            u64_to_le(0, cast(ubyte*) np);
-            u64_to_le(nc, cast(ubyte*) np + 8);
-            *new_value_length = (nc + 1)*16;
-
-            // copy new values
-            start = 16;
-            end = start + 16;
-        }
-
-        size_t num_elements = le_to_u64(cast(const(ubyte)*)np);
-        size_t capacity = le_to_u64(cast(const(ubyte)*)(np + 8));
-
-        if(num_elements + num_new > capacity) {
-            // get new capacity
-            auto nc = num_elements + num_new + 1;
-            kroundup_size_t(nc);
-            // allocate
-            np = cast(char *) malloc(nc*16);
-            // copy
-            np[0..existing_value_length] = existing_value[0 .. existing_value_length];
-
-            nc--;
-            // write len and cap
-            u64_to_le(num_elements, cast(ubyte*)np);
-            u64_to_le(nc, cast(ubyte*)(np + 8));
-
-            *new_value_length = (nc + 1)*16;
-
-            // copy new values
-            start = (num_elements + 1) * 16;
-            end = start + 16;
-        }
-
+        auto np = cast(char*) malloc((num_operands + (existing_value_length / 16)) * 16);
+        
+        np[0 .. existing_value_length] = existing_value[0 .. existing_value_length];
+        size_t start;
+        start = existing_value_length;
         for (auto i = 0; i < num_operands; i++)
         {
-            np[start .. start + operands_list_length[i]] = operands_list[i][0..operands_list_length[i]];
-            start += operands_list_length[i];
+            np[start .. start + 16] = operands_list[i][0..16];
+            start += 16;
         }
-
-        num_elements = num_elements + num_new;
-        u64_to_le(num_elements, cast(ubyte*)np);
+        *new_value_length = existing_value_length + num_operands*16;
         *success = 1;
         return np;
     }
@@ -451,6 +448,7 @@ extern (C) @system nothrow @nogc {
     auto createAppendHash128MergeOperator()
     {
         auto state = cast(merge_operator_state*) malloc(merge_operator_state.sizeof);
+        state.val = 0;
         return rocksdb_mergeoperator_create(state, &AppendDtrHash128, &AppendFullMergeHash128,
                 &AppendPartialMergeHash128, null, &AppendNameHash128);
     }

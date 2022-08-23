@@ -100,17 +100,20 @@ khashlSet!(uint128)* queryOpValue(const(char)[] key, Value value, ref InvertedIn
 khashlSet!(uint128)* unionIds(khashlSet!(uint128)* a, khashlSet!(uint128)* b)
 {
     (*a) |= (*b);
+    b.kh_release;
     return a;
 }
 
 khashlSet!(uint128)* intersectIds(khashlSet!(uint128)* a, khashlSet!(uint128)* b)
 {
     (*a) &= (*b);
+    b.kh_release;
     return a;
 }
 
 khashlSet!(uint128)* negateIds(khashlSet!(uint128)* a, khashlSet!(uint128)* b)
 {
     (*a) |= (*b);
+    b.kh_release;
     return a;
 }

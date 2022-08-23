@@ -212,7 +212,7 @@ struct RocksDB
             Option!(Buffer!ubyte) val;
             if (value)
             {
-                val = Some(Buffer!ubyte(cast(ubyte[])value[0 .. len]));
+                val = Some(Buffer!ubyte(value, len));
             }
             else
             {
@@ -488,7 +488,9 @@ unittest
     {
         for (int i = 0; i < times; i++)
         {
-            assert(db[cast(ubyte[]) i.to!string].unwrap.unwrap[] == cast(ubyte[]) i.to!string);
+            auto b = db[cast(ubyte[]) i.to!string].unwrap.unwrap;
+            assert(b[] == cast(ubyte[]) i.to!string);
+            b.deallocate;
         }
     }
 

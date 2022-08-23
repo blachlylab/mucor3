@@ -160,8 +160,10 @@ unittest
 
         for (int i = 0; i < times; i++)
         {
-            assert(cf[cast(ubyte[])(cf.name ~ i.to!string)].unwrap.unwrap[] == cast(
+            auto r = cf[cast(ubyte[])(cf.name ~ i.to!string)].unwrap.unwrap;
+            assert(r[] == cast(
                     ubyte[]) i.to!string);
+            r.deallocate;
         }
 
         cf.withIter((ref iter) {

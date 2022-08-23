@@ -177,6 +177,46 @@ struct RocksDBOptions
         rocksdb_options_set_block_based_table_factory(this.opts, bbopts.opts);
     }
 
+    @property void maxBackgroundCompactions(size_t v) {
+        rocksdb_options_set_max_background_compactions(this.opts, cast(int)v);
+    }
+
+    @property void writeBufferSize(size_t v) {
+        rocksdb_options_set_write_buffer_size(this.opts, v);
+    }
+
+    @property void maxWriteBufferNumber(size_t v) {
+        rocksdb_options_set_max_write_buffer_number(this.opts, cast(int)v);
+    }
+
+    @property void targetFileSizeBase(size_t v) {
+        rocksdb_options_set_target_file_size_base(this.opts, v);
+    }
+
+    @property void level0FileNumCompactionTrigger(size_t v) {
+        rocksdb_options_set_level0_file_num_compaction_trigger (this.opts, cast(int)v);
+    }
+
+    @property void level0SlowdownWritesTrigger(size_t v) {
+        rocksdb_options_set_level0_slowdown_writes_trigger(this.opts, cast(int)v);
+    }
+
+    @property void level0StopWritesTrigger(size_t v) {
+        rocksdb_options_set_level0_stop_writes_trigger(this.opts, cast(int)v);
+    }
+
+    @property void numLevels(size_t v) {
+        rocksdb_options_set_num_levels(this.opts, cast(int)v);
+    }
+
+    @property void maxBytesForLevelBase(size_t v) {
+        rocksdb_options_set_max_bytes_for_level_base(this.opts, v);
+    }
+
+    @property void maxBytesForLevelMultiplier(double v) {
+        rocksdb_options_set_max_bytes_for_level_multiplier(this.opts, v);
+    }
+
     // @property void comparator(Comparator cmp) {
     //     rocksdb_options_set_comparator(this.opts, cmp.cmp);
     // }

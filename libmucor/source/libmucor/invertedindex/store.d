@@ -41,12 +41,24 @@ struct InvertedIndexStore
         opts.initialize;
         opts.createIfMissing = true;
         opts.errorIfExists = false;
+        opts.maxBackgroundCompactions(20);
+        opts.compactionStyle = CompactionStyle.Level;
+        opts.writeBufferSize = 67108864; // 64MB
+        opts.maxWriteBufferNumber = 3;
+        opts.targetFileSizeBase = 67108864; // 64MB
+        opts.maxBackgroundCompactions =20;
+        opts.level0FileNumCompactionTrigger = 8;
+        opts.level0SlowdownWritesTrigger = 17;
+        opts.level0StopWritesTrigger = 24;
+        opts.numLevels =20;
+        opts.maxBytesForLevelBase = 536870912; // 512MB
+        opts.maxBytesForLevelMultiplier = 8;
         opts.setMergeOperator(createAppendHash128MergeOperator);
 
         RocksBlockBasedOptions bbopts;
         bbopts.initialize;
-        bbopts.cacheIndexAndFilterBlocks = true;
-        bbopts.setFilterPolicy(FilterPolicy.BloomFull, 15);
+        // bbopts.cacheIndexAndFilterBlocks = true;
+        bbopts.setFilterPolicy(FilterPolicy.BloomFull, 10);
 
         opts.setBlockBasedOptions(bbopts);
         opts.unorderedWrites = true;
@@ -85,7 +97,11 @@ struct InvertedIndexStore
     /// i.e INFO/ANN, CHROM, POS, ...
     khashlSet!(char[], true, true)* getIonKeys()
     {
-        return this.idx.byKeyValue().map!(x => x[0].key[].dup).collect;
+        return this.idx.byKeyValue().map!((x) {
+            auto k = x[0].key;
+            scope(exit) k.deallocate;
+            return k[].dup;
+        }).collect;
     }
 
     void storeSharedSymbolTable(SymbolTable* lastSymbolTable)
