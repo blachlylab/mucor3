@@ -14,7 +14,7 @@
 		"progress": "~>5.0.1",
 	},
 	"targetPath": "../bin",
-	"_dflags-ldc": ["--flto=full"],
+	"dflags-ldc": ["--flto=full"],
 	"configurations": [
 		{
 			"name": "standard",

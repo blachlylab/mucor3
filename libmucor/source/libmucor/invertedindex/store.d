@@ -110,7 +110,9 @@ struct InvertedIndexStore
         scope(exit) lastSymbolTable.deallocate;
         IonSymbolTable!false table;
         table.initialize;
-        foreach (key; lastSymbolTable.table[10 .. $])
+        auto t = lastSymbolTable.table;
+        scope(exit) t.deallocate;
+        foreach (key; t[10 .. $])
         {
             table.insert(key.dup);
         }

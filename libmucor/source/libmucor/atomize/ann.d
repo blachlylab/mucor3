@@ -346,20 +346,20 @@ struct Annotation
         if (!this.gene_name.isNone)
         {
             serializer.putKey("gene_name");
-            serializer.putSymbol(this.gene_name.unwrap);
+            serializer.putValue(this.gene_name.unwrap);
         }
 
         if (!this.gene_id.isNone)
         {
             serializer.putKey("gene_id");
-            serializer.putSymbol(this.gene_id.unwrap);
+            serializer.putValue(this.gene_id.unwrap);
         }
 
         serializer.putKey("feature_type");
         serializer.putSymbol(this.feature_type);
 
         serializer.putKey("feature_id");
-        serializer.putSymbol(this.feature_id);
+        serializer.putValue(this.feature_id);
 
         if (!this.transcript_biotype.isNone)
         {

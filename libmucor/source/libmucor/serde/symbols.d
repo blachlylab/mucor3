@@ -234,8 +234,8 @@ struct SymbolTable
 
         void resetSymbolTable() @nogc nothrow 
         {
-            lengths.length = 0;
-            rawdata.length = 0;
+            this.lengths.deallocate;
+            this.rawdata.deallocate;
             foreach (key; IonSystemSymbolTable_v1)
             {
                 rawdata ~= cast(char[])key;
