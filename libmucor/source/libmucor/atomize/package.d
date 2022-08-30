@@ -23,51 +23,83 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, string
     sw.start;
     int vcf_row_count = 0;
     int output_count = 0;
-    auto recIR = VcfRec(vcf.vcfhdr);
+
     // loop over records and parse
-    auto ser = VcfSerializer(outfn, recIR.hdrInfo, SerdeTarget.ion);
-    if (multiSample && multiAllele)
+
+    // if no samples
+    if(vcf.vcfhdr.nsamples == 0) 
     {
-        foreach (x; vcf)
-        {
-            recIR.parse(x);
-            vcf_row_count++;
-            ser.putRecord(recIR);
-            output_count++;
-        }
-    }
-    else if (!multiSample && multiAllele)
-    {
-        foreach (x; vcf)
-        {
-            recIR.parse(x);
-            vcf_row_count++;
-            for (auto i = 0; i < recIR.hdrInfo.samples.length; i++)
+        auto recIRNoSam = VcfRecNoSample(vcf.vcfhdr);
+        auto ser = VcfSerializer(outfn, recIRNoSam.hdrInfo, SerdeTarget.ion);
+        if (multiAllele) {
+            foreach (x; vcf)
             {
-                auto samIR = VcfRecSingleSample(recIR, i);
-                ser.putRecord(samIR);
+                recIRNoSam.parse(x);
+                vcf_row_count++;
+                ser.putRecord(recIRNoSam);
                 output_count++;
             }
-
-        }
-    }
-    else
-    {
-        foreach (x; vcf)
-        {
-            recIR.parse(x);
-            vcf_row_count++;
-            for (auto i = 0; i < recIR.hdrInfo.samples.length; i++)
+        } else {
+            foreach (x; vcf)
             {
-                auto samIR = VcfRecSingleSample(recIR, i);
-                for (auto j = 0; j < samIR.alt.length; j++)
+                recIRNoSam.parse(x);
+                vcf_row_count++;
+                for (auto j = 0; j < recIRNoSam.alt.length; j++)
                 {
-                    auto aIR = VcfRecSingleAlt(samIR, j);
+                    auto aIR = VcfRecSingleAltNoSample(recIRNoSam, j);
+                    // writeln(aIR);
                     ser.putRecord(aIR);
                     output_count++;
                 }
             }
+        }
+    } 
+    else {
+        auto recIR = FullVcfRec(vcf.vcfhdr);
+        auto ser = VcfSerializer(outfn, recIR.hdrInfo, SerdeTarget.ion);
+        if (multiSample && multiAllele)
+        {
+            foreach (x; vcf)
+            {
+                recIR.parse(x);
+                vcf_row_count++;
+                ser.putRecord(recIR);
+                output_count++;
+            }
+        }
+        else if (!multiSample && multiAllele)
+        {
+            foreach (x; vcf)
+            {
+                recIR.parse(x);
+                vcf_row_count++;
+                for (auto i = 0; i < recIR.hdrInfo.samples.length; i++)
+                {
+                    auto samIR = VcfRecSingleSample(recIR, i);
+                    ser.putRecord(samIR);
+                    output_count++;
+                }
 
+            }
+        }
+        else
+        {
+            foreach (x; vcf)
+            {
+                recIR.parse(x);
+                vcf_row_count++;
+                for (auto i = 0; i < recIR.hdrInfo.samples.length; i++)
+                {
+                    auto samIR = VcfRecSingleSample(recIR, i);
+                    for (auto j = 0; j < samIR.alt.length; j++)
+                    {
+                        auto aIR = VcfRecSingleAlt(samIR, j);
+                        ser.putRecord(aIR);
+                        output_count++;
+                    }
+                }
+
+            }
         }
     }
     if (vcf_row_count > 0)

@@ -174,7 +174,7 @@ struct Fmt
                 auto vals = fmt.to!string;
                 for (auto i = 0; i < genotypes.length; i++)
                 {
-                    if(genotypes[i].isNull) continue;
+                    if(genotypes[i].isGenotypeNullOrRef) continue;
                     final switch(hdrInfo.n) {
                         case HeaderLengths.OnePerAllele:
                         case HeaderLengths.OnePerAltAllele:
@@ -207,7 +207,7 @@ struct Fmt
         for (auto i = 0; i < genotypes.length; i++)
         {
             auto gt = genotypes[i];
-            if (gt.isNull)
+            if (gt.isGenotypeNullOrRef)
                 continue;
             this.bySample[i].isNull = false;
             this.bySample[i].other[cfg.getIdx(rec.line.d.fmt[0].id)] = gt.toString;
@@ -225,7 +225,7 @@ struct Fmt
             {
                 auto gt = genotypes[i];
 
-                if (gt.isNull)
+                if (gt.isGenotypeNullOrRef)
                     continue;
                 auto val = vals[i];
                 auto byAllele = &this.bySample[i].byAllele;
@@ -258,7 +258,7 @@ struct Fmt
             for (auto i = 0; i < genotypes.length; i++)
             {
                 auto gt = genotypes[i];
-                if (gt.isNull)
+                if (gt.isGenotypeNullOrRef)
                     continue;
 
                 auto val = vals[i];
@@ -283,7 +283,7 @@ struct Fmt
                 auto val = vals[i];
 
                 auto gt = genotypes[i];
-                if (gt.isNull)
+                if (gt.isGenotypeNullOrRef)
                     continue;
 
                 if (fmt.n == 1)
@@ -359,5 +359,37 @@ struct FmtSingleAlt
         }
 
         serializer.structEnd(state);
+    }
+}
+
+bool isGenotypeNullOrRef(Genotype gt)
+{
+    final switch(gt.type){
+        case BcfRecordType.Int8:
+            foreach(GT!byte g; cast(GT!byte[])(gt.data)) {
+                if(g.isMissing) return true;
+                if(g.isPadding) continue;
+                if(g.getAllele() != 0) return false;
+            }
+            return true;
+        case BcfRecordType.Int16:
+            foreach(GT!short g; cast(GT!short[])(gt.data)) {
+                if(g.isMissing) return true;
+                if(g.isPadding) continue;
+                if(g.getAllele() != 0) return false;
+            }
+            return true;
+        case BcfRecordType.Int32:
+            foreach(GT!int g; cast(GT!int[])(gt.data)) {
+                if(g.isMissing) return true;
+                if(g.isPadding) continue;
+                if(g.getAllele() != 0) return false;
+            }
+            return true;
+        case BcfRecordType.Int64:
+        case BcfRecordType.Float:
+        case BcfRecordType.Char:
+        case BcfRecordType.Null:
+            assert(0);
     }
 }

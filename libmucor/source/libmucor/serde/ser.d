@@ -12,6 +12,7 @@ import libmucor.atomize.header;
 import libmucor.serde;
 import libmucor.khashl;
 import libmucor.error;
+import libmucor : global_pool;
 import std.container : Array;
 
 import std.stdio;
@@ -30,6 +31,7 @@ struct VcfRecordSerializer
 
     IonSerializer!(nMax * 8, [], false) serializer;
     SerdeTarget target;
+    bool calculateHash = true;
 
     @nogc nothrow:
 
@@ -145,6 +147,7 @@ struct VcfSerializer
         char[2] mode = ['w','\0'];
 
         this.outfile = Bgzf(bgzf_open(this.fn.ptr, mode.ptr));
+        auto ret = bgzf_thread_pool(this.outfile, cast(hts_tpool*)global_pool.pool, 0);
         initializeTableFromHeader(hdrInfo);
         writeSharedTable;
         this.target = target;
@@ -229,18 +232,19 @@ struct VcfSerializer
         {
             symbols.insert(name);
         }
-
-        foreach (name; hdrInfo.fmts.other.names)
-        {
-            symbols.insert(name);
-        }
         foreach (f; hdrInfo.filters)
         {
             symbols.insert(f);
         }
-        foreach (sam; hdrInfo.samples)
-        {
-            symbols.insert(sam);
+        if(hdrInfo.samples.length != 0) {
+            foreach (name; hdrInfo.fmts.other.names)
+            {
+                symbols.insert(name);
+            }
+            foreach (sam; hdrInfo.samples)
+            {
+                symbols.insert(sam);
+            }
         }
     }
 
@@ -299,18 +303,20 @@ struct VcfSerializer
 }
 
 /// used for debug/testing 
-auto serializeVcfToIon(T)(T val, string[] symbols = [], SerdeTarget serdeTarget = SerdeTarget.ion)
+auto serializeVcfToIon(T)(T val, string[] symbols = [], bool calulateHash = true, SerdeTarget serdeTarget = SerdeTarget.ion)
 {
     VcfSerializer ser = VcfSerializer(symbols, serdeTarget);
+    ser.recSerializer.calculateHash = calulateHash;
     val.serialize(ser.recSerializer);
     return ionPrefix ~ ser.recSerializer.finalize[].dup;
 }
 
 /// used for debug/testing 
-auto serializeVcfToIon(T)(T val, ref HeaderConfig hdrInfo, SerdeTarget serdeTarget = SerdeTarget
+auto serializeVcfToIon(T)(T val, ref HeaderConfig hdrInfo, bool calulateHash = true, SerdeTarget serdeTarget = SerdeTarget
         .ion)
 {
     VcfSerializer ser = VcfSerializer(hdrInfo, serdeTarget);
+    ser.recSerializer.calculateHash = calulateHash;
     val.serialize(ser.recSerializer);
     return ionPrefix ~ ser.recSerializer.finalize[].dup;
 }

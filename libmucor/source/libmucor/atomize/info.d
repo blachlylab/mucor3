@@ -225,9 +225,9 @@ struct InfoSingleAlt
     FieldValue[] other;
     Annotations[] annFields;
     const(HeaderConfig) cfg;
-    string allele;
+    const(char)[] allele;
 
-    this(Info info, size_t altIdx, string allele)
+    this(Info info, size_t altIdx, const(char)[] allele)
     {
         this.alleleValues = info.byAllele[altIdx];
         this.other = info.other;

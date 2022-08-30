@@ -130,7 +130,8 @@ enum Effect
     duplication,
     bidirectional_gene_fusion,
     structural_interaction_variant,
-    protein_protein_contact
+    protein_protein_contact,
+    start_retained_variant
 }
 
 struct Annotation
@@ -454,8 +455,8 @@ unittest
 
     auto parsed = anns.array;
     enum annFields = serdeGetSerializationKeysRecurse!Annotation.removeSystemSymbols;
-    assert(serializeVcfToIon(parsed[0], annFields)[].dup.ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:ENST00000381657,transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:'ENST00000381657.2:c.-21-26C>A'}`);
-    assert(serializeVcfToIon(parsed[1], annFields)[].dup.ion2text == `{allele:A,effect:[intron_variant],impact:MODIFIER,gene_name:PLCXD1,gene_id:ENSG00000182378,feature_type:Transcript,feature_id:ENST00000381663,transcript_biotype:protein_coding,rank:1,rtotal:7,hgvs_c:'ENST00000381663.3:c.-21-26C>A'}`);
+    assert(serializeVcfToIon(parsed[0], annFields)[].dup.ion2text == `{allele:"A",effect:[intron_variant],impact:MODIFIER,gene_name:"PLCXD1",gene_id:"ENSG00000182378",feature_type:Transcript,feature_id:"ENST00000381657",transcript_biotype:protein_coding,rank:1,rtotal:6,hgvs_c:"ENST00000381657.2:c.-21-26C>A"}`);
+    assert(serializeVcfToIon(parsed[1], annFields)[].dup.ion2text == `{allele:"A",effect:[intron_variant],impact:MODIFIER,gene_name:"PLCXD1",gene_id:"ENSG00000182378",feature_type:Transcript,feature_id:"ENST00000381663",transcript_biotype:protein_coding,rank:1,rtotal:7,hgvs_c:"ENST00000381663.3:c.-21-26C>A"}`);
 
     // assert(serializeVcfToIon(Effect._5_prime_UTR_premature_start_codon_gain_variant).ion2text == "'5_prime_UTR_premature_start_codon_gain_variant'");
 
