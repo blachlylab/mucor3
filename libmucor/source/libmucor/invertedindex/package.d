@@ -49,9 +49,18 @@ struct InvertedIndex
         // return this.recordMd5s;
     }
 
-    auto convertIdsToIon(khashlSet!(uint128) ids)
+    auto convertIdsToIon(ref khashlSet!(uint128) ids)
     {
-        return this.store.getIonObjects(ids.byKey());
+        import mir.utility : _expect;
+        return ids.byKey.map!((x) {
+            auto res = this.store.records[x];
+            if(_expect(res.isErr, false))
+                log_err(__FUNCTION__, "Error occurred: %s", res.error());
+            auto option = res.unwrap();
+            if(_expect(option.isNone, false))
+                log_err(__PRETTY_FUNCTION__, "Error occurred: Ion Hash %s not found in record store", x.toString());
+            return option.unwrap();
+        } );
     }
 
     const(char[])[] getFields(const(char)[] key)
@@ -555,7 +564,8 @@ unittest
     {
         auto rdr = VcfIonDeserializer("/tmp/test2.ion");
         index(rdr, dbname);
-
+    }
+    {
         InvertedIndex idx = InvertedIndex(dbname);
         // idx.store.print;
         query("/tmp/test3.ion", idx, "QUAL > 60");

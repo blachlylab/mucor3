@@ -454,11 +454,6 @@ struct InvertedIndexStore
         return ret;
     }
 
-    auto getIonObjects(R)(R range)
-    {
-        return range.map!(x => this.records[x].unwrap.unwrap);
-    }
-
     void print()
     {
         import std.stdio;

@@ -131,7 +131,7 @@ enum Effect
     bidirectional_gene_fusion,
     structural_interaction_variant,
     protein_protein_contact,
-    start_retained_variant
+    start_retained_variant,
     exon_region,
 }
 

@@ -180,7 +180,7 @@ struct Result(V, E)
 
     private V value;
     private ErrType!E err;
-    private bool isErr;
+    bool isErr;
 
     void opAssign(Result!(V, E) val)
     {
