@@ -75,6 +75,7 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, string
                 vcf_row_count++;
                 for (auto i = 0; i < recIR.hdrInfo.samples.length; i++)
                 {
+                    if(recIR.fmt.bySample[i].isNull) continue;
                     auto samIR = VcfRecSingleSample(recIR, i);
                     ser.putRecord(samIR);
                     output_count++;
@@ -90,6 +91,7 @@ void parseVCF(string fn, int threads, bool multiSample, bool multiAllele, string
                 vcf_row_count++;
                 for (auto i = 0; i < recIR.hdrInfo.samples.length; i++)
                 {
+                    if(recIR.fmt.bySample[i].isNull) continue;
                     auto samIR = VcfRecSingleSample(recIR, i);
                     for (auto j = 0; j < samIR.alt.length; j++)
                     {
