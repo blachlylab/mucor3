@@ -765,9 +765,9 @@ template kh_hash(T)
 auto collect(R)(R range)
 {
     static if(isSomeString!(ElementType!R)) {
-        khashlSet!(ElementType!R, true, true)* set = new khashlSet!(ElementType!R, true, true);
+        khashlSet!(ElementType!R, true, true) set;
     } else {
-        khashlSet!(ElementType!R)* set = new khashlSet!(ElementType!R);
+        khashlSet!(ElementType!R) set;
     }
     
     foreach (e; range)
@@ -946,6 +946,9 @@ unittest
     assert((a | b).byKey.array == ["test4", "test1", "test3", "test2"]);
     assert((a - b).byKey.array == ["test2"]);
     assert((b - a).byKey.array == ["test4"]);
+
+    a.remove("test1");
+    assert(a.byKey.array == ["test3", "test2"]);
     a.kh_release;
     b.kh_release;
 }

@@ -95,7 +95,7 @@ struct InvertedIndexStore
 
     /// load string keys from db that have been observed in data
     /// i.e INFO/ANN, CHROM, POS, ...
-    khashlSet!(char[], true, true)* getIonKeys()
+    khashlSet!(char[], true, true) getIonKeys()
     {
         return this.idx.byKeyValue().map!((x) {
             auto k = x[0].key;

@@ -43,13 +43,13 @@ struct InvertedIndex
         this.store.insert(rec);
     }
 
-    khashlSet!(uint128)* allIds()
+    khashlSet!(uint128) allIds()
     {
         return this.store.records.byKeyValue.map!(x => x[0]).collect;
         // return this.recordMd5s;
     }
 
-    auto convertIdsToIon(khashlSet!(uint128)* ids)
+    auto convertIdsToIon(khashlSet!(uint128) ids)
     {
         return this.store.getIonObjects(ids.byKey());
     }
@@ -64,7 +64,7 @@ struct InvertedIndex
         auto keys = this.store.getIonKeys;
         if (wildcard == -1)
         {
-            if (!(key in *keys))
+            if (!(key in keys))
             {
                 return [];
             }
@@ -89,19 +89,22 @@ struct InvertedIndex
         return ret;
     }
 
-    khashlSet!(uint128)* query(T)(const(char)[] key, T value)
+    khashlSet!(uint128) query(T)(const(char)[] key, T value)
     {
         auto matchingFields = getFields(key);
-        return reduce!unionIds(new khashlSet!uint128,
+        auto ret = reduce!unionIds(khashlSet!uint128.init,
                 matchingFields.map!(x => this.store.filterSingle(x, value))
                 .filter!(x => !x.isNone)
                 .map!(x => x.unwrap.collect()));
+        log_info(__FUNCTION__, "%d ids fetched for query: %s = %s", ret.count,
+                key, value.to!string);
+        return ret;
     }
 
-    khashlSet!(uint128)* queryRange(T)(const(char)[] key, T first, T second)
+    khashlSet!(uint128) queryRange(T)(const(char)[] key, T first, T second)
     {
         auto matchingFields = getFields(key);
-        return reduce!unionIds(new khashlSet!uint128,
+        return reduce!unionIds(khashlSet!uint128.init,
                 matchingFields.map!(x => this.store.filterRange(x, [
                         first, second
                     ]).collect()));
@@ -125,14 +128,14 @@ struct InvertedIndex
         }
     }
 
-    khashlSet!(uint128)* queryOp(T)(const(char)[] key, T val, string op)
+    khashlSet!(uint128) queryOp(T)(const(char)[] key, T val, string op)
     {
         import std.traits : ReturnType;
         import std.algorithm : mean;
 
         log_info(__FUNCTION__, "fetching ids for query: %s %s %s", key, op, val.to!string);
         auto matchingFields = getFields(key).array;
-        khashlSet!(uint128)*[] ids = new khashlSet!(uint128)*[matchingFields.length];
+        khashlSet!(uint128)[] ids = new khashlSet!(uint128)[matchingFields.length];
         foreach (i, kh; parallel(matchingFields))
         {
             ids[i] = this.getMatchingValues(kh, val, op).collect;
@@ -143,10 +146,10 @@ struct InvertedIndex
         return ret;
     }
 
-    khashlSet!(uint128)* queryNOT(khashlSet!(uint128)* values)
+    khashlSet!(uint128) queryNOT(khashlSet!(uint128) values)
     {
         auto r = this.allIds;
-        (*r) -= (*values);
+        r -= (values);
         return r;
     }
 
@@ -314,47 +317,47 @@ unittest
         auto b = [checksums[0], checksums[6], checksums[5]].collect;
         foreach (key; a.byKey)
         {
-            if (!(key in *b))
+            if (!(key in b))
                 writeln("notfound:", key);
         }
         foreach (key; b.byKey)
         {
-            if (!(key in *a))
+            if (!(key in a))
                 writeln("notfound:", key);
         }
         writeln((q1.evaluate(idx)).byKey.array);
-        assert(*(q1.evaluate(idx)) == *([
+        assert((q1.evaluate(idx)) == ([
                 checksums[0], checksums[6], checksums[5]
                 ].collect));
-        assert(*q2.evaluate(idx) == *([checksums[7]].collect));
-        assert(*q3.evaluate(idx) == *([
+        assert(q2.evaluate(idx) == ([checksums[7]].collect));
+        assert(q3.evaluate(idx) == ([
                 checksums[4], checksums[2], checksums[1], checksums[3]
                 ].collect));
-        assert(*q4.evaluate(idx) == *([
+        assert(q4.evaluate(idx) == ([
                 checksums[7], checksums[4], checksums[6], checksums[5],
                 checksums[3]
                 ].collect));
-        assert(*q5.evaluate(idx) == *([
+        assert(q5.evaluate(idx) == ([
                 checksums[7], checksums[2], checksums[4], checksums[6],
                 checksums[5], checksums[3]
                 ].collect));
-        assert(*q6.evaluate(idx) == *([checksums[0], checksums[2], checksums[1]].collect));
-        assert(*q7.evaluate(idx) == *([checksums[0], checksums[1]].collect));
-        assert(*q8.evaluate(idx) == *([checksums[2], checksums[4], checksums[3]].collect));
-        assert(*q9.evaluate(idx) == *([checksums[2], checksums[6], checksums[5]].collect));
-        assert(*q10.evaluate(idx) == *([checksums[6]].collect));
-        assert(*q11.evaluate(idx) == *([
+        assert(q6.evaluate(idx) == ([checksums[0], checksums[2], checksums[1]].collect));
+        assert(q7.evaluate(idx) == ([checksums[0], checksums[1]].collect));
+        assert(q8.evaluate(idx) == ([checksums[2], checksums[4], checksums[3]].collect));
+        assert(q9.evaluate(idx) == ([checksums[2], checksums[6], checksums[5]].collect));
+        assert(q10.evaluate(idx) == ([checksums[6]].collect));
+        assert(q11.evaluate(idx) == ([
                 checksums[2], checksums[6], checksums[4]
                 ].collect));
-        assert(*q12.evaluate(idx) == *([
+        assert(q12.evaluate(idx) == ([
                 checksums[3], checksums[6], checksums[5]
                 ].collect));
-        assert(*q13.evaluate(idx) == *([
+        assert(q13.evaluate(idx) == ([
                 checksums[0], checksums[2], checksums[4], checksums[6]
                 ].collect));
-        assert(*q14.evaluate(idx) == *([checksums[5]].collect));
-        assert(*q15.evaluate(idx) == *(new khashlSet!uint128()));
-        assert(*q16.evaluate(idx) == *([checksums[6]].collect));
+        assert(q14.evaluate(idx) == ([checksums[5]].collect));
+        assert(q15.evaluate(idx) == (khashlSet!uint128()));
+        assert(q16.evaluate(idx) == ([checksums[6]].collect));
     }
 
 }
@@ -434,45 +437,45 @@ unittest
         auto idx = InvertedIndex(dbname);
         import std.algorithm : map, countUntil;
 
-        assert(*q1.evaluate(idx) == *([checksums[0]].collect));
-        assert(*q2.evaluate(idx) == *([
+        assert(q1.evaluate(idx) == ([checksums[0]].collect));
+        assert(q2.evaluate(idx) == ([
                 checksums[0], checksums[2], checksums[4], checksums[3]
                 ].collect));
-        assert(*q3.evaluate(idx) == *([checksums[7], checksums[6], checksums[5]].collect));
-        assert(*q4.evaluate(idx) == *([
+        assert(q3.evaluate(idx) == ([checksums[7], checksums[6], checksums[5]].collect));
+        assert(q4.evaluate(idx) == ([
                 checksums[0], checksums[2], checksums[4], checksums[1],
                 checksums[3]
                 ].collect));
-        assert(*q5.evaluate(idx) == *([
+        assert(q5.evaluate(idx) == ([
                 checksums[6], checksums[1], checksums[5], checksums[7]
                 ].collect));
-        assert(*q6.evaluate(idx) == *([
+        assert(q6.evaluate(idx) == ([
                 checksums[7], checksums[5], checksums[1], checksums[6],
                 checksums[4], checksums[2], checksums[3]
                 ].collect));
-        assert(*q7.evaluate(idx) == *(new khashlSet!uint128()));
-        assert(*q8.evaluate(idx) == *([
+        assert(q7.evaluate(idx) == *(new khashlSet!uint128()));
+        assert(q8.evaluate(idx) == ([
                 checksums[2], checksums[4], checksums[6], checksums[5],
                 checksums[7]
                 ].collect));
-        assert(*q9.evaluate(idx) == *([
+        assert(q9.evaluate(idx) == ([
                 checksums[2], checksums[4], checksums[6], checksums[5],
                 checksums[7]
                 ].collect));
-        assert(*q10.evaluate(idx) == *([
+        assert(q10.evaluate(idx) == ([
                 checksums[2], checksums[4], checksums[6], checksums[1],
                 checksums[5], checksums[7]
                 ].collect));
-        assert(*q11.evaluate(idx) == *([
+        assert(q11.evaluate(idx) == ([
                 checksums[2], checksums[4], checksums[6], checksums[1],
                 checksums[5], checksums[7]
                 ].collect));
-        assert(*q12.evaluate(idx) == *([checksums[0], checksums[3]].collect));
-        assert(*q13.evaluate(idx) == *([checksums[0], checksums[3]].collect));
-        assert(*q14.evaluate(idx) == *([
+        assert(q12.evaluate(idx) == ([checksums[0], checksums[3]].collect));
+        assert(q13.evaluate(idx) == ([checksums[0], checksums[3]].collect));
+        assert(q14.evaluate(idx) == ([
                 checksums[0], checksums[1], checksums[3]
                 ].collect));
-        assert(*q15.evaluate(idx) == *([
+        assert(q15.evaluate(idx) == ([
                 checksums[0], checksums[1], checksums[3]
                 ].collect));
     }

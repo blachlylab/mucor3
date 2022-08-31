@@ -18,7 +18,7 @@ import libmucor.invertedindex;
 import libmucor.invertedindex.record;
 import libmucor.error;
 
-khashlSet!(uint128)* evaluateQuery(QueryExpr* queryExpr, ref InvertedIndex idx, string lastKey = "")
+khashlSet!(uint128) evaluateQuery(QueryExpr* queryExpr, ref InvertedIndex idx, string lastKey = "")
 {
     auto matchBasic = (BasicQueryExpr x, string lk) => x.match!((Value x) {
         if (lk == "")
@@ -40,7 +40,7 @@ khashlSet!(uint128)* evaluateQuery(QueryExpr* queryExpr, ref InvertedIndex idx, 
         final switch (x.op)
         {
         case KeyOp.Exists:
-            return new khashlSet!(uint128)(); /// TODO: complete
+            return khashlSet!(uint128)(); /// TODO: complete
         }
     });
     return (*queryExpr).match!((BasicQuery x) => matchBasic(*x.expr, lastKey),
@@ -61,11 +61,9 @@ khashlSet!(uint128)* evaluateQuery(QueryExpr* queryExpr, ref InvertedIndex idx, 
     }, (SubQueryExpr x) => evaluateQuery(x.sub, idx, lastKey),);
 }
 
-khashlSet!(const(char)[])* getQueryFields(QueryExpr* queryExpr, khashlSet!(const(char)[])* keys)
+khashlSet!(const(char)[]) getQueryFields(QueryExpr* queryExpr, khashlSet!(const(char)[]) keys = khashlSet!(const(char)[]).init)
 {
-    if (!keys)
-        keys = new khashlSet!(const(char)[]);
-    auto matchBasic = (BasicQueryExpr x, khashlSet!(const(char)[])* k) => x.match!((Value x) {
+    auto matchBasic = (BasicQueryExpr x, khashlSet!(const(char)[]) k) => x.match!((Value x) {
         return k;
     }, (KeyValue x) { k.insert(x.lhs.key); return k; },/// key op
             (UnaryKeyOp x) { k.insert(x.lhs.key); return k; });
@@ -79,7 +77,7 @@ khashlSet!(const(char)[])* getQueryFields(QueryExpr* queryExpr, khashlSet!(const
     }, (SubQueryExpr x) => getQueryFields(x.sub, keys));
 }
 
-khashlSet!(uint128)* queryValue(const(char)[] key, Value value, ref InvertedIndex idx)
+khashlSet!(uint128) queryValue(const(char)[] key, Value value, ref InvertedIndex idx)
 {
 
     return (*value.expr).match!((bool x) => idx.query(key, x),
@@ -89,7 +87,7 @@ khashlSet!(uint128)* queryValue(const(char)[] key, Value value, ref InvertedInde
             (LongRange x) => idx.queryRange(key, x[0], x[1]),);
 }
 
-khashlSet!(uint128)* queryOpValue(const(char)[] key, Value value, ref InvertedIndex idx, string op)
+khashlSet!(uint128) queryOpValue(const(char)[] key, Value value, ref InvertedIndex idx, string op)
 {
     alias f = tryMatch!((long x) { return idx.queryOp!long(key, x, op); }, (double x) {
         return idx.queryOp!double(key, x, op);
@@ -97,23 +95,21 @@ khashlSet!(uint128)* queryOpValue(const(char)[] key, Value value, ref InvertedIn
     return f(*value.expr);
 }
 
-khashlSet!(uint128)* unionIds(khashlSet!(uint128)* a, khashlSet!(uint128)* b)
+khashlSet!(uint128) unionIds(khashlSet!(uint128) a, khashlSet!(uint128) b)
 {
-    (*a) |= (*b);
+    khashlSet!(uint128) ret;
+    ret = a | b;
+    a.kh_release;
     b.kh_release;
-    return a;
+    return ret;
 }
 
-khashlSet!(uint128)* intersectIds(khashlSet!(uint128)* a, khashlSet!(uint128)* b)
+khashlSet!(uint128) intersectIds(khashlSet!(uint128) a, khashlSet!(uint128) b)
 {
-    (*a) &= (*b);
+    khashlSet!(uint128) ret;
+    ret = a & b;
+    a.kh_release;
     b.kh_release;
-    return a;
+    return ret;
 }
 
-khashlSet!(uint128)* negateIds(khashlSet!(uint128)* a, khashlSet!(uint128)* b)
-{
-    (*a) |= (*b);
-    b.kh_release;
-    return a;
-}
