@@ -132,6 +132,7 @@ enum Effect
     structural_interaction_variant,
     protein_protein_contact,
     start_retained_variant
+    exon_region,
 }
 
 struct Annotation
