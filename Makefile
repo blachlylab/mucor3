@@ -31,19 +31,15 @@ endif
 
 clean:
 	# remove binaries
-	rm bin/*
+	[ ! -e bin ] || rm -r bin
 
 	# remove dub selection files
-	rm libmucor/dub.selections.json
-	rm mucor3/dub.selections.json
-	rm option/dub.selections.json
-	rm drocks/dub.selections.json
+	[ ! -e libmucor/dub.selections.json ] || rm libmucor/dub.selections.json
+	[ ! -e mucor3/dub.selections.json ] || rm mucor3/dub.selections.json
 
 	# remove .dub folders
-	rm -r libmucor/.dub
-	rm -r mucor3/.dub
-	rm -r option/.dub
-	rm -r drocks/.dub
+	[ ! -e libmucor/.dub ] || rm -r libmucor/.dub
+	[ ! -e mucor3/.dub ] || rm -r mucor3/.dub
 
 # mucor3:
 # 	cd mucor3
