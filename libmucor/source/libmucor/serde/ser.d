@@ -33,7 +33,7 @@ struct VcfRecordSerializer
     SerdeTarget target;
     bool calculateHash = true;
 
-    @nogc nothrow:
+    @nogc nothrow @safe:
 
     this(ref SymbolTableBuilder symbols, SerdeTarget target) @trusted
     {

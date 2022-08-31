@@ -15,7 +15,7 @@ import mir.ser;
 import mir.bignum.integer;
 import mir.utility : _expect;
 
-auto hashAndFinalize(ref VcfRecordSerializer serializer, size_t s) {
+auto hashAndFinalize(ref VcfRecordSerializer serializer, size_t s) @nogc nothrow @safe {
     import core.stdc.stdlib : malloc, free;
 
     if(_expect(serializer.calculateHash, true)) {

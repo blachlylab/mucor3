@@ -39,7 +39,7 @@ const(char[])[] removeSystemSymbols(const(char[])[] keys) @safe pure nothrow
 
 static immutable ubyte[] ionPrefix = [0xe0, 0x01, 0x00, 0xea];
 
-BigInt!2 hashIon(ubyte[] data)
+BigInt!2 hashIon(ubyte[] data) @nogc nothrow @trusted
 {
     BigInt!2 ret = BigInt!2([SEED1, SEED2]);
     SpookyHash.Hash128(data.ptr, data.length, &ret.data[0], &ret.data[1]);

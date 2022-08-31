@@ -5,7 +5,7 @@ import mir.utility : _expect;
 
 import libmucor.error;
 
-T enumFromStr(T)(ref string myString)
+T enumFromStr(T)(ref string myString) @nogc nothrow @safe
 {
     T v;
     if (_expect(serdeParseEnum(myString, v), true))
@@ -19,7 +19,7 @@ T enumFromStr(T)(ref string myString)
     }
 }
 
-string enumToString(T)(T e)
+string enumToString(T)(T e) @nogc nothrow @safe
 {
     final switch (e)
     {

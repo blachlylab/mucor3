@@ -57,7 +57,7 @@ alias khiter_t = khint_t;
 
 pragma(inline, true)
 {
-    @nogc nothrow:
+    @nogc nothrow @trusted:
     auto __kh_used(T, L)(ref L flag, T i)
     {
         return (flag[i >> 5] >> (i & 0x1fU) & 1U);
@@ -141,7 +141,7 @@ pragma(inline, true):
     //     kfree(cast(void*) this.keys);
     //     kfree(cast(void*) this.used);
     // }
-
+    @nogc nothrow @trusted:
     typeof(this) dup()
     {
         return typeof(this)(this.bits, this.count, this.used.dup, this.keys.dup);

@@ -220,7 +220,6 @@ struct Info
 
 struct InfoSingleAlt
 {
-    Annotation _dummy;
     InfoAlleleValues alleleValues;
     FieldValue[] other;
     Annotations[] annFields;

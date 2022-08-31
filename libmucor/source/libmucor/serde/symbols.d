@@ -39,7 +39,7 @@ struct SymbolTableBuilder
 
     /// insert symbol  
     @nogc nothrow:
-    size_t insert(const(char)[] key)
+    size_t insert(const(char)[] key) @nogc nothrow @trusted
     {
         auto k = kh_hash!(const(char)[]).kh_hash_func(key);
         auto p = k in currentSymbolsMap;
@@ -54,7 +54,7 @@ struct SymbolTableBuilder
         return numSymbols - 1;
     }
 
-    ubyte[] getRawSymbols()
+    ubyte[] getRawSymbols() @nogc nothrow @safe
     {
         return cast(ubyte[]) dataForHashing[];
     }
@@ -63,7 +63,7 @@ struct SymbolTableBuilder
     // {
     //     symbols:[ ... ]
     // }
-    const(ubyte)[] serialize()
+    const(ubyte)[] serialize() @nogc nothrow @safe
     {
         if (this.syms.length > 0)
         {

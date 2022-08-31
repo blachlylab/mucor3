@@ -292,6 +292,34 @@ struct Buffer(T, bool useGC = false) {
             this.capacity = this.len;
         }
     }
+
+    int opApply(scope int delegate(ref T) @nogc nothrow @safe dg) @nogc nothrow @trusted
+    {
+        int result = 0;
+    
+        for (ulong i;i < len; i++)
+        {
+            result = dg(this.ptr[i]);
+            if (result)
+                break;
+        }
+    
+        return result;
+    }
+
+    int opApply(scope int delegate(ulong, ref T) @nogc nothrow @safe dg) @nogc nothrow @trusted
+    {
+        int result = 0;
+    
+        for (ulong i;i < len; i++)
+        {
+            result = dg(i, this.ptr[i]);
+            if (result)
+                break;
+        }
+    
+        return result;
+    }
 }
 
 unittest {

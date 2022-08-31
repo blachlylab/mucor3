@@ -24,7 +24,7 @@ struct Annotations
     string other;
     bool empty;
     
-    nothrow pragma(inline, true):
+    @safe @nogc nothrow pragma(inline, true):
     this(string val)
     {
         // if types empty, all types are encoded as strings
@@ -207,7 +207,7 @@ struct Annotation
     /// messages messages are optional.
     Option!string errors_warnings_info;
     
-    nothrow pragma(inline, true):
+    @safe @nogc nothrow pragma(inline, true):
     this(string ann)
     {
 
