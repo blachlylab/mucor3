@@ -208,8 +208,12 @@ struct InvertedIndexStore
         case IonTypeCode.null_:
             return;
         case IonTypeCode.bool_:
-            debug assert(0, "We don't handle bool values yet");
-            else return;
+
+            auto k = CompositeKey(key, true);
+            this.idx[k] ~= checksum;
+            k.key.deallocate;
+
+            return;
         case IonTypeCode.uInt:
             IonUInt val;
             err = value.get(val);
