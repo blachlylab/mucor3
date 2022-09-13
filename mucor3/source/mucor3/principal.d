@@ -197,7 +197,7 @@ void filterAnnotationToPrincipalIsoform(VCFRecord rec, string annotationFile,
     }
     auto best = matchingRecords[bestIdx];
 
-    string newAnn;
+    const(char)[] newAnn;
     foreach (i, f; featureNames)
     {
         if (f == best["ID"])

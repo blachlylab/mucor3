@@ -3,6 +3,7 @@ module libmucor.atomize.ann;
 import option;
 import libmucor.atomize.util;
 import libmucor.serde;
+import libmucor.utility;
 import memory;
 
 import std.array : array;
@@ -18,14 +19,14 @@ import mir.parse : fromString;
 struct Annotations
 {
     /// slice of original string 
-    string original;
+    const(char)[] original;
     /// range of individual annotations
-    string frontVal;
-    string other;
+    const(char)[] frontVal;
+    const(char)[] other;
     bool empty;
     
     @safe @nogc nothrow pragma(inline, true):
-    this(string val)
+    this(const(char)[] val)
     {
         // if types empty, all types are encoded as strings
         this.original = val;
@@ -138,7 +139,7 @@ enum Effect
 struct Annotation
 {
     /// Allele (or ALT)
-    string allele;
+    const(char)[] allele;
 
     /// Annotation (a.k.a. effect or consequence): Annotated using Sequence Ontology terms. Multiple effects can be concatenated using ‘&’.
     Buffer!Effect effect;
@@ -147,30 +148,30 @@ struct Annotation
     Modifier impact;
 
     /// Gene Name: Common gene name (HGNC).
-    Option!string gene_name;
+    Option!(const(char)[]) gene_name;
 
     /// Gene ID: Gene ID
-    Option!string gene_id;
+    Option!(const(char)[]) gene_id;
 
     /// Feature type: Which type of feature is in the next field
-    string feature_type;
+    const(char)[] feature_type;
 
     /// Feature ID: Depending on the annotation, this may be: Transcript ID, Motif ID, miRNA, ChipSeq peak, Histone mark, etc.
-    string feature_id;
+    const(char)[] feature_id;
 
     /// Transcript biotype. The bare minimum is at least a description on whether the transcript is {“Coding”, “Noncoding”}. Whenever possible, use ENSEMBL biotypes.
-    Option!string transcript_biotype;
+    Option!(const(char)[]) transcript_biotype;
 
     /// Rank / total : Exon or Intron rank / total number of exons or introns.
     Option!long rank; // not required
     Option!long rtotal; // not required
 
     /// HGVS.c: Variant using HGVS notation (DNA level)
-    string hgvs_c;
+    const(char)[] hgvs_c;
 
     /// HGVS.p: If variant is coding, this field describes the variant using HGVS notation (Protein level).
     /// Since transcript ID is already mentioned in ‘feature ID’, it may be omitted here.
-    Option!string hgvs_p; // not required
+    Option!(const(char)[]) hgvs_p; // not required
 
     /// cDNA_position: Position in cDNA (one based).
     Option!long cdna_position; // not required
@@ -206,10 +207,10 @@ struct Annotation
     /// or ‘message types’ (as shown in column 2, e.g.
     /// WARNING_REF_DOES_NOT_MATCH_GENOME). All these errors, warnings or information
     /// messages messages are optional.
-    Option!string errors_warnings_info;
+    Option!(const(char)[]) errors_warnings_info;
     
     @safe @nogc nothrow pragma(inline, true):
-    this(string ann)
+    this(const(char)[] ann)
     {
 
         auto vals = ann.findSplit('|');
@@ -461,16 +462,4 @@ unittest
 
     // assert(serializeVcfToIon(Effect._5_prime_UTR_premature_start_codon_gain_variant).ion2text == "'5_prime_UTR_premature_start_codon_gain_variant'");
 
-}
-
-
-auto findSplit(string val, char splitChar) @nogc nothrow @trusted {
-    import core.stdc.string : memchr;
-    string[2] ret;
-    auto p = cast(char*)memchr(val.ptr, splitChar, (cast(char[])val).length);
-    if(!p) return ret;
-    auto len = ((cast(ulong)p) - (cast(ulong)val.ptr));
-    ret[0] = val[0 .. len];
-    ret[1] = cast(string)p[1 .. val.length - len];
-    return ret;
 }
