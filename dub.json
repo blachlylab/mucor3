@@ -37,6 +37,12 @@
 			"name": "unittest",
 			"targetType": "library",
 			"excludedSourceFiles": ["mucor3/source/app.d"]
+		},
+		{
+			"name": "libasan",
+			"targetType": "library",
+			"excludedSourceFiles": ["mucor3/source/app.d"],
+			"dflags-ldc": ["-fsanitize=address"]
 		}
 	]
 }
