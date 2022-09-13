@@ -2,51 +2,15 @@ module libmucor.atomize.fmt;
 
 import libmucor.atomize.field;
 import libmucor.atomize.header;
+import libmucor.atomize.genotype;
+import libmucor.atomize.util;
 import libmucor.serde.ser;
 
 import std.algorithm : map, any;
 
-import dhtslib.vcf;
-
-
-struct FmtValues
-{
-    FieldValue[] fields;
-    bool isNull = true;
-
-    void reset()
-    {
-        this.isNull = true;
-        foreach (f; fields)
-        {
-            f.reset;
-        }
-    }
-
-    ref auto opIndex(size_t index)
-    {
-        this.isNull = false;
-        return fields[index];
-    }
-
-    void serialize(ref VcfRecordSerializer serializer, const(HeaderConfig)* cfg, bool byAllele)
-    {
-        if (this.isNull)
-            return;
-        auto s = serializer.structBegin;
-        foreach (i, val; this.fields)
-        {
-            if (val.isNull)
-                continue;
-            if (byAllele)
-                serializer.putKey(cfg.fmts.byAllele.names[i]);
-            else
-                serializer.putKey(cfg.fmts.other.names[i]);
-            val.serialize(serializer);
-        }
-        serializer.structEnd(s);
-    }
-}
+import dhtslib.vcf: VCFRecord, HeaderLengths, BcfRecordType, UnpackLevel;
+import htslib: bcf_fmt_t;
+import memory;
 
 /** 
  * sam1: {
@@ -56,39 +20,42 @@ struct FmtValues
  */
 struct FmtSampleValues
 {
-    FmtValues[] byAllele;
-    FmtValues other;
-    bool isNull = true;
+    Buffer!(Buffer!FmtField) byAllele;
+    Genotype gt;
+    Buffer!FmtField other;
 
-    void reset()
+    void reset() @nogc nothrow @safe
     {
-        this.isNull = true;
+        this.gt.reset();
         foreach (ref v; byAllele)
         {
-            v.reset;
+            v.deallocate();
         }
-        this.other.reset;
+        this.byAllele.length = 0;
+        this.other.length = 0;
     }
 
-    void serialize(ref VcfRecordSerializer serializer, const(HeaderConfig)* cfg)
+    void serialize(ref VcfRecordSerializer serializer) @nogc nothrow @safe
     {
         auto state = serializer.structBegin;
-        if (this.byAllele.map!(x => !x.isNull).any)
-        {
+        if(this.byAllele.length) {
             serializer.putKey("byAllele");
             auto state2 = serializer.listBegin;
-            foreach (i, v; this.byAllele)
+            foreach (ref ba; this.byAllele)
             {
-                v.serialize(serializer, cfg, true);
+                auto state3 = serializer.structBegin;
+                foreach (ref v; ba)
+                    v.serialize(serializer);
+                serializer.structEnd(state3);
             }
             serializer.listEnd(state2);
         }
 
-        foreach (i, val; this.other.fields)
+        serializer.putKey("GT");
+        gt.serialize(serializer);
+
+        foreach (ref val; this.other)
         {
-            if (val.isNull)
-                continue;
-            serializer.putKey(cfg.fmts.other.names[i]);
             val.serialize(serializer);
         }
         serializer.structEnd(state);
@@ -102,24 +69,16 @@ struct FmtSampleValues
  */
 struct Fmt
 {
-    FmtSampleValues[] bySample;
-    Genotype[] genotypes;
+    Buffer!FmtSampleValues bySample;
     const(HeaderConfig) cfg;
-    size_t numByAlleleFields;
 
-    this(HeaderConfig cfg)
+    this(HeaderConfig cfg) @nogc nothrow @safe
     {
-        this.numByAlleleFields = cfg.fmts.byAllele.names.length;
         this.bySample.length = cfg.samples.length;
-        foreach (ref s; this.bySample)
-        {
-            s.other.fields.length = cfg.fmts.other.names.length;
-        }
-        this.genotypes.length = cfg.samples.length;
         this.cfg = cfg;
     }
 
-    void reset()
+    void reset() @nogc nothrow @safe
     {
         foreach (ref sam; bySample)
         {
@@ -127,184 +86,69 @@ struct Fmt
         }
     }
 
-    void parse(VCFRecord rec)
+    void parse(ref VCFRecord rec) @nogc nothrow @trusted
     {
-        import htslib.vcf;
-
+        // unpack(rec, UnpackLevel.All);
+        
         this.reset;
-        /// make sure all arrays are initialized
-        foreach (ref s; this.bySample)
-        {
-            if (s.byAllele.length < rec.line.n_allele - 1)
-            {
-                s.byAllele.length = rec.line.n_allele - 1;
-                foreach (ref v; s.byAllele)
-                {
-                    v.fields.length = this.numByAlleleFields;
-                }
-            }
-            else
-            {
-                s.byAllele.length = rec.line.n_allele - 1;
-            }
-        }
-
+        
         assert(this.bySample.length == rec.line.n_sample);
         if (rec.line.n_fmt == 0)
             return;
         /// get genotype first
-        auto gtFMT = FormatField("GT", &rec.line.d.fmt[0], rec.line);
         /// loop over samples and get genotypes
         for (auto i = 0; i < rec.line.n_sample; i++)
         {
-            auto gt = Genotype(gtFMT, i);
-            genotypes[i] = gt;
+            this.bySample[i].gt = Genotype(&rec.line.d.fmt[0], i);
         }
 
         /// loop over fmts
-        foreach (bcf_fmt_t v; rec.line.d.fmt[1 .. rec.line.n_fmt])
+        foreach (t, bcf_fmt_t v; rec.line.d.fmt[1 .. rec.line.n_fmt])
         {
-            auto fmt = FormatField("", &v, rec.line);
-
             auto idx = cfg.getIdx(v.id);
             auto hdrInfo = cfg.getFmt(v.id);
-            final switch (fmt.type)
+
+            for (auto i = 0; i < rec.line.n_sample; i++)
             {
-            case BcfRecordType.Char:
-                auto vals = fmt.to!string;
-                for (auto i = 0; i < genotypes.length; i++)
-                {
-                    if(genotypes[i].isGenotypeNullOrRef) continue;
-                    final switch(hdrInfo.n) {
-                        case HeaderLengths.OnePerAllele:
-                        case HeaderLengths.OnePerAltAllele:
-                            this.bySample[i].byAllele[0][idx] = vals[i][0];
-                            break;
-                        case HeaderLengths.OnePerGenotype:
-                        case HeaderLengths.Fixed:
-                        case HeaderLengths.None:
-                        case HeaderLengths.Variable:
-                            this.bySample[i].other[idx] = vals[i][0];
-                            break;
-                    }
-                }
-                continue;
-                // float or float array
-            case BcfRecordType.Float:
-                this.parseFmt!float(hdrInfo, fmt, idx);
-                break;
-                // int type or array
-            case BcfRecordType.Int8:
-            case BcfRecordType.Int16:
-            case BcfRecordType.Int32:
-            case BcfRecordType.Int64:
-                this.parseFmt!long(hdrInfo, fmt, idx);
-                break;
-            case BcfRecordType.Null:
-                continue;
-            }
-        }
-        for (auto i = 0; i < genotypes.length; i++)
-        {
-            auto gt = genotypes[i];
-            if (gt.isGenotypeNullOrRef)
-                continue;
-            this.bySample[i].isNull = false;
-            this.bySample[i].other[cfg.getIdx(rec.line.d.fmt[0].id)] = gt.toString;
-        }
-    }
+                if(this.bySample[i].gt.isNullOrRef) continue;
+                final switch(hdrInfo.n) {
+                    case HeaderLengths.OnePerAllele:
+                        if(!this.bySample[i].byAllele.length)
+                            this.bySample[i].byAllele.length = rec.line.n_allele - 1;
 
-    void parseFmt(T)(HdrFieldInfo hdrInfo, FormatField fmt, size_t idx)
-    {
-        assert(genotypes.length == this.bySample.length);
-        final switch (hdrInfo.n)
-        {
-        case HeaderLengths.OnePerAllele:
-            auto vals = fmt.to!T;
-            for (auto i = 0; i < genotypes.length; i++)
-            {
-                auto gt = genotypes[i];
-
-                if (gt.isGenotypeNullOrRef)
-                    continue;
-                auto val = vals[i];
-                auto byAllele = &this.bySample[i].byAllele;
-                if (byAllele.length == 0)
-                    return;
-                assert(fmt.n == val.length);
-
-                auto first = val[0];
-                foreach (gi; gt.alleles)
-                {
-                    if (gi == 0)
-                    {
-                        first = val[gi];
+                        for(auto j=0; j < this.bySample[i].byAllele.length; j++) {
+                            this.bySample[i].byAllele[j] ~= FmtField(&v, cfg.fmts.byAllele.names[idx], i, j, true);
+                        }
                         break;
-                    }
-                }
-                auto j = 0;
-                foreach (gi; gt.alleles)
-                {
-                    if (gi != 0 && j < byAllele.length)
-                    {
-                        (*byAllele)[j][idx] = [first, val[gi]];
-                        j++;
-                    }
-                }
-            }
-            return;
-        case HeaderLengths.OnePerAltAllele:
-            auto vals = fmt.to!T;
-            for (auto i = 0; i < genotypes.length; i++)
-            {
-                auto gt = genotypes[i];
-                if (gt.isGenotypeNullOrRef)
-                    continue;
+                    case HeaderLengths.OnePerAltAllele:
+                        if(!this.bySample[i].byAllele.length)
+                            this.bySample[i].byAllele.length = rec.line.n_allele - 1;
 
-                auto val = vals[i];
-                if (this.bySample[i].byAllele.length == 0)
-                    return;
-                assert(this.bySample[i].byAllele.length == val.length);
-
-                foreach (j, ref allele; this.bySample[i].byAllele)
-                {
-                    allele[idx] = val[j];
+                        for(auto j=0; j < this.bySample[i].byAllele.length; j++) {
+                            this.bySample[i].byAllele[j] ~= FmtField(&v, cfg.fmts.byAllele.names[idx], i, j);
+                        }
+                        break;
+                    case HeaderLengths.OnePerGenotype:
+                    case HeaderLengths.Fixed:
+                    case HeaderLengths.None:
+                    case HeaderLengths.Variable:
+                        this.bySample[i].other ~= FmtField(&v, cfg.fmts.other.names[idx], i);
+                        break;
                 }
             }
-            return;
-        case HeaderLengths.OnePerGenotype:
-        case HeaderLengths.Fixed:
-        case HeaderLengths.None:
-        case HeaderLengths.Variable:
-            auto vals = fmt.to!T;
-
-            for (auto i = 0; i < genotypes.length; i++)
-            {
-                auto val = vals[i];
-
-                auto gt = genotypes[i];
-                if (gt.isGenotypeNullOrRef)
-                    continue;
-
-                if (fmt.n == 1)
-                    this.bySample[i].other[idx] = val[0];
-                else
-                    this.bySample[i].other[idx] = val;
-            }
-            return;
         }
     }
 
-    void serialize(ref VcfRecordSerializer serializer)
+    void serialize(ref VcfRecordSerializer serializer) @nogc nothrow @safe
     {
         auto state = serializer.structBegin;
 
         foreach (i, string key; cfg.samples)
         {
-            if (this.bySample[i].isNull)
+            if (this.bySample[i].gt.isNullOrRef)
                 continue;
             serializer.putKey(key);
-            this.bySample[i].serialize(serializer, &cfg);
+            this.bySample[i].serialize(serializer);
         }
         serializer.structEnd(state);
     }
@@ -315,46 +159,47 @@ struct FmtSingleSample
     FmtSampleValues sampleValues;
     const(HeaderConfig) cfg;
 
-    this(Fmt fmt, size_t samIdx)
+    this(Fmt fmt, size_t samIdx) @nogc nothrow @safe
     {
         this.sampleValues = fmt.bySample[samIdx];
         this.cfg = fmt.cfg;
     }
 
-    void serialize(S)(ref S serializer)
+    void serialize(S)(ref S serializer) @nogc nothrow @safe
     {
-        this.sampleValues.serialize(serializer, &cfg);
+        this.sampleValues.serialize(serializer);
     }
 }
 
 struct FmtSingleAlt
 {
-    FmtValues alleleValues;
-    FmtValues other;
+    Buffer!FmtField alleleValues;
+    Genotype gt;
+    Buffer!FmtField other;
     const(HeaderConfig) cfg;
 
-    this(FmtSingleSample fmt, size_t altIdx)
+    this(FmtSingleSample fmt, size_t altIdx) @nogc nothrow @safe
     {
-        this.alleleValues = fmt.sampleValues.byAllele[altIdx];
+        if(fmt.sampleValues.byAllele.length)
+            this.alleleValues = fmt.sampleValues.byAllele[altIdx];
+        this.gt = fmt.sampleValues.gt;
         this.other = fmt.sampleValues.other;
         this.cfg = fmt.cfg;
     }
 
-    void serialize(ref VcfRecordSerializer serializer)
+    void serialize(ref VcfRecordSerializer serializer) @nogc nothrow @safe
     {
         auto state = serializer.structBegin;
-        foreach (i, val; this.alleleValues.fields)
+        foreach (i, val; this.alleleValues)
         {
-            if (val.isNull)
-                continue;
-            serializer.putKey(cfg.fmts.byAllele.names[i]);
             val.serialize(serializer);
         }
-        foreach (i, val; this.other.fields)
+
+        serializer.putKey("GT");
+        gt.serialize(serializer);
+
+        foreach (i, val; this.other)
         {
-            if (val.isNull)
-                continue;
-            serializer.putKey(cfg.fmts.other.names[i]);
             val.serialize(serializer);
         }
 
@@ -362,34 +207,83 @@ struct FmtSingleAlt
     }
 }
 
-bool isGenotypeNullOrRef(Genotype gt)
+unittest
 {
-    final switch(gt.type){
-        case BcfRecordType.Int8:
-            foreach(GT!byte g; cast(GT!byte[])(gt.data)) {
-                if(g.isMissing) return true;
-                if(g.isPadding) continue;
-                if(g.getAllele() != 0) return false;
-            }
-            return true;
-        case BcfRecordType.Int16:
-            foreach(GT!short g; cast(GT!short[])(gt.data)) {
-                if(g.isMissing) return true;
-                if(g.isPadding) continue;
-                if(g.getAllele() != 0) return false;
-            }
-            return true;
-        case BcfRecordType.Int32:
-            foreach(GT!int g; cast(GT!int[])(gt.data)) {
-                if(g.isMissing) return true;
-                if(g.isPadding) continue;
-                if(g.getAllele() != 0) return false;
-            }
-            return true;
-        case BcfRecordType.Int64:
-        case BcfRecordType.Float:
-        case BcfRecordType.Char:
-        case BcfRecordType.Null:
-            assert(0);
+    import std.stdio;
+    import libmucor.serde;
+    import libmucor.atomize.record;
+    import mir.ion.conv;
+    import dhtslib.vcf : VCFReader;
+    
+
+    auto vcf = VCFReader("test/data/vcf_file.vcf", -1, UnpackLevel.All);
+    
+    auto hdrInfo = HeaderConfig(vcf.vcfhdr);
+    vcf.popFront;
+    vcf.popFront;
+    vcf.popFront;
+    auto ionRec = FullVcfRec(vcf.vcfhdr);
+
+    auto res1 = `{A:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},B:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
+    auto res2 = `{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}`;
+    auto res3 = `{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}`;
+    auto res4 = `{TT:0,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}`;
+    auto res5 = `{TT:0,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}`;
+    auto res6 = `{TT:1,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}`;
+    auto res7 = `{TT:1,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}`;
+
+    auto rec = vcf.front;
+    ionRec.parse(rec);
+    assert(serializeVcfToIon(ionRec.fmt, hdrInfo, false).ion2text == res1);
+    {
+        auto ionRecSS1 = VcfRecSingleSample(ionRec, 0);
+        assert(serializeVcfToIon(ionRecSS1.fmt, hdrInfo, false).ion2text == res2);
+
+        auto ionRecSS2 = VcfRecSingleSample(ionRec, 1);
+        assert(serializeVcfToIon(ionRecSS2.fmt, hdrInfo, false).ion2text == res3);
+
+        auto ionRecSA1 = VcfRecSingleAlt(ionRecSS1, 0);
+        assert(serializeVcfToIon(ionRecSA1.fmt, hdrInfo, false).ion2text == res4);
+
+        auto ionRecSA2 = VcfRecSingleAlt(ionRecSS2, 0);
+        assert(serializeVcfToIon(ionRecSA2.fmt, hdrInfo, false).ion2text == res5);
+
+        auto ionRecSA3 = VcfRecSingleAlt(ionRecSS1, 1);
+        assert(serializeVcfToIon(ionRecSA3.fmt, hdrInfo, false).ion2text == res6);
+
+        auto ionRecSA4 = VcfRecSingleAlt(ionRecSS2, 1);
+        assert(serializeVcfToIon(ionRecSA4.fmt, hdrInfo, false).ion2text == res7);
+    }
+    vcf.popFront;
+
+    rec = vcf.front;
+
+    res1 = `{A:{GT:"0/1",GQ:245,DP:32},B:{GT:"0/1",GQ:245,DP:32}}`;
+    res2 = `{GT:"0/1",GQ:245,DP:32}`;
+    res3 = `{GT:"0/1",GQ:245,DP:32}`;
+    res4 = `{GT:"0/1",GQ:245,DP:32}`;
+    res5 = `{GT:"0/1",GQ:245,DP:32}`;
+
+    ionRec.parse(rec);
+    writeln(serializeVcfToIon(ionRec.fmt, hdrInfo, false).ion2text);
+    assert(serializeVcfToIon(ionRec.fmt, hdrInfo, false).ion2text == res1);
+    {
+        auto ionRecSS1 = VcfRecSingleSample(ionRec, 0);
+        assert(serializeVcfToIon(ionRecSS1.fmt, hdrInfo, false).ion2text == res2);
+
+        
+        auto ionRecSS2 = VcfRecSingleSample(ionRec, 1);
+        assert(serializeVcfToIon(ionRecSS2.fmt, hdrInfo, false).ion2text == res3);
+
+        
+
+        auto ionRecSA1 = VcfRecSingleAlt(ionRecSS1, 0);
+        assert(serializeVcfToIon(ionRecSA1.fmt, hdrInfo, false).ion2text == res4);
+
+        
+        auto ionRecSA2 = VcfRecSingleAlt(ionRecSS2, 0);
+        assert(serializeVcfToIon(ionRecSA2.fmt, hdrInfo, false).ion2text == res5);
+
+        
     }
 }

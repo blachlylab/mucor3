@@ -258,7 +258,7 @@ unittest
     auto ionRec = FullVcfRec(vcf.vcfhdr);
 
     ionRec.parse(rec);
-
+    writeln(serializeVcfToIon(ionRec, hdrInfo, false).ion2text);
     assert(serializeVcfToIon(ionRec, hdrInfo, false).ion2text == res1);
     {
         auto ionRecSS1 = VcfRecSingleSample(ionRec, 0);
@@ -294,7 +294,6 @@ unittest
 
     rec = vcf.front;
     ionRec.parse(rec);
-    writeln(serializeVcfToIon(ionRec, hdrInfo, false).ion2text);
     assert(serializeVcfToIon(ionRec, hdrInfo, false).ion2text == res1);
 
     auto ionRecSS1 = VcfRecSingleSample(ionRec, 0);
