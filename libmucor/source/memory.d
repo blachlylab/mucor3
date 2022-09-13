@@ -8,22 +8,10 @@ import std.typecons : RefCounted, RefCountedAutoInitialize;
 import core.atomic;
 import libmucor.error;
 
-/// allocate bytes
-/// if using GC, zeros bytes and registers with GC
+/// allocates and zeroes bytes
+/// if using GC, registers with GC
 T* allocate(T, bool useGC = false)(size_t n) @trusted @nogc nothrow {
-    auto p = cast(T*) pureMalloc(n*T.sizeof);
-    static if(useGC) {
-        memset(p, 0, n*T.sizeof);
-        GC.addRange(p, n*T.sizeof);
-    }
-    return p;
-}
-
-/// allocate bytes
-/// if using GC, zeros bytes and registers with GC
-T* callocate(T, bool useGC = false)(size_t n) @trusted @nogc nothrow {
-    auto p = cast(T*) pureMalloc(n*T.sizeof);
-    memset(p, 0, n*T.sizeof);
+    auto p = cast(T*) pureCalloc(n, T.sizeof);
     static if(useGC) {
         GC.addRange(p, n*T.sizeof);
     }

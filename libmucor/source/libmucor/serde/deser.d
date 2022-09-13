@@ -95,7 +95,7 @@ struct VcfIonDeserializer
 
         this.inFile = Bgzf(bgzf_open(this.fn.ptr, mode.ptr));
 
-        this.symbols = callocate!SymbolTable(1);
+        this.symbols = allocate!SymbolTable(1);
 
         error = readVersion();
         handleIonError(error);
