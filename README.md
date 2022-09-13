@@ -1,4 +1,6 @@
 # Mucor3
+[![unittests](https://github.com/blachlylab/mucor3/actions/workflows/unittests.yml/badge.svg)](https://github.com/blachlylab/mucor3/actions/workflows/unittests.yml)
+[![codecov.io](https://codecov.io/github/blachlylab/mucor3/coverage.svg)](https://codecov.io/github/blachlylab/mucor3)
 
 * [Introduction](#introduction)
 * [Installation](#installation)
