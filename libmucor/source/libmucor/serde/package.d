@@ -46,7 +46,7 @@ BigInt!2 hashIon(ubyte[] data) @nogc nothrow @trusted
     return ret;
 }
 
-void handleIonError(IonErrorCode err) @nogc nothrow
+void handleIonError(IonErrorCode err, const(char)[] msg = "", string fun = __FUNCTION__, size_t line = __LINE__) @nogc nothrow @safe
 {
     debug
     {
@@ -54,7 +54,13 @@ void handleIonError(IonErrorCode err) @nogc nothrow
     }
     else
     {
-        if (_expect(err, false))
-            log_err(__FUNCTION__, "Ion error: %s", ionErrorMsg(err));
+        if (_expect(err, false)) {
+            if(msg != "") {
+                log_err(fun, "Error at %s:%d: %s, Ion error: %s", fun, line, msg, ionErrorMsg(err));
+            } else {
+                log_err(fun, "Error at %s:%d: Ion error: %s", fun, line, ionErrorMsg(err));
+            }
+            
+        }
     }
 }

@@ -186,17 +186,27 @@ void serializeValueByType(OutputMode mode, T)(T field, ref VcfRecordSerializer s
                 return;
         } else static if(mode == OutputMode.OnePerAlt) {
             case BcfRecordType.Char:
-                auto str = (cast(char*)field.data.ptr)[1..field.data.length];
-                auto split = findSplit(str, ',');
-                int i = 0;
-                while(split[1].length != 0 && i < field.alleleIdx){
-                    split = findSplit(split[1], ',');
-                    i++;
-                }
+                if(cast(char)field.data[0] == ','){
+                    auto str = (cast(char*)field.data.ptr)[1..field.data.length];
+                    auto split = findSplit(str, ',');
+                    int i = 0;
+                    while(split[1].length != 0 && i < field.alleleIdx){
+                        split = findSplit(split[1], ',');
+                        i++;
+                    }
 
-                assert(i == field.alleleIdx);
-                s.putKey(field.id);
-                serializeValue(s.serializer, split[0]);
+                    assert(i == field.alleleIdx);
+                    s.putKey(field.id);
+                    serializeValue(s.serializer, split[0]);
+                } else {
+                    s.putKey(field.id);
+                    auto arr = (cast(char*)field.data.ptr)[0..field.data.length];
+                    if(!arr[$-1]) {
+                        arr = fromStringz(cast(char*)field.data.ptr);
+                    }
+                    serializeValue(s.serializer, arr);
+                }
+                
                 return;
             case BcfRecordType.Null:
                 return;
