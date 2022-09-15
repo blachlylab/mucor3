@@ -197,14 +197,19 @@ void filterAnnotationToPrincipalIsoform(VCFRecord rec, string annotationFile,
     }
     auto best = matchingRecords[bestIdx];
 
-    const(char)[] newAnn;
+    const(char)[][] newAnns;
     foreach (i, f; featureNames)
     {
         if (f == best["ID"])
         {
-            newAnn = Annotations(anns.original).drop(i).frontVal;
-            break;
+            newAnns ~= Annotations(anns.original).drop(i).frontVal;
         }
+    }
+    const(char)[] newAnn;
+    if(newAnns.length == 1) {
+        newAnn = newAnns[0];
+    } else {
+        newAnn = newAnns.join(",");
     }
 
     rec.addInfo(infoField, newAnn);
