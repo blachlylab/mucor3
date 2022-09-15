@@ -97,12 +97,16 @@ struct VcfRequiredFields(bool singleSample, bool singleAlt)
         }
 
         serializer.putKey("FILTER");
-        auto l2 = serializer.listBegin;
-        foreach (ref const(char)[] key; filter)
-        {
-            serializer.putSymbol(key);
+        if(filter.length == 1) {
+            serializer.putSymbol(filter[0]);
+        } else if(filter.length > 1) {
+            auto l2 = serializer.listBegin;
+            foreach (ref const(char)[] key; filter)
+            {
+                serializer.putSymbol(key);
+            }
+            serializer.listEnd(l2);
         }
-        serializer.listEnd(l2);
 
         static if (singleSample)
         {
@@ -250,11 +254,11 @@ unittest
     auto hdrInfo = HeaderConfig(vcf.vcfhdr);
     auto rec = vcf.front;
 
-    auto res1 = `{CHROM:'1',POS:3000150,REF:"C",ALT:["T"],QUAL:59.2,FILTER:[PASS],INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{A:{GT:"0/1",GQ:245},B:{GT:"0/1",GQ:245}}}`;
-    auto res2 = `{CHROM:'1',POS:3000150,REF:"C",ALT:["T"],QUAL:59.2,FILTER:[PASS],sample:A,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
-    auto res3 = `{CHROM:'1',POS:3000150,REF:"C",ALT:["T"],QUAL:59.2,FILTER:[PASS],sample:B,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
-    auto res4 = `{CHROM:'1',POS:3000150,REF:"C",ALT:"T",QUAL:59.2,FILTER:[PASS],sample:A,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
-    auto res5 = `{CHROM:'1',POS:3000150,REF:"C",ALT:"T",QUAL:59.2,FILTER:[PASS],sample:B,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
+    auto res1 = `{CHROM:'1',POS:3000150,REF:"C",ALT:["T"],QUAL:59.2,FILTER:PASS,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{A:{GT:"0/1",GQ:245},B:{GT:"0/1",GQ:245}}}`;
+    auto res2 = `{CHROM:'1',POS:3000150,REF:"C",ALT:["T"],QUAL:59.2,FILTER:PASS,sample:A,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
+    auto res3 = `{CHROM:'1',POS:3000150,REF:"C",ALT:["T"],QUAL:59.2,FILTER:PASS,sample:B,INFO:{byAllele:[{AC:2}],AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
+    auto res4 = `{CHROM:'1',POS:3000150,REF:"C",ALT:"T",QUAL:59.2,FILTER:PASS,sample:A,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
+    auto res5 = `{CHROM:'1',POS:3000150,REF:"C",ALT:"T",QUAL:59.2,FILTER:PASS,sample:B,INFO:{AC:2,AN:4},FORMAT:{GT:"0/1",GQ:245}}`;
     auto ionRec = FullVcfRec(vcf.vcfhdr);
 
     ionRec.parse(rec);
@@ -284,13 +288,13 @@ unittest
     vcf.popFront;
     vcf.popFront;
 
-    res1 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:["T","C"],QUAL:12.6,FILTER:[test],INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{A:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},B:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}}`;
-    res2 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:["T","C"],QUAL:12.6,FILTER:[test],sample:A,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
-    res3 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:["T","C"],QUAL:12.6,FILTER:[test],sample:B,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
-    res4 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:"T",QUAL:12.6,FILTER:[test],sample:A,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
-    res5 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:"T",QUAL:12.6,FILTER:[test],sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
-    auto res6 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:"C",QUAL:12.6,FILTER:[test],sample:A,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
-    auto res7 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:"C",QUAL:12.6,FILTER:[test],sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
+    res1 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:["T","C"],QUAL:12.6,FILTER:test,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{A:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]},B:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}}`;
+    res2 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:["T","C"],QUAL:12.6,FILTER:test,sample:A,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
+    res3 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:["T","C"],QUAL:12.6,FILTER:test,sample:B,INFO:{byAllele:[{AC:1},{AC:1}],TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{byAllele:[{TT:0},{TT:1}],GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
+    res4 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:"T",QUAL:12.6,FILTER:test,sample:A,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
+    res5 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:"T",QUAL:12.6,FILTER:test,sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:0,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
+    auto res6 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:"C",QUAL:12.6,FILTER:test,sample:A,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"0/1",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,-20.0,-5.0,-20.0]}}`;
+    auto res7 = `{CHROM:'1',POS:3062915,ID:idSNP,REF:"G",ALT:"C",QUAL:12.6,FILTER:test,sample:B,INFO:{AC:1,TEST:5,DP4:[1,2,3,4],AN:3},FORMAT:{TT:1,GT:"2",GQ:409,DP:35,GL:[-20.0,-5.0,-20.0,nan,nan,nan]}}`;
 
     rec = vcf.front;
     ionRec.parse(rec);
