@@ -157,9 +157,7 @@ struct InvertedIndex
 
     khashlSet!(uint128) queryNOT(khashlSet!(uint128) values)
     {
-        auto r = this.allIds;
-        r -= (values);
-        return r;
+        return this.allIds - values;
     }
 
     auto opBinaryRight(string op)(InvertedIndex lhs)
@@ -243,6 +241,21 @@ unittest
         assert(idx.queryRange("test3", 1, 3).byKey.array == [
                 checksums[0], checksums[1]
                 ]);
+        assert(idx.store.existsOp("test3") == [
+                checksums[0], checksums[1], checksums[2]
+                ].collect);
+        assert(idx.store.existsOp("test2") == [
+                checksums[1], checksums[0]
+                ].collect);
+        assert(idx.store.existsOp("test4") == [
+                checksums[2]
+                ].collect);
+        assert(idx.queryNOT(idx.store.existsOp("test4")) == [
+                checksums[0], checksums[1],
+                ].collect);
+        assert(idx.queryNOT(idx.query("test2", "foo")) == [
+                checksums[1], checksums[2]
+                ].collect);
     }
 
 }
@@ -320,6 +333,8 @@ unittest
         auto q14 = Query("(test* = baz) & (test3 = 6..7)");
         auto q15 = Query("(test = (world | worl | hi | bye)) & (test4/foo = (bar & baz))");
         auto q16 = Query("(test = hello) & (test4/foo = (bar & baz))");
+        auto q17 = Query("test4/foo: exists");
+        auto q18 = Query("!(test4/foo: exists)");
 
         auto idx = InvertedIndex(dbname);
         auto a = q1.evaluate(idx);
@@ -367,6 +382,10 @@ unittest
         assert(q14.evaluate(idx) == ([checksums[5]].collect));
         assert(q15.evaluate(idx) == (khashlSet!uint128()));
         assert(q16.evaluate(idx) == ([checksums[6]].collect));
+        assert(q17.evaluate(idx) == ([checksums[2], checksums[6], checksums[5], checksums[7]].collect));
+        assert(q18.evaluate(idx) == ([
+            checksums[0], checksums[1], checksums[3], checksums[4]
+            ].collect));
     }
 
 }
@@ -398,6 +417,7 @@ unittest
         checksums ~= uint128.fromHexString("5edd465728d24f70b27540b3b24a97a3");
         checksums ~= uint128.fromHexString("c35c7fba59054a728ae54ea7ade538e5");
         checksums ~= uint128.fromHexString("239ef3ec18e848c38a2a8876993b8edf");
+        checksums ~= uint128.fromHexString("239ef3ec18e848c28ae54ea7ade538e5");
 
         auto idx = InvertedIndex(dbname);
         data ~= cast(ubyte[])(
@@ -421,6 +441,9 @@ unittest
         data ~= cast(ubyte[])(
                 `{test1:-0.2,test2:-1e-9,test3:97,checksum:` ~ checksums[7].toString ~ `}`)
             .text2ion;
+        data ~= cast(ubyte[])(
+                `{test1:-0.2,test2:-1e-9,test4:97,checksum:` ~ checksums[8].toString ~ `}`)
+            .text2ion;
         foreach (symTable, val; IonValueStream(data))
         {
             idx.insert(symTable, val);
@@ -442,24 +465,32 @@ unittest
         auto q13 = Query("test3 < 10.0");
         auto q14 = Query("test3 <= 10");
         auto q15 = Query("test3 <= 10.0");
+        auto q16 = Query("test3: exists");
+        auto q17 = Query("test4: exists");
+        auto q18 = Query("!(test4: exists)");
+        auto q19 = Query("!(test3: exists)");
+        auto q20 = Query("!(test2: exists)");
+        auto q21 = Query("!(test1 = 0.4)");
 
         auto idx = InvertedIndex(dbname);
         import std.algorithm : map, countUntil;
 
+        assert(idx.allIds.count == 9);
+        assert(idx.allIds.byKey.array.length == 9);
         assert(q1.evaluate(idx) == ([checksums[0]].collect));
         assert(q2.evaluate(idx) == ([
                 checksums[0], checksums[2], checksums[4], checksums[3]
                 ].collect));
-        assert(q3.evaluate(idx) == ([checksums[7], checksums[6], checksums[5]].collect));
+        assert(q3.evaluate(idx) == ([checksums[8], checksums[7], checksums[6], checksums[5]].collect));
         assert(q4.evaluate(idx) == ([
                 checksums[0], checksums[2], checksums[4], checksums[1],
                 checksums[3]
                 ].collect));
         assert(q5.evaluate(idx) == ([
-                checksums[6], checksums[1], checksums[5], checksums[7]
+                checksums[6], checksums[1], checksums[5], checksums[7], checksums[8] 
                 ].collect));
         assert(q6.evaluate(idx) == ([
-                checksums[7], checksums[5], checksums[1], checksums[6],
+                checksums[8], checksums[7], checksums[5], checksums[1], checksums[6],
                 checksums[4], checksums[2], checksums[3]
                 ].collect));
         assert(q7.evaluate(idx) == *(new khashlSet!uint128()));
@@ -486,6 +517,22 @@ unittest
                 ].collect));
         assert(q15.evaluate(idx) == ([
                 checksums[0], checksums[1], checksums[3]
+                ].collect));
+        assert(q16.evaluate(idx) == ([
+                checksums[7], checksums[5], checksums[1], checksums[6],
+                checksums[4], checksums[0], checksums[2], checksums[3]
+                ].collect));
+        
+        assert(q17.evaluate(idx) == ([checksums[8]].collect));
+        assert(q18.evaluate(idx) == ([
+                checksums[7], checksums[5], checksums[1], checksums[6],
+                checksums[4], checksums[0], checksums[2], checksums[3]
+                ].collect));
+        assert(q19.evaluate(idx) == ([checksums[8]].collect));
+        assert(q20.evaluate(idx) == *(new khashlSet!uint128()));
+        assert(q21.evaluate(idx) == ([
+                checksums[7], checksums[5], checksums[1], checksums[6],
+                checksums[4], checksums[8], checksums[2], checksums[3]
                 ].collect));
     }
 

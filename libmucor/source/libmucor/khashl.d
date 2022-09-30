@@ -347,37 +347,6 @@ pragma(inline, true):
             }
         }
 
-        void opOpAssign(string op)(ref const(kh_t) other)
-        {
-
-            static if (op == "&")
-            {
-                foreach (k; this.byKey)
-                {
-                    if (!(k in other))
-                        this.remove(k);
-                }
-
-            }
-            else static if (op == "-")
-            {
-                foreach (k; this.byKey)
-                {
-                    if (k in other)
-                        this.remove(k);
-                }
-            }
-            else static if (op == "|")
-            {
-                foreach (k; other.byKey)
-                    this.insert(k);
-            }
-            else
-            {
-                static assert(0, "op not implemented");
-            }
-        }
-
         auto opEquals(const(kh_t) other) const
         {
             foreach (key; this.byKey)

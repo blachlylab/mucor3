@@ -40,7 +40,7 @@ khashlSet!(uint128) evaluateQuery(QueryExpr* queryExpr, ref InvertedIndex idx, s
         final switch (x.op)
         {
         case KeyOp.Exists:
-            return khashlSet!(uint128)(); /// TODO: complete
+            return queryOpExists(x.lhs.key, idx);
         }
     });
     return (*queryExpr).match!((BasicQuery x) => matchBasic(*x.expr, lastKey),
@@ -93,6 +93,11 @@ khashlSet!(uint128) queryOpValue(const(char)[] key, Value value, ref InvertedInd
         return idx.queryOp!double(key, x, op);
     });
     return f(*value.expr);
+}
+
+khashlSet!(uint128) queryOpExists(const(char)[] key, ref InvertedIndex idx)
+{
+    return idx.store.existsOp(key);
 }
 
 khashlSet!(uint128) unionIds(khashlSet!(uint128) a, khashlSet!(uint128) b)

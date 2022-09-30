@@ -39,7 +39,7 @@ unittest
     auto q = Query("1.0");
     assert(q == Query(Value("1.0")));
 
-    q = Query("\"key\": _exists_");
+    q = Query("\"key\": exists");
     assert(q == Query(UnaryKeyOp(Key("key"), KeyOp.Exists)));
 
     q = Query("val1 | 1 | 2.1");

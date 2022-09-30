@@ -478,4 +478,29 @@ struct InvertedIndexStore
             stderr.writeln(kv);
         }
     }
+
+    /// load string keys from db that have been observed in data
+    /// i.e INFO/ANN, CHROM, POS, ...
+    auto existsOp(const(char)[] key)
+    {
+        import libmucor.hts_endian;
+        uint128[] ret;
+        this.idx.family
+            .iter()
+            .filter!((x) {
+                auto kbytes = x.key;
+                scope(exit) kbytes.deallocate;
+                auto k = deserialize!CompositeKey(kbytes);
+                scope(exit) k.key.deallocate;
+                return k.key[] == key;
+            })
+            .each!((x) {
+                auto v = x.value();
+                scope(exit) v.deallocate;
+                for(auto i = 0; i < v.length; i+=16) {
+                    ret ~= uint128([le_to_u64(v.ptr + i), le_to_u64(v.ptr + i + 8)]);
+                } 
+            });
+        return ret.collect;
+    }
 }
