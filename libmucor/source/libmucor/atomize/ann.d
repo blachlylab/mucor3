@@ -78,62 +78,142 @@ enum Modifier
 
 enum Effect
 {
-    chromosome_number_variation,
-    exon_loss_variant,
-    frameshift_variant,
-    stop_gained,
-    stop_lost,
-    start_lost,
-    splice_acceptor_variant,
-    splice_donor_variant,
-    rare_amino_acid_variant,
-    missense_variant,
-    disruptive_inframe_insertion,
-    conservative_inframe_insertion,
-    disruptive_inframe_deletion,
-    conservative_inframe_deletion,
-    @serdeKeys("5_prime_UTR_truncation") _5_prime_UTR_truncation,
-    @serdeKeys("3_prime_UTR_truncation") _3_prime_UTR_truncation,
-    exon_loss,
-    splice_branch_variant,
-    splice_region_variant,
-    stop_retained_variant,
-    initiator_codon_variant,
-    synonymous_variant,
-    non_canonical_start_codon,
+    /// Fusion of two genes in opposite directions. HIGH
+    bidirectional_gene_fusion, 
+    /// The variant hits a CDS. MODIFIER
+    /// One or many codons are changed e.g.: An MNP of size multiple of 3   LOW
     coding_sequence_variant,
-    @serdeKeys("5_prime_UTR_variant") _5_prime_UTR_variant,
-    @serdeKeys("3_prime_UTR_variant") _3_prime_UTR_variant,
-    @serdeKeys("5_prime_UTR_premature_start_codon_gain_variant") _5_prime_UTR_premature_start_codon_gain_variant,
-    upstream_gene_variant,
-    downstream_gene_variant,
-    TF_binding_site_variant,
-    regulatory_region_variant,
-    miRNA,
-    custom,
-    sequence_feature,
-    conserved_intron_variant,
-    intron_variant,
-    intragenic_variant,
-    conserved_intergenic_variant,
-    intergenic_region,
-    non_coding_exon_variant,
-    nc_transcript_variant,
-    gene_variant,
+    /// A large parte (over 1%) of the chromosome was deleted.  HIGH
     chromosome,
-    non_coding_transcript_exon_variant,
-    TFBS_ablation,
-    gene_fusion,
-    feature_ablation,
-    feature_fusion,
-    transcript_ablation,
-    non_coding_transcript_variant,
+    /// 
+    chromosome_number_variation,
+    /// 
+    conservative_inframe_insertion,
+    /// 
+    conservative_inframe_deletion,
+    /// The variant is in a highly conserved intergenic region  MODIFIER
+    conserved_intergenic_variant, 
+    /// The variant is in a highly conserved intronic region    MODIFIER
+    conserved_intron_variant,
+    /// 
+    custom,
+    /// Duplication of a large chromosome segment (over 1% or 1,000,000 bases)  HIGH
+    /// Duplication of an exon or part of an exon.  HIGH
+    /// Duplication of a gene.  MODIFIER
     duplication,
-    bidirectional_gene_fusion,
-    structural_interaction_variant,
-    protein_protein_contact,
-    start_retained_variant,
+    /// One codon is changed and one or many codons are inserted e.g.: An insert of size multiple of three, not at codon boundary   MODERATE
+    disruptive_inframe_insertion, 
+    /// One codon is changed and one or more codons are deleted e.g.: A deletion of size multiple of three, not at codon boundary   MODERATE
+    disruptive_inframe_deletion,
+    /// Downstream of a gene (default length: 5K bases) MODIFIER
+    downstream_gene_variant,
+    /// The variant hits an exon (from a non-coding transcript) or a retained intron.   MODIFIER
     exon_region,
+    /// 
+    exon_variant,
+    /// 
+    exon_loss,
+    /// A deletion removes the whole exon or a part.    HIGH
+    exon_loss_variant,
+    /// Deletion of a gene. HIGH
+    /// Deletion of a transcript.   HIGH
+    feature_ablation,
+    /// 
+    feature_fusion,
+    /// 
+    feature_elongation,
+    /// Insertion or deletion causes a frame shift e.g.: An indel size is not multple of 3  HIGH
+    frameshift_variant,
+    /// The variant hits a gene.    MODIFIER
+    gene_variant,
+    /// Fusion of two genes or of one gene and an intergenic region.    HIGH
+    gene_fusion,
+    /// One or many codons are deleted e.g.: A deletion multiple of three at codon boundary MODERATE
+    inframe_deletion,
+    /// Inversion of a large chromosome segment (over 1% or 1,000,000 bases).   HIGH
+    /// Inversion of an exon or part of an exon.    HIGH
+    inversion,
+    /// One or many codons are inserted e.g.: An insert multiple of three in a codon boundary   MODERATE
+    inframe_insertion,
+    /// The variant is in an intergenic region  MODIFIER
+    intergenic_region, 
+    /// Variant causes start codon to be mutated into another start codon (the new codon produces a different AA). e.g.: Atg/Ctg, M/L (ATG and CTG can be START codons) LOW
+    initiator_codon_variant,	
+    /// The variant hits a gene, but no transcripts within the gene MODIFIER
+    intragenic_variant, 
+    /// Variant hits and intron. Technically, hits no exon in the transcript.   MODIFIER
+    intron_variant, 
+    /// Variant affects an miRNA    MODIFIER
+    miRNA,
+    /// Variant causes a codon that produces a different amino acid e.g.: Tgg/Cgg, W/R  MODERATE
+    missense_variant,
+    /// 
+    nc_transcript_variant,
+    /// 
+    non_canonical_start_codon,
+    /// 
+    non_coding_exon_variant,
+    /// 
+    non_coding_transcript_exon_variant,
+    /// 
+    non_coding_transcript_variant,
+    /// Protein-Protein interaction loci.   HIGH
+    protein_protein_contact,
+    /// The variant hits a rare amino acid thus is likely to produce protein loss of function   HIGH
+    rare_amino_acid_variant,
+    /// Rearrangement affecting one or more genes.  HIGH
+    rearranged_at_DNA_level,
+    /// The variant hits a known regulatory feature (non-coding).   MODIFIER
+    regulatory_region_variant,
+    
+    /// Variant causes stop codon to be mutated into another stop codon (the new codon produces a different AA). e.g.: Atg/Ctg, M/L (ATG and CTG can be START codons)   LOW
+    /// Variant causes stop codon to be mutated into another stop codon. e.g.: taA/taG, */* LOW
+    start_retained_variant,
+    /// 
+    stop_retained_variant,
+    /// Within protein interacion loci (e.g. two AA that are in contact within the same protein, prossibly helping structural conformation).    HIGH
+    structural_interaction_variant,
+    /// The variant hits a splice acceptor site (defined as two bases before exon start, except for the first exon).    HIGH
+    splice_acceptor_variant,
+    splice_branch_variant,
+    /// The variant hits a Splice donor site (defined as two bases after coding exon end, except for the last exon).    HIGH	
+    splice_donor_variant,
+    /// A sequence variant in which a change has occurred within the region of the splice site, either within 1-3 bases of the exon or 3-8 bases of the intron. LOW
+    /// A varaint affective putative (Lariat) branch point, located in the intron.  LOW
+    /// A varaint affective putative (Lariat) branch point from U12 splicing machinery, located in the intron.  MODERATE
+    splice_region_variant,
+    /// Variant causes stop codon to be mutated into a non-stop codon e.g.: Tga/Cga, */R    HIGH
+    stop_lost,
+    /// A variant in 5'UTR region produces a three base sequence that can be a START codon. LOW
+    @serdeKeys("5_prime_UTR_premature_start_codon_gain_variant") _5_prime_UTR_premature_start_codon_gain_variant,
+    /// Variant causes start codon to be mutated into a non-start codon. e.g.: aTg/aGg, M/R HIGH
+    start_lost,
+    /// Variant causes a STOP codon e.g.: Cag/Tag, Q/*  HIGH
+    stop_gained,	
+    /// Variant causes a codon that produces the same amino acid e.g.: Ttg/Ctg, L/L LOW
+    synonymous_variant,	
+    /// Variant causes start codon to be mutated into another start codon. e.g.: Ttg/Ctg, L/L (TTG and CTG can be START codons) LOW
+    start_retained,
+    /// A 'NextProt' based annotation. Details are provided in the 'feature type' sub-field (ANN), or in the effect details (EFF).  MODERATE
+    sequence_feature,
+    /// The variant hits a transcript.  MODIFIER
+    transcript_ablation,
+    /// 
+    transcript_variant,
+    /// 
+    TF_binding_site_variant,
+    /// 
+    TFBS_ablation,
+    /// Upstream of a gene (default length: 5K bases)   MODIFIER
+    upstream_gene_variant,
+    /// Variant hits 3'UTR region   MODIFIER	
+    @serdeKeys("3_prime_UTR_variant") _3_prime_UTR_variant,
+    /// The variant deletes an exon which is in the 3'UTR of the transcript MODERATE
+    @serdeKeys("3_prime_UTR_truncation") _3_prime_UTR_truncation,
+    /// Variant hits 5'UTR region   MODIFIER
+    @serdeKeys("5_prime_UTR_variant") _5_prime_UTR_variant,
+    /// The variant deletes an exon which is in the 5'UTR of the transcript MODERATE
+    @serdeKeys("5_prime_UTR_truncation") _5_prime_UTR_truncation,
 }
 
 /// This enum represents the transcript_biotype field of the ANN spec
@@ -291,8 +371,11 @@ enum AnnErrWarnInfo {
     I2, INFO_COMPOUND_ANNOTATION,
     /// An alternative reference sequence was used to calculate this annotation
     /// (e.g. cancer sample comparing somatic vs. germline).
-    I3, INFO_NON_REFERENCE_ANNOTATION
-    
+    I3, INFO_NON_REFERENCE_ANNOTATION,
+    ///
+    ERROR_OUT_OF_EXON, 
+    /// Missing coding sequence information
+	ERROR_MISSING_CDS_SEQUENCE 
 }
 
 // Calculated from values in our vcfs
