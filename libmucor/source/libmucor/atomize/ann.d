@@ -313,7 +313,7 @@ enum TranscriptBiotype {
     /// Unspliced lncRNA that is several kb in size.
     macro_lncRNA,
     /// Transcript where ditag and/or published experimental data strongly supports the existence of short non-coding transcripts transcribed from the 3'UTR.
-    @serdeKeys("3prime_overlapping_ncRNA") _3prime_overlapping_ncRNA,
+    prime3_overlapping_ncrna,
     /// Otherwise viable coding region omitted from this alternatively spliced transcript because the splice variation affects a region coding for a protein domain.
     disrupted_domain,
     /// Short non coding RNA gene that forms part of the vault ribonucleoprotein complex.
@@ -325,8 +325,9 @@ enum TranscriptBiotype {
     /// Bare minimum as required by ANN spec
     Coding,
     Noncoding,
+    
     nonsense_mediated_decay,
-    prime3_overlapping_ncrna,
+    
 }
 
 enum AnnErrWarnInfo {
