@@ -35,7 +35,8 @@ enum UnaryLogicalOp : string
 /// Operators that can be applied to a key 
 enum KeyOp : string
 {
-    Exists = "exists"
+    NotExists = "not_exists",
+    Exists = "exists",
 }
 
 /// Operators that can be applied to a key 

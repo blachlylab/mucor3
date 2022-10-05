@@ -172,6 +172,23 @@ struct InvertedIndex
         return ret;
     }
 
+    khashlSet!(uint128) queryOpNotExists(const(char)[] key)
+    {
+        import std.traits : ReturnType;
+        import std.algorithm : mean;
+
+        log_info(__FUNCTION__, "fetching ids for query: %s: not_exists", key);
+        auto matchingFields = getFields(key).array;
+        khashlSet!(uint128)[] ids = new khashlSet!(uint128)[matchingFields.length];
+        foreach (i, k; parallel(matchingFields))
+        {
+            ids[i] = this.queryNOT(this.store.existsOp(k).collect);
+        }
+        auto ret = taskPool.reduce!unionIds(ids, 1);
+        log_info(__FUNCTION__, "%d ids fetched for query: %s: not_exists", ret.count, key);
+        return ret;
+    }
+
     khashlSet!(uint128) queryNOT(khashlSet!(uint128) values)
     {
         return this.allIds - values;
@@ -258,16 +275,16 @@ unittest
         assert(idx.queryRange("test3", 1, 3).byKey.array == [
                 checksums[0], checksums[1]
                 ]);
-        assert(idx.store.existsOp("test3") == [
+        assert(idx.queryOpExists("test3") == [
                 checksums[0], checksums[1], checksums[2]
                 ].collect);
-        assert(idx.store.existsOp("test2") == [
+        assert(idx.queryOpExists("test2") == [
                 checksums[1], checksums[0]
                 ].collect);
-        assert(idx.store.existsOp("test4") == [
+        assert(idx.queryOpExists("test4") == [
                 checksums[2]
                 ].collect);
-        assert(idx.queryNOT(idx.store.existsOp("test4")) == [
+        assert(idx.queryNOT(idx.queryOpExists("test4")) == [
                 checksums[0], checksums[1],
                 ].collect);
         assert(idx.queryNOT(idx.query("test2", "foo")) == [
@@ -488,6 +505,7 @@ unittest
         auto q19 = Query("!(test3: exists)");
         auto q20 = Query("!(test2: exists)");
         auto q21 = Query("!(test1 = 0.4)");
+        auto q22 = Query("test2: not_exists");
 
         auto idx = InvertedIndex(dbname);
         import std.algorithm : map, countUntil;
@@ -551,6 +569,9 @@ unittest
                 checksums[7], checksums[5], checksums[1], checksums[6],
                 checksums[4], checksums[8], checksums[2], checksums[3]
                 ].collect));
+        writeln(q20.evaluate(idx).byKey);
+        writeln(q22.evaluate(idx).byKey);
+        assert(q22.evaluate(idx) == q20.evaluate(idx));
     }
 
     import std.file;
