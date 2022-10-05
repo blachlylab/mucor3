@@ -155,6 +155,23 @@ struct InvertedIndex
         return ret;
     }
 
+    khashlSet!(uint128) queryOpExists(const(char)[] key)
+    {
+        import std.traits : ReturnType;
+        import std.algorithm : mean;
+
+        log_info(__FUNCTION__, "fetching ids for query: %s: exists", key);
+        auto matchingFields = getFields(key).array;
+        khashlSet!(uint128)[] ids = new khashlSet!(uint128)[matchingFields.length];
+        foreach (i, k; parallel(matchingFields))
+        {
+            ids[i] = this.store.existsOp(k).collect;
+        }
+        auto ret = taskPool.reduce!unionIds(ids, 1);
+        log_info(__FUNCTION__, "%d ids fetched for query: %s: exists", ret.count, key);
+        return ret;
+    }
+
     khashlSet!(uint128) queryNOT(khashlSet!(uint128) values)
     {
         return this.allIds - values;

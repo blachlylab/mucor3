@@ -501,6 +501,6 @@ struct InvertedIndexStore
                     ret ~= uint128([le_to_u64(v.ptr + i), le_to_u64(v.ptr + i + 8)]);
                 } 
             });
-        return ret.collect;
+        return ret;
     }
 }
