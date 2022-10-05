@@ -97,7 +97,7 @@ khashlSet!(uint128) queryOpValue(const(char)[] key, Value value, ref InvertedInd
 
 khashlSet!(uint128) queryOpExists(const(char)[] key, ref InvertedIndex idx)
 {
-    return idx.store.existsOp(key);
+    return idx.queryOpExists(key);
 }
 
 khashlSet!(uint128) unionIds(khashlSet!(uint128) a, khashlSet!(uint128) b)
