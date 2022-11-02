@@ -29,7 +29,7 @@ struct InvertedIndexStore
     SymbolTable* currentSymbolTable;
     SymbolTableBuilder* newSymbolTable;
 
-    this(string dbfn)
+    this(string dbfn, bool readOnly)
     {
 
         Env env;
@@ -54,6 +54,7 @@ struct InvertedIndexStore
         opts.maxBytesForLevelBase = 536870912; // 512MB
         opts.maxBytesForLevelMultiplier = 8;
         opts.setMergeOperator(createAppendHash128MergeOperator);
+        opts.readOnly = readOnly;
 
         RocksBlockBasedOptions bbopts;
         bbopts.initialize;

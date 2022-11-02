@@ -25,9 +25,9 @@ struct InvertedIndex
 {
     InvertedIndexStore store;
 
-    this(string prefix)
+    this(string prefix, bool readOnly = false)
     {
-        this.store = InvertedIndexStore(prefix);
+        this.store = InvertedIndexStore(prefix, readOnly);
     }
 
     void insert(const(char[])[] symbolTable, IonDescribedValue val)
@@ -507,7 +507,7 @@ unittest
         auto q21 = Query("!(test1 = 0.4)");
         auto q22 = Query("test2: not_exists");
 
-        auto idx = InvertedIndex(dbname);
+        auto idx = InvertedIndex(dbname, true);
         import std.algorithm : map, countUntil;
 
         assert(idx.allIds.count == 9);

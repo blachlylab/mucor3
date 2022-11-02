@@ -111,6 +111,7 @@ alias RocksOptionsPtr = SafePtr!(rocksdb_options_t, rocksdb_options_destroy);
 struct RocksDBOptions
 {
     RocksOptionsPtr opts;
+    bool readOnly;
 
     this(this)
     {

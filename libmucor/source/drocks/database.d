@@ -75,11 +75,15 @@ struct RocksDB
 
             rocksdb_column_family_handle_t*[] result;
             result.length = columnFamilyNames.length;
-
-            this.db = rocksdb_open_column_families(opts.opts, toStringz(path),
-                    cast(int) columnFamilyNames.length, columnFamilyNames.ptr,
-                    columnFamilyOptions.ptr, result.ptr, &err);
-
+            if(opts.readOnly){
+                this.db = rocksdb_open_for_read_only_column_families(opts.opts, toStringz(path),
+                        cast(int) columnFamilyNames.length, columnFamilyNames.ptr,
+                        columnFamilyOptions.ptr, result.ptr, 0, &err);
+            } else {
+                this.db = rocksdb_open_column_families(opts.opts, toStringz(path),
+                        cast(int) columnFamilyNames.length, columnFamilyNames.ptr,
+                        columnFamilyOptions.ptr, result.ptr, &err);
+            }
             foreach (idx, handle; result)
             {
                 this.columnFamilies[existingColumnFamilies[idx]] = ColumnFamily(this,
@@ -88,7 +92,12 @@ struct RocksDB
         }
         else
         {
-            this.db = rocksdb_open(opts.opts, toStringz(path), &err);
+            if(opts.readOnly){
+                this.db = rocksdb_open_for_read_only(opts.opts, toStringz(path), 0, &err);
+            } else {
+                this.db = rocksdb_open(opts.opts, toStringz(path), &err);
+            }
+            
         }
 
         if (err)
