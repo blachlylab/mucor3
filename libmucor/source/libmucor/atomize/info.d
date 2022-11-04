@@ -319,3 +319,27 @@ unittest
     // auto ionRecSA4 = VcfRecSingleAlt(ionRecSS2, 1);
     // assert(serializeVcfToIon(ionRecSA4, hdrInfo, false).ion2text == res7);
 }
+unittest
+{
+    import std.stdio;
+    import libmucor.serde;
+    import libmucor.atomize.record;
+    import mir.ion.conv;
+    import dhtslib.vcf : VCFReader;
+    
+
+    auto vcf = VCFReader("test/data/vcf_file2.vcf", -1, UnpackLevel.All);
+    
+    auto hdrInfo = HeaderConfig(vcf.vcfhdr);
+    auto res1 = `{byAllele:[{AC:2}],DP4:[1,2,3,4],AN:4,INDEL:true,STR:"test"}`;
+    auto res2 = `{byAllele:[{AC:2}],DP4:[1,2,3,4],AN:4,INDEL:true,STR:"test"}`;
+    auto res3 = `{byAllele:[{AC:2}],DP4:[1,2,3,4],AN:4,INDEL:true,STR:"test"}`;
+    auto res4 = `{AC:2,DP4:[1,2,3,4],AN:4,INDEL:true,STR:"test"}`;
+    auto res5 = `{AC:2,DP4:[1,2,3,4],AN:4,INDEL:true,STR:"test"}`;
+
+    auto ionRec = FullVcfRec(vcf.vcfhdr);
+
+    auto rec = vcf.front;
+    ionRec.parse(rec);
+    writeln(serializeVcfToIon(ionRec.info, hdrInfo, false).ion2text);
+}

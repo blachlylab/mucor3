@@ -78,7 +78,6 @@ struct InfoField {
         this.data = info.vptr[0 .. info.vptr_len];
         this.id = id;
         this.len = info.len;
-        log_info(__FUNCTION__,"%d", this.len);
         
         if(this.data.length == RecordTypeSizes[this.type])
             this.mode = OutputMode.One;
@@ -90,6 +89,7 @@ struct InfoField {
         this.type = cast(BcfRecordType)info.type;
         this.data = info.vptr[0 .. info.vptr_len];
         this.id = id;
+        this.len = info.len;
         
         this.alleleIdx = alleleIdx;
         this.mode = OutputMode.OnePerAlt;
@@ -99,6 +99,7 @@ struct InfoField {
         this.type = cast(BcfRecordType)info.type;
         this.data = info.vptr[0 .. info.vptr_len];
         this.id = id;
+        this.len = info.len;
         this.alleleIdx = alleleIdx;
         assert(isPerAllele);
         this.mode = OutputMode.OnePerAllele;
@@ -153,7 +154,11 @@ void serializeValueByType(OutputMode mode, T)(T field, ref VcfRecordSerializer s
         }
         static if(mode == OutputMode.All) {
             case BcfRecordType.Char:
-                const(char)[] str = fromStringz(cast(char*)field.data.ptr);
+                Buffer!(char) buf;
+                buf ~= cast(char[])field.data;
+                buf ~= '\0';
+                const(char)[] str = fromStringz(cast(char*) buf[].ptr);
+                str = str.length > field.len ? str[0..field.len] : str;
                 auto split = findSplit(str, ',');
                 if(split[1].length != 0){
                     s.putKey(field.id);
@@ -166,7 +171,7 @@ void serializeValueByType(OutputMode mode, T)(T field, ref VcfRecordSerializer s
                         serializeValue(s.serializer, split[0]);
                         split = findSplit(str, ',');
                     }
-                    serializeValue(s.serializer, str);
+                    serializeValue(s.serializer, fromStringz(str.ptr));
                     s.listEnd(l);
                 } else {
                     s.putKey(field.id);
@@ -176,6 +181,7 @@ void serializeValueByType(OutputMode mode, T)(T field, ref VcfRecordSerializer s
                     }
                     serializeValue(s.serializer, arr);
                 }
+                buf.deallocate;
                 return;
             case BcfRecordType.Null:
                 return;
