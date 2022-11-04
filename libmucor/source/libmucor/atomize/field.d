@@ -1,5 +1,6 @@
 module libmucor.atomize.field;
 
+import libmucor.error;
 import libmucor.serde.ser;
 import libmucor.utility;
 import libmucor.atomize.header;
@@ -31,6 +32,7 @@ struct FmtField {
     ubyte[] data;
     OutputMode mode;
     int alleleIdx;
+    int len;
 
     this(bcf_fmt_t * fmt, const(char)[] id, int sampleIdx) @nogc @trusted nothrow {
         this.type = cast(BcfRecordType)fmt.type;
@@ -70,11 +72,13 @@ struct InfoField {
     bool isFlag;
     OutputMode mode;
     int alleleIdx = -1;
-
+    int len;
     this(bcf_info_t * info, const(char)[] id) @nogc @trusted nothrow {
         this.type = cast(BcfRecordType)info.type;
         this.data = info.vptr[0 .. info.vptr_len];
         this.id = id;
+        this.len = info.len;
+        log_info(__FUNCTION__,"%d", this.len);
         
         if(this.data.length == RecordTypeSizes[this.type])
             this.mode = OutputMode.One;
@@ -149,16 +153,20 @@ void serializeValueByType(OutputMode mode, T)(T field, ref VcfRecordSerializer s
         }
         static if(mode == OutputMode.All) {
             case BcfRecordType.Char:
-                if(cast(char)field.data[0] == ','){
-                    auto str = fromStringz(cast(char*)field.data.ptr + 1);
+                const(char)[] str = fromStringz(cast(char*)field.data.ptr);
+                auto split = findSplit(str, ',');
+                if(split[1].length != 0){
                     s.putKey(field.id);
                     auto l = s.listBegin;
-                    auto split = findSplit(str, ',');
-                    while(split[1].length != 0){
-                        serializeValue(s.serializer, split[0]);
-                        split = findSplit(split[1], ',');
-                    }
+                    str = split[1];
                     serializeValue(s.serializer, split[0]);
+                    split = findSplit(str, ',');
+                    while(split[1].length != 0){
+                        str = split[1];
+                        serializeValue(s.serializer, split[0]);
+                        split = findSplit(str, ',');
+                    }
+                    serializeValue(s.serializer, str);
                     s.listEnd(l);
                 } else {
                     s.putKey(field.id);
@@ -239,3 +247,31 @@ if(is(T == InfoField) || is(T == FmtField))
             return;
         }   
     }
+
+unittest
+{
+    import dhtslib.vcf;
+    import htslib.vcf;
+    import libmucor.atomize;
+    import mir.serde : SerdeTarget;
+    import mir.ion.conv;
+    import std.stdio;
+    import libmucor.serde : ionPrefix;
+
+
+    auto vcf = VCFReader("test/data/vcf_file2.vcf");
+    auto hdrInfo = HeaderConfig(vcf.vcfhdr);
+    auto rec = vcf.front;
+    auto hdr = vcf.vcfhdr.hdr;
+    auto bcf_rec = rec.line;
+    auto info_rec = bcf_get_info(hdr, bcf_rec, "TEST2");
+    auto info = InfoField(info_rec, "TEST2");
+    VcfSerializer ser = VcfSerializer(hdrInfo, SerdeTarget.ion);
+    ser.recSerializer.calculateHash = false;
+    auto b = ser.recSerializer.structBegin;
+    serialize(info, ser.recSerializer);
+    ser.recSerializer.structEnd(b);
+    auto data = ionPrefix ~ ser.recSerializer.finalize[].dup;
+    assert(data[].dup.ion2text == `{TEST2:["Hello","There","World"]}`);
+    // vcf_ser.putRecord(rec);
+}
