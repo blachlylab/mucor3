@@ -95,17 +95,18 @@ struct VcfRequiredFields(bool singleSample, bool singleAlt)
             serializer.putKey("QUAL");
             serializer.putValue(qual);
         }
-
-        serializer.putKey("FILTER");
-        if(filter.length == 1) {
-            serializer.putSymbol(filter[0]);
-        } else if(filter.length > 1) {
-            auto l2 = serializer.listBegin;
-            foreach (ref const(char)[] key; filter)
-            {
-                serializer.putSymbol(key);
+        if(filter.length > 1) {
+            serializer.putKey("FILTER");
+            if(filter.length == 1) {
+                serializer.putSymbol(filter[0]);
+            } else {
+                auto l2 = serializer.listBegin;
+                foreach (ref const(char)[] key; filter)
+                {
+                    serializer.putSymbol(key);
+                }
+                serializer.listEnd(l2);
             }
-            serializer.listEnd(l2);
         }
 
         static if (singleSample)

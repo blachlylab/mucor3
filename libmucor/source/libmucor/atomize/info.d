@@ -56,7 +56,10 @@ struct Info
             auto idx = cfg.getIdx(v.key);
             auto hdrInfo = cfg.getInfo(v.key);
             if (hdrInfo.t == HeaderTypes.Flag) {
-                other ~= InfoField(true, cfg.infos.other.names[idx]);
+                if(cfg.isByAllele[v.key])
+                    other ~= InfoField(true, cfg.infos.byAllele.names[idx]);
+                else
+                    other ~= InfoField(true, cfg.infos.other.names[idx]);
                 continue;
             }
             if (cfg.isAnn[v.key])
