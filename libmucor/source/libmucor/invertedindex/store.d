@@ -20,15 +20,16 @@ import mir.ser.ion;
 import mir.utility;
 import mir.appender : ScopedBuffer;
 import libmucor.khashl;
+import core.sync.rwmutex : ReadWriteMutex;
 
 struct InvertedIndexStore
 {
     RocksDB db;
     Hash2IonStore records;
-    KVIndex idx;
+    KVIndex[string] indexes;
     SymbolTable* currentSymbolTable;
     SymbolTableBuilder* newSymbolTable;
-
+    ReadWriteMutex m;
     this(string dbfn, bool readOnly)
     {
 
@@ -70,7 +71,11 @@ struct InvertedIndexStore
         if (cf)
         {
             this.records = Hash2IonStore(&this.db.columnFamilies["records"]);
-            this.idx = KVIndex(&this.db.columnFamilies["idx"]);
+            foreach (key; this.db.columnFamilies.keys)
+            {
+                if(key != "records")
+                    indexes[key] = KVIndex(&this.db.columnFamilies[key]);
+            }
 
             auto existing = this.getSharedSymbolTable.unwrap;
             if (!existing.isNone)
@@ -90,20 +95,17 @@ struct InvertedIndexStore
         else
         {
             this.records = Hash2IonStore(this.db.createColumnFamily("records").unwrap);
-            this.idx = KVIndex(this.db.createColumnFamily("idx").unwrap);
+            // this.idx = KVIndex(this.db.createColumnFamily("idx").unwrap);
         }
+        this.m = new ReadWriteMutex;
     }
 
-    /// load string keys from db that have been observed in data
-    /// i.e INFO/ANN, CHROM, POS, ...
-    khashlSet!(char[], true, true) getIonKeys()
-    {
-        return this.idx.byKeyValue().map!((x) {
-            auto k = x[0].key;
-            scope(exit) k.deallocate;
-            return k[].dup;
-        }).collect;
-    }
+    // /// load string keys from db that have been observed in data
+    // /// i.e INFO/ANN, CHROM, POS, ...
+    // khashlSet!(char[], true, true) getIonKeys()
+    // {
+    //     return this.indexes.byKey.collect;
+    // }
 
     void storeSharedSymbolTable(SymbolTable* lastSymbolTable)
     {
@@ -204,6 +206,23 @@ struct InvertedIndexStore
             return;
 
         IonErrorCode err;
+        if(value.descriptor.type != IonTypeCode.struct_ && value.descriptor.type != IonTypeCode.list) {
+            auto rdr = m.reader;
+            // rdr.lock;
+            auto present = key in indexes;
+            if(!present) {
+                rdr.unlock;
+                synchronized (m.writer) {
+                    auto res = this.db.createColumnFamily(key.idup);
+                    if(!res.isErr)
+                        indexes[key.idup] = KVIndex(res.unwrap);
+                    // import std.stdio;
+                    // writeln(indexes.byKey);
+                }
+            } else {
+                rdr.unlock;
+            }
+        }
         final switch (value.descriptor.type)
         {
         case IonTypeCode.null_:
@@ -211,7 +230,8 @@ struct InvertedIndexStore
         case IonTypeCode.bool_:
 
             auto k = CompositeKey(key, true);
-            this.idx[k] ~= checksum;
+            synchronized (m.reader)
+                indexes[key][k] ~= checksum;
             k.key.deallocate;
 
             return;
@@ -224,8 +244,8 @@ struct InvertedIndexStore
             err = val.get(l);
             handleIonError(err);
             auto k = CompositeKey(key, l);
-
-            this.idx[k] ~= checksum;
+            synchronized (m.reader)
+                indexes[key][k] ~= checksum;
             k.key.deallocate;
             return;
 
@@ -239,7 +259,8 @@ struct InvertedIndexStore
             handleIonError(err);
             auto k = CompositeKey(key, l);
 
-            this.idx[k] ~= checksum;
+            synchronized (m.reader)
+                indexes[key][k] ~= checksum;
             k.key.deallocate;
             return;
 
@@ -252,8 +273,8 @@ struct InvertedIndexStore
             err = val.get(f);
             handleIonError(err);
             auto k = CompositeKey(key, f);
-
-            this.idx[k] ~= checksum;
+            synchronized (m.reader)
+                indexes[key][k] ~= checksum;
             k.key.deallocate;
             return;
         case IonTypeCode.decimal:
@@ -266,7 +287,8 @@ struct InvertedIndexStore
             handleIonError(err);
             auto k = CompositeKey(key, f);
 
-            this.idx[k] ~= checksum;
+            synchronized (m.reader)
+                indexes[key][k] ~= checksum;
             k.key.deallocate;
             return;
         case IonTypeCode.symbol:
@@ -277,8 +299,8 @@ struct InvertedIndexStore
             auto i = val.get;
             auto s = symbolTable[i];
             auto k = CompositeKey(key, s);
-
-            this.idx[k] ~= checksum;
+            synchronized (m.reader)
+                indexes[key][k] ~= checksum;
             k.key.deallocate;
             return;
         case IonTypeCode.string:
@@ -287,8 +309,9 @@ struct InvertedIndexStore
             handleIonError(err);
 
             auto k = CompositeKey(key, val);
-
-            this.idx[k] ~= checksum;
+            
+            synchronized (m.reader)
+                indexes[key][k] ~= checksum;
             k.key.deallocate;
             return;
         case IonTypeCode.clob:
@@ -415,7 +438,7 @@ struct InvertedIndexStore
     {
         auto k = CompositeKey(key, val);
 
-        return this.idx[k].unwrap;
+        return indexes[key][k].unwrap;
     }
 
     auto filterRange(T)(const(char)[] key, T[] range)
@@ -424,7 +447,7 @@ struct InvertedIndexStore
         {
             auto lowerK = CompositeKey(key, range[0]);
             auto upperK = CompositeKey(key, range[1]);
-            auto vals = this.idx.filterRange(lowerK, upperK).filter!(x => x[0].key == lowerK.key)
+            auto vals = indexes[key].filterRange(lowerK, upperK).filter!(x => x[0].key == lowerK.key)
                 .map!(x => x[1]);
         }
         else static if (isBoolean!T)
@@ -435,7 +458,7 @@ struct InvertedIndexStore
         {
             auto lowerK = CompositeKey(key, range[0]);
             auto upperK = CompositeKey(key, range[1]);
-            auto vals = this.idx.byKeyValue(lowerK, upperK).map!(x => x[1]);
+            auto vals = indexes[key].byKeyValue(lowerK, upperK).map!(x => x[1]);
         }
 
         uint128[] ret;
@@ -450,7 +473,7 @@ struct InvertedIndexStore
 
         auto ival = CompositeKey(key, val);
 
-        auto vals = this.idx.filterOp!op(ival).filter!(x => x[0].key == ival.key)
+        auto vals = indexes[key].filterOp!op(ival).filter!(x => x[0].key == ival.key)
             .map!(x => x[1]);
 
         alias ifun = (x) => mixin("x[0] " ~ op ~ " ival");
@@ -464,7 +487,7 @@ struct InvertedIndexStore
         import std.stdio;
 
         stderr.writeln("keys:");
-        foreach (k; this.getIonKeys.byKey)
+        foreach (k; this.indexes.byKey)
         {
             stderr.writeln(k);
         }
@@ -474,10 +497,14 @@ struct InvertedIndexStore
             stderr.writeln(kv);
         }
         stderr.writeln("idx");
-        foreach (kv; this.idx.byKeyValue)
+        foreach (key; indexes.keys)
         {
-            stderr.writeln(kv);
+            foreach (kv; indexes[key].byKeyValue)
+            {
+                stderr.writeln(kv);
+            }    
         }
+        
     }
 
     /// load string keys from db that have been observed in data
@@ -486,7 +513,7 @@ struct InvertedIndexStore
     {
         import libmucor.hts_endian;
         uint128[] ret;
-        this.idx.family
+        indexes[key.idup].family
             .iter()
             .filter!((x) {
                 auto kbytes = x.key;

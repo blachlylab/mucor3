@@ -70,10 +70,9 @@ struct InvertedIndex
         auto keycopy = key.idup;
         const(char[])[] ret;
         auto wildcard = key.indexOf('*');
-        auto keys = this.store.getIonKeys;
         if (wildcard == -1)
         {
-            if (!(key in keys))
+            if (!(key in this.store.indexes))
             {
                 return [];
             }
@@ -86,14 +85,13 @@ struct InvertedIndex
         {
             key = key.replace("*", ".*");
             auto reg = regex("^" ~ key ~ "$");
-            ret = keys.byKey.filter!(x => !(x[].matchFirst(reg).empty)).map!(x => x[].dup).array;
+            ret = this.store.indexes.byKey.filter!(x => !(x[].matchFirst(reg).empty)).map!(x => x[].dup).array;
             if (ret.length == 0)
             {
                 log_warn(__FUNCTION__,
                         "Warning: Key wildcards sequence %s matched no keys in index!", keycopy);
             }
         }
-        keys.kh_release;
         log_debug(__FUNCTION__, "Key %s matched %d keys", keycopy, ret.length);
         return ret;
     }
