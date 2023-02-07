@@ -48,7 +48,7 @@ void query_main(string[] args)
     StopWatch sw;
     sw.start;
 
-    InvertedIndex idx = InvertedIndex(prefix);
+    InvertedIndex idx = InvertedIndex(prefix, true);
     // auto idxs = idx.fields[args[1]].filter(args[2..$]);
     // float[] range = [args[2].to!float,args[3].to!float];
     log_info(__FUNCTION__, "Time to load index: %s seconds", sw.peek.total!"seconds");
@@ -87,6 +87,4 @@ void index_main(string[] args)
     // set_log_level(LogLevel.Trace);
     auto data = VcfIonDeserializer(args[1]);
     index(data, prefix);
-
-    data.buffer.ptr = null;
 }

@@ -194,14 +194,13 @@ struct InvertedIndexStore
         handleIonError(err);
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
-        auto x = Buffer!ubyte(rec.toBytes);
+        auto x = Buffer!ubyte(rec.data);
         this.records[hash] = x;
 
         foreach (key, value; data)
         {
             insertIonValue(key, value, data.symbolTable, hash);
         }
-        destroy(x);
     }
 
     void insertIonValue(const(char)[] key, IonDescribedValue value,

@@ -15,24 +15,26 @@ import std.stdio;
 import std.traits : ReturnType;
 import std.container : Array;
 import core.stdc.stdlib : malloc, free;
+import core.sync.rwmutex : ReadWriteMutex;
 
 struct VcfIonRecord
 {
 
-    SymbolTable symbols;
-    Buffer!ubyte data;
+    SymbolTable * symbols;
+    ubyte[] data;
 
     IonValue val;
     IonDescribedValue des;
 
-    @nogc nothrow:
+    ReadWriteMutex.Reader rdr; 
 
-    this(SymbolTable st, Buffer!ubyte val)
+    this(SymbolTable * st, ubyte[] val, ReadWriteMutex m)
     {
+        this.rdr = m.reader;
         this.data = val;
         this.symbols = st;
         
-        this.val = IonValue(data[]);
+        this.val = IonValue(data);
         auto err = this.val.describe(des);
         handleIonError(err);
     }
@@ -46,11 +48,6 @@ struct VcfIonRecord
         assert(!error, ionErrorMsg(error));
 
         return obj;
-    }
-
-    auto toBytes()
-    {
-        return this.val.data;
     }
 
     // void deallocate() {
@@ -75,20 +72,20 @@ struct VcfIonDeserializer
 {
     Bgzf inFile;
 
-    Buffer!(char) fn;
+    char[] fn;
 
-    Buffer!(ubyte) buffer;
+    ubyte[] buffer;
 
     SymbolTable* symbols;
 
     bool empty;
     IonErrorCode error;
 
-    @nogc nothrow: 
+    ReadWriteMutex m;
 
     this(string fn, size_t bufferSize = 4096)
     {
-        this.fn = Buffer!(char)(cast(char[])fn);
+        this.fn = cast(char[])fn;
         this.fn ~= '\0';
 
         char[2] mode = ['r','\0'];
@@ -114,6 +111,8 @@ struct VcfIonDeserializer
         error = this.symbols.loadSymbolTable(view);
         handleIonError(error);
 
+        this.m = new ReadWriteMutex;
+
         this.popFront;
     }
 
@@ -133,7 +132,7 @@ struct VcfIonDeserializer
         if (error)
             ret = Err(ionErrorMsg(error));
         else
-            ret = Ok(VcfIonRecord(this.symbols.dup, this.buffer.dup));
+            ret = Ok(VcfIonRecord(this.symbols, this.buffer.dup, this.m));
         return ret;
     }
 
@@ -151,22 +150,24 @@ struct VcfIonDeserializer
 
         if (des.type == IonTypeCode.annotations)
         {
-            auto len = this.buffer.length;
-            this.buffer.length = len + des.L;
-            this.buffer[len .. $] = 0;
+            synchronized (m.writer) {
+                auto len = this.buffer.length;
+                this.buffer.length = len + des.L;
+                this.buffer[len .. $] = 0;
 
-            auto n = bgzf_read(inFile, this.buffer[len .. $].ptr, this.buffer.length - len); 
-            if(n != this.buffer.length - len) handleIonError(IonErrorCode.unexpectedEndOfData);
-            
-            auto view = cast(const(ubyte)[])this.buffer[];
+                auto n = bgzf_read(inFile, this.buffer[len .. $].ptr, this.buffer.length - len); 
+                if(n != this.buffer.length - len) handleIonError(IonErrorCode.unexpectedEndOfData);
+                
+                auto view = cast(const(ubyte)[])this.buffer[];
 
-            error = this.symbols.loadSymbolTable(view);
-            handleIonError(error);
+                error = this.symbols.loadSymbolTable(view);
+                handleIonError(error);
 
-            this.buffer.length = 0;
+                this.buffer.length = 0;
 
-            error = parseDescriptor(des);
-            handleIonError(error);
+                error = parseDescriptor(des);
+                handleIonError(error);
+            }
         }
 
         auto len = this.buffer.length;
@@ -196,7 +197,7 @@ struct VcfIonDeserializer
         return error;
     }
 
-    IonErrorCode parseDescriptor()(scope ref IonDescriptor descriptor) @trusted nothrow @nogc
+    IonErrorCode parseDescriptor()(scope ref IonDescriptor descriptor) @trusted nothrow
     {
         version (LDC) pragma(inline, true);
         auto res = bgzf_getc(inFile);
@@ -241,7 +242,7 @@ struct VcfIonDeserializer
         return IonErrorCode.none;
     }
 
-    package IonErrorCode parseVarUInt(bool checkInput = true, U)(scope out U result) @trusted nothrow @nogc
+    package IonErrorCode parseVarUInt(bool checkInput = true, U)(scope out U result) @trusted nothrow
             if (is(U == ubyte) || is(U == ushort) || is(U == uint) || is(U == ulong))
     {
         version (LDC) pragma(inline, true);
