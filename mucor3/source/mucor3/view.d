@@ -5,6 +5,7 @@ import mir.ion.value;
 
 import std.stdio;
 import core.stdc.stdlib : exit;
+import std.array;
 
 import std.getopt;
 
@@ -36,9 +37,9 @@ void view_main(string[] args)
     {
         auto r = rec.unwrap;
         auto t = r.symbols.table;
-        auto a = cast(const(char[])[])t[];
-        scope(exit) r.deallocate;
-        scope(exit) t.deallocate;
+        auto a = cast(const(char[])[])t[].array;
+        // scope(exit) r.deallocate;
+        // scope(exit) t.deallocate;
         if (json)
             writeln(vcfIonToJson(r.withSymbols(a)));
         else

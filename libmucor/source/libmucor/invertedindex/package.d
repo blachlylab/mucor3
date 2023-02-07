@@ -597,11 +597,11 @@ auto query(string outfn, ref InvertedIndex idx, string queryStr)
     auto tdata = idx.store.getSharedSymbolTable.unwrap.unwrap;
     auto tarr = cast(const(ubyte)[])tdata[];
     table.loadSymbolTable(tarr);
-    auto serializer = VcfSerializer(outfn, cast(string[]) table.table[10 .. $], SerdeTarget.ion);
+    auto serializer = VcfSerializer(outfn, table.table[10 .. $], SerdeTarget.ion);
     foreach (d; idx.convertIdsToIon(idxs))
     {
         serializer.putData(d[]);
-        d.deallocate;
+        // d.deallocate;
     }
 }
 
@@ -617,8 +617,9 @@ void index(ref VcfIonDeserializer range, string prefix)
     {
         auto r = rec.unwrap;
         idx.insert(r);
-        r.deallocate;
+        // r.deallocate;
         count.atomicOp!"+="(1);
+        destroy(r);
     }
     idx.store.storeSharedSymbolTable(range.symbols);
     // assert(count == idx.recordMd5s.length,"number of md5s doesn't match number of records");
@@ -663,8 +664,8 @@ unittest
             auto t = r.symbols.table;
             writeln(vcfIonToText(r.withSymbols(cast(const(char[])[])t[])));
             writeln(vcfIonToJson(r.withSymbols(cast(const(char[])[])t[])));
-            t.deallocate;
-            r.deallocate;
+            // t.deallocate;
+            // r.deallocate;
         }
     }
 }

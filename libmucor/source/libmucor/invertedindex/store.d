@@ -87,7 +87,7 @@ struct InvertedIndexStore
                 this.newSymbolTable = new SymbolTableBuilder;
                 foreach (key; this.currentSymbolTable.table[10 .. $])
                 {
-                    this.newSymbolTable.insert(key);
+                    this.newSymbolTable.insert(key[]);
                 }
             }
 
@@ -110,18 +110,18 @@ struct InvertedIndexStore
     void storeSharedSymbolTable(SymbolTable* lastSymbolTable)
     {
         import mir.ion.symbol_table : IonSymbolTable;
-        scope(exit) lastSymbolTable.deallocate;
+        // scope(exit) lastSymbolTable.deallocate;
         IonSymbolTable!false table;
         table.initialize;
         auto t = lastSymbolTable.table;
-        scope(exit) t.deallocate;
+        // scope(exit) t.deallocate;
         foreach (key; t[10 .. $])
         {
-            table.insert(key.dup);
+            table.insert(key[].dup);
         }
         table.finalize;
         auto key = serialize("sharedTable");
-        scope(exit) key.deallocate;
+        // scope(exit) key.deallocate;
         this.db[key[]] = table.data;
         
     }
@@ -129,7 +129,7 @@ struct InvertedIndexStore
     auto getSharedSymbolTable()
     {
         auto key = serialize("sharedTable");
-        scope(exit) key.deallocate;
+        // scope(exit) key.deallocate;
         return this.db[key[]];
     }
 
@@ -160,8 +160,8 @@ struct InvertedIndexStore
         IonStruct sval;
         IonInt hashValue;
         IonErrorCode err;
-        Buffer!(char[]) table;
-        scope(exit) table.deallocate;
+        Array!(char[]) table;
+        // scope(exit) table.deallocate;
         if (this.currentSymbolTable && rec.symbols.table != this.currentSymbolTable.table)
         {
             auto val = convertIonSymbols(rec);
@@ -172,14 +172,17 @@ struct InvertedIndexStore
             err = dval.get(sval);
             handleIonError(err);
             table = this.currentSymbolTable.table;
-            data = sval.withSymbols(cast(const(char[])[])table[]);
+            auto t = table[].map!(x => x[]).array;
+            data = sval.withSymbols(cast(const(char[])[])t);
 
         }
         else
         {
             sval = rec.getObj;
             table = rec.symbols.table;
-            data = sval.withSymbols(cast(const(char[])[])table[]);
+            auto t = table[].map!(x => x[]).array;
+            data = sval.withSymbols(cast(const(char[])[])t);
+            destroy(table);
         }
 
         // data = sval.withSymbols(cast(const(char[])[])rec.symbols.table[]);
@@ -191,12 +194,14 @@ struct InvertedIndexStore
         handleIonError(err);
 
         uint128 hash = uint128.fromBigEndian(hashValue.data, hashValue.sign);
-        this.records[hash] = Buffer!ubyte(rec.toBytes);
+        auto x = Buffer!ubyte(rec.toBytes);
+        this.records[hash] = x;
 
         foreach (key, value; data)
         {
             insertIonValue(key, value, data.symbolTable, hash);
         }
+        destroy(x);
     }
 
     void insertIonValue(const(char)[] key, IonDescribedValue value,
@@ -229,10 +234,10 @@ struct InvertedIndexStore
             return;
         case IonTypeCode.bool_:
 
-            auto k = CompositeKey(key, true);
+            auto k = CompositeKey(true);
             synchronized (m.reader)
                 indexes[key][k] ~= checksum;
-            k.key.deallocate;
+            // k.key.deallocate;
 
             return;
         case IonTypeCode.uInt:
@@ -243,10 +248,10 @@ struct InvertedIndexStore
             ulong l;
             err = val.get(l);
             handleIonError(err);
-            auto k = CompositeKey(key, l);
+            auto k = CompositeKey(l);
             synchronized (m.reader)
                 indexes[key][k] ~= checksum;
-            k.key.deallocate;
+            // k.key.deallocate;
             return;
 
         case IonTypeCode.nInt:
@@ -257,11 +262,11 @@ struct InvertedIndexStore
             long l;
             err = val.get(l);
             handleIonError(err);
-            auto k = CompositeKey(key, l);
+            auto k = CompositeKey(l);
 
             synchronized (m.reader)
                 indexes[key][k] ~= checksum;
-            k.key.deallocate;
+            // k.key.deallocate;
             return;
 
         case IonTypeCode.float_:
@@ -272,10 +277,10 @@ struct InvertedIndexStore
             double f;
             err = val.get(f);
             handleIonError(err);
-            auto k = CompositeKey(key, f);
+            auto k = CompositeKey(f);
             synchronized (m.reader)
                 indexes[key][k] ~= checksum;
-            k.key.deallocate;
+            // k.key.deallocate;
             return;
         case IonTypeCode.decimal:
             IonDecimal val;
@@ -285,11 +290,11 @@ struct InvertedIndexStore
             double f;
             err = val.get(f);
             handleIonError(err);
-            auto k = CompositeKey(key, f);
+            auto k = CompositeKey(f);
 
             synchronized (m.reader)
                 indexes[key][k] ~= checksum;
-            k.key.deallocate;
+            // k.key.deallocate;
             return;
         case IonTypeCode.symbol:
             IonSymbolID val;
@@ -298,21 +303,21 @@ struct InvertedIndexStore
 
             auto i = val.get;
             auto s = symbolTable[i];
-            auto k = CompositeKey(key, s);
+            auto k = CompositeKey(s);
             synchronized (m.reader)
                 indexes[key][k] ~= checksum;
-            k.key.deallocate;
+            // k.key.deallocate;
             return;
         case IonTypeCode.string:
             const(char)[] val;
             err = value.get(val);
             handleIonError(err);
 
-            auto k = CompositeKey(key, val);
+            auto k = CompositeKey(val);
             
             synchronized (m.reader)
                 indexes[key][k] ~= checksum;
-            k.key.deallocate;
+            // k.key.deallocate;
             return;
         case IonTypeCode.clob:
             debug assert(0, "We don't handle ion clob values");
@@ -362,8 +367,8 @@ struct InvertedIndexStore
         handleIonError(err);
         IonSerializer!(nMax * 8, [], false) serializer;
         serializer.initializeNoTable;
-
-        this.convertIonSymbols(value, rec.symbols.table[10 .. $], serializer);
+        auto t = rec.symbols.table[10 .. $].map!(x => x[]).array;
+        this.convertIonSymbols(value, t, serializer);
 
         serializer.finalize;
         this.currentSymbolTable = new SymbolTable;
@@ -436,7 +441,7 @@ struct InvertedIndexStore
     /// key = val
     Option!(uint128[]) filterSingle(T)(const(char)[] key, T val)
     {
-        auto k = CompositeKey(key, val);
+        auto k = CompositeKey(val);
 
         return indexes[key][k].unwrap;
     }
@@ -445,9 +450,9 @@ struct InvertedIndexStore
     {
         static if (isNumeric!T)
         {
-            auto lowerK = CompositeKey(key, range[0]);
-            auto upperK = CompositeKey(key, range[1]);
-            auto vals = indexes[key].filterRange(lowerK, upperK).filter!(x => x[0].key == lowerK.key)
+            auto lowerK = CompositeKey(range[0]);
+            auto upperK = CompositeKey(range[1]);
+            auto vals = indexes[key].filterRange(lowerK, upperK)
                 .map!(x => x[1]);
         }
         else static if (isBoolean!T)
@@ -456,8 +461,8 @@ struct InvertedIndexStore
         }
         else static if (isSomeString!T)
         {
-            auto lowerK = CompositeKey(key, range[0]);
-            auto upperK = CompositeKey(key, range[1]);
+            auto lowerK = CompositeKey(range[0]);
+            auto upperK = CompositeKey(range[1]);
             auto vals = indexes[key].byKeyValue(lowerK, upperK).map!(x => x[1]);
         }
 
@@ -471,9 +476,9 @@ struct InvertedIndexStore
     {
         import std.stdio;
 
-        auto ival = CompositeKey(key, val);
+        auto ival = CompositeKey(val);
 
-        auto vals = indexes[key].filterOp!op(ival).filter!(x => x[0].key == ival.key)
+        auto vals = indexes[key].filterOp!op(ival)
             .map!(x => x[1]);
 
         alias ifun = (x) => mixin("x[0] " ~ op ~ " ival");
@@ -515,16 +520,17 @@ struct InvertedIndexStore
         uint128[] ret;
         indexes[key.idup].family
             .iter()
-            .filter!((x) {
-                auto kbytes = x.key;
-                scope(exit) kbytes.deallocate;
-                auto k = deserialize!CompositeKey(kbytes);
-                scope(exit) k.key.deallocate;
-                return k.key[] == key;
-            })
+            // .filter!((x) {
+            //     auto kbytes = x.key;
+            //     // scope(exit) kbytes.deallocate;
+            //     auto k = deserialize!CompositeKey(kbytes);
+            //     // scope(exit) k.key.deallocate;
+            //     return k.key[] == key;
+            // })
+            .map!(x =>x)
             .each!((x) {
                 auto v = x.value();
-                scope(exit) v.deallocate;
+                // scope(exit) v.deallocate;
                 for(auto i = 0; i < v.length; i+=16) {
                     ret ~= uint128([le_to_u64(v.ptr + i), le_to_u64(v.ptr + i + 8)]);
                 } 

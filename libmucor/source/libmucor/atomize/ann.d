@@ -1002,14 +1002,14 @@ struct Annotation
         serializer.putKey("effect");
         if(effect.length == 1) {
             serializer.putSymbol(enumToString(effect[0]));
-            effect.deallocate;
+            // effect.deallocate;
         } else {
             auto l = serializer.listBegin;
             foreach (e; effect)
             {
                 serializer.putSymbol(enumToString(e));
             }
-            effect.deallocate;
+            // effect.deallocate;
             serializer.listEnd(l);
         }
 

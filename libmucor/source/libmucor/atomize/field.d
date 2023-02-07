@@ -181,7 +181,7 @@ void serializeValueByType(OutputMode mode, T)(T field, ref VcfRecordSerializer s
                     }
                     serializeValue(s.serializer, arr);
                 }
-                buf.deallocate;
+                // buf.deallocate;
                 return;
             case BcfRecordType.Null:
                 return;

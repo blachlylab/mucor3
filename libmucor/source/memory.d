@@ -121,6 +121,8 @@ struct Buffer(T, bool useGC = false) {
     T * ptr;
     private size_t len;
     private size_t capacity;
+    /// reference counting
+    shared int * refct;
 
     @safe @nogc nothrow @live:
     
@@ -130,6 +132,8 @@ struct Buffer(T, bool useGC = false) {
     {
         this.ptr = ptr;
         this.len = this.capacity = len;
+        this.refct = cast(shared int *) pureCalloc(int.sizeof, 1);
+        (*this.refct) = 1;
     }
 
     /// create from slice
@@ -139,16 +143,43 @@ struct Buffer(T, bool useGC = false) {
     {
         this.reserveExactly(data.length);
         this.len = data.length;
+        this.refct = cast(shared int *) pureCalloc(int.sizeof, 1);
+        (*this.refct) = 1;
         memcpy(this.ptr, data.ptr, data.length * T.sizeof);
     }
 
-    /// deallocates data in this buffer
-    /// resets buffer for further use
-    void deallocate() {
-        free!T(this.ptr);
-        this.ptr = null;
-        this.len = this.capacity = 0;
+    /// postblit that respects scope
+    this(this) @trusted return scope
+    {
+        if(this.refct) atomicOp!"+="(*this.refct, 1);
     }
+
+    /// dtor that respects scope
+    ~this() @trusted return scope
+    {
+        if(!this.refct) return;
+        if(atomicOp!"-="(*this.refct, 1)) return;
+        if(this.ptr){
+            this[] = T.init;
+            pureFree(cast(int*)this.refct);
+            /// if destroy function return is void 
+            /// just destroy
+            /// else if return is int
+            /// destroy then check return value 
+            /// else don't compile
+            free!T(this.ptr);
+            this.ptr = null;
+            this.len = this.capacity = 0;
+        }
+    }
+
+    // /// deallocates data in this buffer
+    // /// resets buffer for further use
+    // void deallocate() {
+    //     free!T(this.ptr);
+    //     this.ptr = null;
+    //     this.len = this.capacity = 0;
+    // }
 
     /// get length of buffer
     @property length() const {
@@ -187,6 +218,8 @@ struct Buffer(T, bool useGC = false) {
         /// allocate and return
         if(this.capacity == 0) {
             this.ptr = allocate!(T, useGC)(size);
+            this.refct = cast(shared int *) pureCalloc(int.sizeof, 1);
+            (*this.refct) = 1;
             this.capacity = size;
             return;
         }
@@ -274,14 +307,28 @@ struct Buffer(T, bool useGC = false) {
 
     /// shrink buffer to length
     void shrink() {
-        if(this.capacity == 0) this.deallocate;
-        else {
+        // if(this.capacity == 0) this.deallocate;
+        // else {
             this.ptr = reallocate!(T, useGC)(this.ptr, this.len, this.len);
             this.capacity = this.len;
-        }
+        // }
     }
 
     int opApply(scope int delegate(ref T) @nogc nothrow @safe dg) @nogc nothrow @trusted
+    {
+        int result = 0;
+    
+        for (ulong i;i < len; i++)
+        {
+            result = dg(this.ptr[i]);
+            if (result)
+                break;
+        }
+    
+        return result;
+    }
+
+    int opApply(scope int delegate(ref T) @nogc nothrow dg) @nogc nothrow @trusted
     {
         int result = 0;
     

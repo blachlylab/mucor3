@@ -48,7 +48,7 @@ struct RecordStore(K, V)
     {
         alias innerFun = (Option!(Buffer!ubyte) x) => x.map!(y => deserialize!V(y));
         auto k = serialize(key);
-        scope(exit) k.deallocate;
+        // scope(exit) k.deallocate;
         return (*this.family)[k[]].map!(x => innerFun(x));
     }
 
@@ -56,8 +56,8 @@ struct RecordStore(K, V)
     {
         auto k = serialize(key);
         auto v = serialize(value);
-        scope(exit) k.deallocate;
-        scope(exit) v.deallocate;
+        // scope(exit) k.deallocate;
+        scope(exit) destroy(v);
         return (*this.family)[k[]] = v[];
     }
 
@@ -67,8 +67,8 @@ struct RecordStore(K, V)
         {
             auto k = serialize(key);
             auto v = serialize(value);
-            scope(exit) k.deallocate;
-            scope(exit) v.deallocate;
+            // scope(exit) k.deallocate;
+            // scope(exit) v.deallocate;
             this.family.opIndexOpAssign!op(v[], k[]);
         }
     }
@@ -79,8 +79,8 @@ struct RecordStore(K, V)
         return r.std_map!((x) {
             auto k = x.key;
             auto v = x.value; 
-            scope(exit) k.deallocate;
-            scope(exit) v.deallocate;
+            // scope(exit) k.deallocate;
+            // scope(exit) v.deallocate;
             return tuple(deserialize!K(k), deserialize!V(v));
         });
     }
@@ -89,7 +89,7 @@ struct RecordStore(K, V)
         auto r = this.family.iter;
         return r.std_map!((x) {
             auto k = x.key;
-            scope(exit) k.deallocate;
+            // scope(exit) k.deallocate;
             return deserialize!K(k);
         });
     }
@@ -102,32 +102,32 @@ struct RecordStore(K, V)
             return r.lt(k[]).std_map!((x) {
                 auto k = x.key;
                 auto v = x.value; 
-                scope(exit) k.deallocate;
-                scope(exit) v.deallocate;
+                // scope(exit) k.deallocate;
+                // scope(exit) v.deallocate;
                 return tuple(deserialize!K(k), deserialize!V(v));
         });
         else static if (op == "<=")
             return r.lte(k[]).std_map!((x) {
                 auto k = x.key;
                 auto v = x.value; 
-                scope(exit) k.deallocate;
-                scope(exit) v.deallocate;
+                // scope(exit) k.deallocate;
+                // scope(exit) v.deallocate;
                 return tuple(deserialize!K(k), deserialize!V(v));
         });
         else static if (op == ">")
             return r.gt(k[]).std_map!((x) {
                 auto k = x.key;
                 auto v = x.value; 
-                scope(exit) k.deallocate;
-                scope(exit) v.deallocate;
+                // scope(exit) k.deallocate;
+                // scope(exit) v.deallocate;
                 return tuple(deserialize!K(k), deserialize!V(v));
         });
         else static if (op == ">=")
             return r.gte(k[]).std_map!((x) {
                 auto k = x.key;
                 auto v = x.value; 
-                scope(exit) k.deallocate;
-                scope(exit) v.deallocate;
+                // scope(exit) k.deallocate;
+                // scope(exit) v.deallocate;
                 return tuple(deserialize!K(k), deserialize!V(v));
         });
         else
@@ -139,14 +139,14 @@ struct RecordStore(K, V)
         auto r = this.family.iter;
         auto s = serialize(start);
         auto e = serialize(end);
-        scope(exit) s.deallocate;
-        scope(exit) e.deallocate;
+        // scope(exit) s.deallocate;
+        // scope(exit) e.deallocate;
         return r.gte(s[]).lt(e[])
             .std_map!((x) {
                 auto k = x.key;
                 auto v = x.value; 
-                scope(exit) k.deallocate;
-                scope(exit) v.deallocate;
+                // scope(exit) k.deallocate;
+                // scope(exit) v.deallocate;
                 return tuple(deserialize!K(k), deserialize!V(v));
         });
     }
@@ -169,14 +169,12 @@ union IndexValue
 
 struct CompositeKey
 {
-    Buffer!char key;
     IndexValueType vtype;
 
     IndexValue val;
 
-    this(T)(const(char)[] key, T val)
+    this(T)(T val)
     {
-        this.key = key;
         static if (isNumeric!T)
         {
             vtype = IndexValueType.Number;
@@ -201,12 +199,12 @@ struct CompositeKey
         final switch (this.vtype)
         {
         case IndexValueType.Bool:
-            return "%s::%s::%s".format(key[], cast(char) vtype, val.b);
+            return "%s::%s".format(cast(char) vtype, val.b);
         case IndexValueType.Number:
-            version(RealNumbers) return "%s::%s::%s".format(key[], cast(char) vtype, val.n.toString);
-            else return "%s::%s::%s".format(key[], cast(char) vtype, val.n.to!string);
+            version(RealNumbers) return "%s::%s".format(cast(char) vtype, val.n.toString);
+            else return "%s::%s".format(cast(char) vtype, val.n.to!string);
         case IndexValueType.String:
-            return "%s::%s::%s".format(key[], cast(char) vtype, val.s);
+            return "%s::%s".format(cast(char) vtype, val.s);
         }
     }
 
@@ -233,8 +231,6 @@ auto serialize(T)(T val) @nogc nothrow @trusted
     {
         
         Buffer!ubyte arr;
-        arr ~= cast(ubyte[]) val.key[];
-        arr ~= '\0';
         arr ~= cast(ubyte) val.vtype;
         final switch (val.vtype)
         {
@@ -317,25 +313,24 @@ T deserialize(T, bool useGC = false)(Buffer!ubyte val)
     {
         import core.stdc.string : strlen;
 
-        ret.key = Buffer!char(val[0..strlen(cast(const(char)*)val.ptr)]);
-        ret.vtype = cast(IndexValueType) val[ret.key.length + 1];
+        ret.vtype = cast(IndexValueType) val[0];
         final switch (ret.vtype)
         {
         case IndexValueType.Bool:
-            ret.val.b = cast(bool) val[ret.key.length + 2];
+            ret.val.b = cast(bool) val[1];
             break;
         case IndexValueType.Number:
             version(RealNumbers)
-                ret.val.n = bigEndianToNative(val[ret.key.length + 2 .. ret.key.length + 2 + 10][0 .. 10]);
+                ret.val.n = bigEndianToNative(val[1 .. 11][0 .. 10]);
             else {
-                ret.val.n = bigEndianToNative!double(val[ret.key.length + 2 .. ret.key.length + 2 + 8][0 .. 8]);
+                ret.val.n = bigEndianToNative!double(val[1 .. 9][0 .. 8]);
                 ret.val.n = - ret.val.n;
             }
 
             break;
         case IndexValueType.String:
             
-            ret.val.s = cast(const(char)[]) val[ret.key.length + 2 .. $].dup;
+            ret.val.s = cast(const(char)[]) val[1 .. $].dup;
             break;
         }
         return ret;

@@ -53,10 +53,10 @@ struct VcfIonRecord
         return this.val.data;
     }
 
-    void deallocate() {
-        this.data.deallocate;
-        this.symbols.deallocate;
-    }
+    // void deallocate() {
+    //     this.data.deallocate;
+    //     this.symbols.deallocate;
+    // }
 
 }
 
@@ -115,6 +115,15 @@ struct VcfIonDeserializer
         handleIonError(error);
 
         this.popFront;
+    }
+
+    this(this) {
+        this.inFile = inFile;
+        this.fn = fn;
+        this.buffer = buffer;
+        this.symbols = symbols;
+        this.empty = empty;
+        this.error = error;
     }
 
     /// set up buffer, read first chunk, and validate version/ionPrefix

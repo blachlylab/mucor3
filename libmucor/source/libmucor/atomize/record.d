@@ -26,7 +26,7 @@ auto hashAndFinalize(ref VcfRecordSerializer serializer, size_t s) @nogc nothrow
         
         serializer.putKey("checksum");
         serializeValue(serializer.serializer, hashIon(d[]));
-        d.deallocate;
+        // d.deallocate;
     }
     serializer.structEnd(s);
 }

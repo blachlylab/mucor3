@@ -27,10 +27,11 @@ struct FmtSampleValues
     void reset() @nogc nothrow @safe
     {
         this.gt.reset();
-        foreach (ref v; byAllele)
-        {
-            v.deallocate();
-        }
+        byAllele[] = Buffer!FmtField.init;
+        // foreach (ref v; byAllele)
+        // {
+        //     v.deallocate();
+        // }
         this.byAllele.length = 0;
         this.other.length = 0;
     }

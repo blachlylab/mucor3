@@ -163,7 +163,7 @@ struct VcfSerializer
         this.recSerializer = VcfRecordSerializer(this.symbols, target);
     }
 
-    this(string[] symbols, SerdeTarget target)
+    this(Array!(char[]).Range symbols, SerdeTarget target)
     {
         initializeTableFromStrings(symbols);
         this.target = target;
@@ -171,7 +171,7 @@ struct VcfSerializer
         this.recSerializer = VcfRecordSerializer(this.symbols, target);
     }
 
-    this(string fn, string[] symbols, SerdeTarget target)
+    this(string fn, Array!(char[]).Range symbols, SerdeTarget target)
     {
         this.fn = Buffer!(char)(cast(char[])fn);
         this.fn ~= '\0';
@@ -248,7 +248,7 @@ struct VcfSerializer
         }
     }
 
-    void initializeTableFromStrings(string[] sharedSymbols)
+    void initializeTableFromStrings(Array!(char[]).Range sharedSymbols)
     {
         foreach (key; sharedSymbols)
         {
@@ -277,7 +277,7 @@ struct VcfSerializer
         if(_expect(err < 0, false)) {
             log_err(__FUNCTION__, "Error writing data");
         }
-        d.deallocate;
+        // d.deallocate;
     }
 
     void putData(const(ubyte)[] d)
@@ -297,7 +297,7 @@ struct VcfSerializer
         if(_expect(err < 0, false)) {
             log_err(__FUNCTION__, "Error writing data");
         }
-        d.deallocate;
+        // d.deallocate;
     }
 
 }

@@ -124,7 +124,7 @@ struct Iterator
         }
 
         rocksdb_iter_next(this.iter);
-        this.frontKey.deallocate;
+        // this.frontKey.deallocate;
         this.frontKey = Buffer!ubyte(this.key);
     }
 
@@ -145,7 +145,7 @@ struct Iterator
         }
 
         rocksdb_iter_prev(this.iter);
-        this.backKey.deallocate;
+        // this.backKey.deallocate;
         this.backKey = Buffer!ubyte(this.key);
     }
 

@@ -88,4 +88,5 @@ void index_main(string[] args)
     auto data = VcfIonDeserializer(args[1]);
     index(data, prefix);
 
+    data.buffer.ptr = null;
 }

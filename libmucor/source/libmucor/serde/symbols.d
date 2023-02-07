@@ -97,8 +97,8 @@ struct SymbolTableBuilder
 
             this.syms.length = 0;
             this.dataForHashing.length = 0;
-            this.dataForHashing.deallocate;
-            this.syms.deallocate;
+            // this.dataForHashing.deallocate;
+            // this.syms.deallocate;
             
             this.newSymbolsMap.kh_release;
             this.first = false;
@@ -112,9 +112,8 @@ struct SymbolTable
 {
     Buffer!(char) rawdata;
     Buffer!(size_t) lengths;
-    @nogc nothrow:
 
-    void createFromHeaderConfig(ref HeaderConfig hdrInfo)
+    void createFromHeaderConfig(ref HeaderConfig hdrInfo) @nogc nothrow
     {
         IonSymbolTable!false tmptable;
         tmptable.initialize;
@@ -181,7 +180,7 @@ struct SymbolTable
         assert(!err, ionErrorMsg(err));
     }
 
-    void createFromStrings(string[] symbols)
+    void createFromStrings(string[] symbols) @nogc nothrow
     {
         IonSymbolTable!false tmptable;
         tmptable.initialize;
@@ -205,20 +204,21 @@ struct SymbolTable
         assert(!err, ionErrorMsg(err));
     }
 
-    auto dup() {
+    auto dup() @nogc nothrow {
         SymbolTable t;
         t.rawdata = this.rawdata.dup;
         t.lengths = this.lengths.dup;
         return t;
     }
 
-    void deallocate() {
-        this.rawdata.deallocate;
-        this.lengths.deallocate;
-    }
+    // void deallocate() {
+    //     this.rawdata.deallocate;
+    //     this.lengths.deallocate;
+    // }
 
-    auto table() {
-        Buffer!(char[]) arr;
+    auto table() @nogc nothrow {
+        import std.container.array : Array;
+        Array!(char[])  arr;
         auto a = rawdata[];
         foreach (l; lengths)
         {
@@ -229,13 +229,13 @@ struct SymbolTable
     }
 
     /// scraped and modified from here: 
-    IonErrorCode loadSymbolTable(ref const(ubyte)[] d)
+    IonErrorCode loadSymbolTable(ref const(ubyte)[] d) @nogc nothrow
     {
 
         void resetSymbolTable() @nogc nothrow 
         {
-            this.lengths.deallocate;
-            this.rawdata.deallocate;
+            // this.lengths.deallocate;
+            // this.rawdata.deallocate;
             foreach (key; IonSystemSymbolTable_v1)
             {
                 rawdata ~= cast(char[])key;
@@ -370,18 +370,18 @@ struct SymbolTable
         return error;
     }
 
-    ref auto opIndex(size_t index)
+    ref auto opIndex(size_t index) @nogc nothrow
     {
         return this.table[index];
     }
 
-    auto toBytes()
+    auto toBytes() @nogc nothrow
     {
         IonSymbolTable!false tmptable;
         tmptable.initialize;
-        foreach (const(char[]) key; this.table[10 .. $])
+        foreach (key; this.table[10 .. $])
         {
-            tmptable.insert(key);
+            tmptable.insert(key[]);
         }
         tmptable.finalize;
         return cast(const(ubyte)[]) tmptable.data;

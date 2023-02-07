@@ -420,8 +420,8 @@ pragma(inline, true):
     void kh_release()
     {
         this.kh_clear;
-        this.keys.deallocate;
-        this.used.deallocate;
+        // this.keys.deallocate;
+        // this.used.deallocate;
     }
 
     khint_t kh_getp(const(Bucket)* key) const
@@ -518,7 +518,7 @@ pragma(inline, true):
         if (n_buckets > new_n_buckets) /* shrink the hash table */
             this.keys.length = new_n_buckets;
         // kfree(this.used); /* free the working space */
-        this.used.deallocate;
+        // this.used.deallocate;
         this.used = new_used, this.bits = new_bits;
         return 0;
     }

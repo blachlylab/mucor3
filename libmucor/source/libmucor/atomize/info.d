@@ -29,10 +29,11 @@ struct Info
 
     void reset() @nogc nothrow @safe
     {
-        foreach (ref v; byAllele)
-        {
-            v.deallocate();
-        }
+        byAllele[] = Buffer!InfoField.init;
+        // foreach (ref v; byAllele)
+        // {
+        //     v.deallocate();
+        // }
         this.byAllele.length = 0;
         other.length = 0;
     }
@@ -168,7 +169,7 @@ struct InfoSingleAlt
             foreach (ann; anns)
             {
                 if (ann.allele != allele){
-                    ann.effect.deallocate;
+                    // ann.effect.deallocate;
                     continue;
                 }
                 ann.serialize(serializer);
